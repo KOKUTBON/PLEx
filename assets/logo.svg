@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <title>PLEx</title>
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#131729"/>
+      <stop offset="1" stop-color="#06070d"/>
+    </linearGradient>
+    <linearGradient id="edge" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#22d3ee" stop-opacity="0.55"/>
+      <stop offset="0.5" stop-color="#8b5cf6" stop-opacity="0.25"/>
+      <stop offset="1" stop-color="#d946ef" stop-opacity="0.55"/>
+    </linearGradient>
+    <linearGradient id="grad" gradientUnits="userSpaceOnUse" x1="140" y1="88" x2="340" y2="424">
+      <stop offset="0" stop-color="#22d3ee"/>
+      <stop offset="0.38" stop-color="#3b82f6"/>
+      <stop offset="0.7" stop-color="#8b5cf6"/>
+      <stop offset="1" stop-color="#d946ef"/>
+    </linearGradient>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="18"/>
+    </filter>
+  </defs>
+  <rect x="8" y="8" width="496" height="496" rx="116" fill="url(#tile)"/>
+  <rect x="9.5" y="9.5" width="493" height="493" rx="114.5" fill="none" stroke="url(#edge)" stroke-width="3"/>
+  <g fill="none" stroke="url(#grad)" stroke-width="56" stroke-linecap="round" stroke-linejoin="round">
+    <g opacity="0.45" filter="url(#glow)">
+      <path d="M168 316V116H262a80 80 0 0 1 0 160H168"/>
+      <circle cx="168" cy="394" r="30" fill="url(#grad)" stroke="none"/>
+    </g>
+    <path d="M168 316V116H262a80 80 0 0 1 0 160H168"/>
+    <circle cx="168" cy="394" r="30" fill="url(#grad)" stroke="none"/>
+  </g>
+</svg>

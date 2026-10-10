@@ -1,0 +1,17 @@
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    open-pull-requests-limit: 0
+    directory: "/"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "pip"
+    open-pull-requests-limit: 0
+    directory: "/"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "npm"
+    open-pull-requests-limit: 0
+    directory: "/vscode"
+    schedule:
+      interval: "weekly"

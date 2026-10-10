@@ -1,0 +1,133 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+.python-version
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# Test/coverage caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.hypothesis/
+
+# Environment files and safe templates
+.env
+.env.*
+!.env.example
+!.env.sample
+
+# Secrets and credentials
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+secrets/
+credentials/
+credentials*.json
+
+# Generated, local, and backup data
+uploads/
+artifacts/
+outputs/
+reports/
+backups/
+dumps/
+
+# Databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Editor and OS
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
+# Local developer configurations and overrides
+*.local
+*.local.*
+*.private
+
+# Local notes, scratch, and temporary files
+*.local.md
+notes/
+scratch/
+tmp/
+temp/
+
+# Logs
+*.log
+logs/
+
+# Tool outputs and caches
+out/
+.plex_cache.json
+plex-report*.json
+plex-report*.html
+
+# Node / VS Code extension build artifacts
+node_modules/
+vscode/out/
+vscode/.vscode-test/
+*.vsix
+
+# AI development tools
+.claude/
+.codex/
+.cursor/
+.windsurf/
+.github/agents/
+
+# AI assistant state and conversation exports
+.aider*
+.continue/
+.copilot/
+.cursorrules
+.cursorignore
+.clinerules/
+.roo/
+CLAUDE.md
+AGENTS.md
+GEMINI.md
+.github/copilot-instructions.md
+.github/instructions/
+.github/prompts/
+
+# Assembled GitHub Pages output
+_site/
+
+# Local deployment records and private credentials
+.env.local
+.env.production
+*.pem
+*.key
+*.sqlite
+*.sqlite3
+*.db
+/data/private/
+/backups/

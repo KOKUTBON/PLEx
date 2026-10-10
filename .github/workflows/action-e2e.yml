@@ -1,0 +1,62 @@
+name: Action E2E
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  action-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: ./action
+        with:
+          install: "true"
+          changed_only: "false"
+          compare_base: "false"
+          stability: "stable"
+          md_out: "out/plex.md"
+          json_out: "out/plex.json"
+          html_out: "out/plex.html"
+          upload_html: "true"
+          write_summary: "true"
+      - name: Verify outputs
+        shell: bash
+        run: |
+          test -f out/plex.json
+          test -f out/plex.html
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path("out/plex.json").read_text())
+          assert "schema_version" in data
+          assert "findings" in data
+          html = Path("out/plex.html").read_text()
+          assert "<!doctype html>" in html.lower()
+          print("ok")
+          PY
+
+  action-rejects-invalid-input:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: ./
+        id: invalid
+        with:
+          install: "true"
+          path: "."
+          dynamic_top: "not-a-number"
+          changed_only: "false"
+          fail_on_error: "false"
+      - name: Analyzer failures must remain visible in action outputs
+        env:
+          ANALYZER_EXIT: ${{ steps.invalid.outputs.exit_code }}
+          GATING_FAILED: ${{ steps.invalid.outputs.gating_failed }}
+        run: |
+          test -n "$ANALYZER_EXIT"
+          test "$ANALYZER_EXIT" != "0"
+          test "$GATING_FAILED" = "true"

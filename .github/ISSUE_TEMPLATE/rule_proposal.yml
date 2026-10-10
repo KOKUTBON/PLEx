@@ -1,0 +1,42 @@
+name: Rule proposal
+description: Propose a new built-in rule or rule behavior change
+labels: ["enhancement", "rule"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem statement
+      description: What performance risk or false negative should this rule address?
+    validations:
+      required: true
+  - type: textarea
+    id: detection
+    attributes:
+      label: Detection heuristic
+      description: Describe the signal(s) and expected confidence.
+    validations:
+      required: true
+  - type: textarea
+    id: false_positives
+    attributes:
+      label: False-positive risks
+      description: Where might this trigger incorrectly?
+  - type: textarea
+    id: examples
+    attributes:
+      label: Code examples
+      description: Include at least one positive and one negative example.
+      render: python
+    validations:
+      required: true
+  - type: textarea
+    id: tests
+    attributes:
+      label: Test plan
+      description: What fixtures/tests should be added?
+      placeholder: |
+        - [ ] Positive fixture
+        - [ ] Negative fixture
+        - [ ] Snapshot/report impact checked
+    validations:
+      required: true

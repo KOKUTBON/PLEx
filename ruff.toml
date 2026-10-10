@@ -1,0 +1,7 @@
+line-length = 100
+# Intentionally slow fixture code that feeds the website demo.
+extend-exclude = ["site/demo-project"]
+
+[lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E501"]

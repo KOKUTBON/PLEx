@@ -1,0 +1,1277 @@
+{
+  "generated": "2026-10-10",
+  "scope": "Dependency metadata observed from committed npm locks and local validation environments. Not a legal clearance or complete binary/container SBOM. Preserve upstream notices and inspect assets separately.",
+  "dependencies": [
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "@azure/abort-controller",
+      "version": "2.2.0",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "@azure/core-auth",
+      "version": "1.11.0",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "@azure/core-client",
+      "version": "1.11.1",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "@azure/core-process",
+      "version": "1.0.0",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "@azure/core-rest-pipeline",
+      "version": "1.25.0",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "@azure/core-tracing",
+      "version": "1.4.0",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "@azure/core-util",
+      "version": "1.14.0",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "@azure/identity",
+      "version": "4.13.3",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "@azure/logger",
+      "version": "1.4.0",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "@azure/msal-browser",
+      "version": "5.22.0",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "@azure/msal-common",
+      "version": "16.14.1",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "@azure/msal-node",
+      "version": "6.0.1",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "@napi-rs/keyring",
+      "version": "1.3.0",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "@napi-rs/keyring-darwin-arm64",
+      "version": "1.3.0",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "@napi-rs/keyring-darwin-x64",
+      "version": "1.3.0",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "@napi-rs/keyring-freebsd-x64",
+      "version": "1.3.0",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "@napi-rs/keyring-linux-arm-gnueabihf",
+      "version": "1.3.0",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "@napi-rs/keyring-linux-arm64-gnu",
+      "version": "1.3.0",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "@napi-rs/keyring-linux-arm64-musl",
+      "version": "1.3.0",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "@napi-rs/keyring-linux-riscv64-gnu",
+      "version": "1.3.0",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "@napi-rs/keyring-linux-x64-gnu",
+      "version": "1.3.0",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "@napi-rs/keyring-linux-x64-musl",
+      "version": "1.3.0",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "@napi-rs/keyring-win32-arm64-msvc",
+      "version": "1.3.0",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "@napi-rs/keyring-win32-ia32-msvc",
+      "version": "1.3.0",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "@napi-rs/keyring-win32-x64-msvc",
+      "version": "1.3.0",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "@secretlint/core",
+      "version": "10.2.2",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "@secretlint/profiler",
+      "version": "10.2.2",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "@secretlint/secretlint-rule-no-dotenv",
+      "version": "10.2.2",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "@secretlint/secretlint-rule-preset-recommend",
+      "version": "10.2.2",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "@secretlint/source-creator",
+      "version": "10.2.2",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "@secretlint/types",
+      "version": "10.2.2",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "@types/node",
+      "version": "18.19.130",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "@types/vscode",
+      "version": "1.138.0",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "@typespec/ts-http-runtime",
+      "version": "0.3.9",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "@vscode/vsce",
+      "version": "4.0.0",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "@vscode/vsce-sign",
+      "version": "2.1.0",
+      "license": "SEE LICENSE IN LICENSE.txt",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "@vscode/vsce-sign-alpine-arm64",
+      "version": "2.0.6",
+      "license": "SEE LICENSE IN LICENSE.txt",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "@vscode/vsce-sign-alpine-x64",
+      "version": "2.0.6",
+      "license": "SEE LICENSE IN LICENSE.txt",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "@vscode/vsce-sign-darwin-arm64",
+      "version": "2.0.6",
+      "license": "SEE LICENSE IN LICENSE.txt",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "@vscode/vsce-sign-darwin-x64",
+      "version": "2.0.6",
+      "license": "SEE LICENSE IN LICENSE.txt",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "@vscode/vsce-sign-linux-arm",
+      "version": "2.0.6",
+      "license": "SEE LICENSE IN LICENSE.txt",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "@vscode/vsce-sign-linux-arm64",
+      "version": "2.0.6",
+      "license": "SEE LICENSE IN LICENSE.txt",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "@vscode/vsce-sign-linux-x64",
+      "version": "2.0.6",
+      "license": "SEE LICENSE IN LICENSE.txt",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "@vscode/vsce-sign-win32-arm64",
+      "version": "2.0.6",
+      "license": "SEE LICENSE IN LICENSE.txt",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "@vscode/vsce-sign-win32-x64",
+      "version": "2.0.6",
+      "license": "SEE LICENSE IN LICENSE.txt",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "agent-base",
+      "version": "7.1.4",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "azure-devops-node-api",
+      "version": "12.5.0",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "balanced-match",
+      "version": "4.0.4",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "binaryextensions",
+      "version": "6.11.0",
+      "license": "Artistic-2.0",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "boundary",
+      "version": "2.0.0",
+      "license": "BSD-2-Clause",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "brace-expansion",
+      "version": "5.0.12",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "buffer-crc32",
+      "version": "0.2.13",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "buffer-equal-constant-time",
+      "version": "1.0.1",
+      "license": "BSD-3-Clause",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "bundle-name",
+      "version": "4.1.0",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "call-bind-apply-helpers",
+      "version": "1.0.2",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "call-bound",
+      "version": "1.0.4",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "cockatiel",
+      "version": "3.2.1",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "commander",
+      "version": "12.1.0",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "debug",
+      "version": "4.4.3",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "default-browser",
+      "version": "5.5.1",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "default-browser-id",
+      "version": "5.0.1",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "define-lazy-prop",
+      "version": "3.0.0",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "dunder-proto",
+      "version": "1.0.1",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "ecdsa-sig-formatter",
+      "version": "1.0.11",
+      "license": "Apache-2.0",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "editions",
+      "version": "6.22.0",
+      "license": "Artistic-2.0",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "entities",
+      "version": "8.1.0",
+      "license": "BSD-2-Clause",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "es-define-property",
+      "version": "1.0.1",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "es-errors",
+      "version": "1.3.0",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "es-object-atoms",
+      "version": "1.1.2",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "fdir",
+      "version": "6.5.0",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "function-bind",
+      "version": "1.1.2",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "get-intrinsic",
+      "version": "1.3.0",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "get-proto",
+      "version": "1.0.1",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "gopd",
+      "version": "1.2.0",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "graceful-fs",
+      "version": "4.2.11",
+      "license": "ISC",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "has-symbols",
+      "version": "1.1.0",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "hasown",
+      "version": "2.0.4",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "hosted-git-info",
+      "version": "4.1.0",
+      "license": "ISC",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "http-proxy-agent",
+      "version": "7.0.2",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "https-proxy-agent",
+      "version": "7.0.6",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "is-docker",
+      "version": "3.0.0",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "is-inside-container",
+      "version": "1.0.0",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "is-wsl",
+      "version": "3.1.1",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "istextorbinary",
+      "version": "9.5.0",
+      "license": "Artistic-2.0",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "jsonc-parser",
+      "version": "3.3.1",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "jsonwebtoken",
+      "version": "9.0.3",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "jwa",
+      "version": "2.0.1",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "jws",
+      "version": "4.0.1",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "lodash.includes",
+      "version": "4.3.0",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "lodash.isboolean",
+      "version": "3.0.3",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "lodash.isinteger",
+      "version": "4.0.4",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "lodash.isnumber",
+      "version": "3.0.3",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "lodash.isplainobject",
+      "version": "4.0.6",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "lodash.isstring",
+      "version": "4.0.1",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "lodash.once",
+      "version": "4.1.1",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "lru-cache",
+      "version": "6.0.0",
+      "license": "ISC",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "marked",
+      "version": "18.1.0",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "math-intrinsics",
+      "version": "1.1.0",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "mime",
+      "version": "1.6.0",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "minimatch",
+      "version": "10.2.6",
+      "license": "BlueOak-1.0.0",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "ms",
+      "version": "2.1.3",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "mute-stream",
+      "version": "0.0.8",
+      "license": "ISC",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "object-inspect",
+      "version": "1.13.4",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "open",
+      "version": "10.2.0",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "parse5",
+      "version": "8.0.1",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "pend",
+      "version": "1.2.0",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "picomatch",
+      "version": "4.0.7",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "proper-lockfile",
+      "version": "4.1.2",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "qs",
+      "version": "6.16.0",
+      "license": "BSD-3-Clause",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "read",
+      "version": "1.0.7",
+      "license": "ISC",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "retry",
+      "version": "0.12.0",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "run-applescript",
+      "version": "7.1.0",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "safe-buffer",
+      "version": "5.2.1",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "sax",
+      "version": "1.6.1",
+      "license": "BlueOak-1.0.0",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "semver",
+      "version": "7.8.5",
+      "license": "ISC",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "side-channel",
+      "version": "1.1.1",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "side-channel-list",
+      "version": "1.0.1",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "side-channel-map",
+      "version": "1.0.1",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "side-channel-weakmap",
+      "version": "1.0.2",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "signal-exit",
+      "version": "3.0.7",
+      "license": "ISC",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "structured-source",
+      "version": "4.0.0",
+      "license": "BSD-2-Clause",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "textextensions",
+      "version": "6.11.0",
+      "license": "Artistic-2.0",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "tinyglobby",
+      "version": "0.2.17",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "tslib",
+      "version": "2.8.1",
+      "license": "0BSD",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "tunnel",
+      "version": "0.0.6",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "typed-rest-client",
+      "version": "1.8.11",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "typescript",
+      "version": "5.9.3",
+      "license": "Apache-2.0",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "underscore",
+      "version": "1.13.8",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "undici-types",
+      "version": "5.26.5",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "url-join",
+      "version": "4.0.1",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "version-range",
+      "version": "4.15.0",
+      "license": "Artistic-2.0",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "wsl-utils",
+      "version": "0.1.0",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "xml2js",
+      "version": "0.5.0",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "xmlbuilder",
+      "version": "11.0.1",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "yallist",
+      "version": "4.0.0",
+      "license": "ISC",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "yauzl",
+      "version": "3.4.0",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "npm",
+      "manifest": "vscode/package-lock.json",
+      "name": "yazl",
+      "version": "2.5.1",
+      "license": "MIT",
+      "development": true
+    },
+    {
+      "ecosystem": "python",
+      "name": "PyYAML",
+      "version": "6.0.3",
+      "license": "MIT",
+      "scope": "local validation environment; may include development/optional dependencies"
+    },
+    {
+      "ecosystem": "python",
+      "name": "Pygments",
+      "version": "2.21.0",
+      "license": "BSD-2-Clause",
+      "scope": "local validation environment; may include development/optional dependencies"
+    },
+    {
+      "ecosystem": "python",
+      "name": "ast_serialize",
+      "version": "0.12.1",
+      "license": "MIT",
+      "scope": "local validation environment; may include development/optional dependencies"
+    },
+    {
+      "ecosystem": "python",
+      "name": "cfgv",
+      "version": "3.5.0",
+      "license": "MIT",
+      "scope": "local validation environment; may include development/optional dependencies"
+    },
+    {
+      "ecosystem": "python",
+      "name": "coverage",
+      "version": "7.16.2",
+      "license": "Apache-2.0",
+      "scope": "local validation environment; may include development/optional dependencies"
+    },
+    {
+      "ecosystem": "python",
+      "name": "distlib",
+      "version": "0.4.3",
+      "license": "PSF-2.0",
+      "scope": "local validation environment; may include development/optional dependencies"
+    },
+    {
+      "ecosystem": "python",
+      "name": "filelock",
+      "version": "4.1.0",
+      "license": "MIT",
+      "scope": "local validation environment; may include development/optional dependencies"
+    },
+    {
+      "ecosystem": "python",
+      "name": "identify",
+      "version": "2.6.20",
+      "license": "MIT",
+      "scope": "local validation environment; may include development/optional dependencies"
+    },
+    {
+      "ecosystem": "python",
+      "name": "iniconfig",
+      "version": "2.3.1",
+      "license": "MIT",
+      "scope": "local validation environment; may include development/optional dependencies"
+    },
+    {
+      "ecosystem": "python",
+      "name": "librt",
+      "version": "0.16.0",
+      "license": "MIT",
+      "scope": "local validation environment; may include development/optional dependencies"
+    },
+    {
+      "ecosystem": "python",
+      "name": "mypy",
+      "version": "2.4.0",
+      "license": "MIT",
+      "scope": "local validation environment; may include development/optional dependencies"
+    },
+    {
+      "ecosystem": "python",
+      "name": "mypy_extensions",
+      "version": "1.1.0",
+      "license": "MIT",
+      "scope": "local validation environment; may include development/optional dependencies"
+    },
+    {
+      "ecosystem": "python",
+      "name": "nodeenv",
+      "version": "1.11.0",
+      "license": "BSD",
+      "scope": "local validation environment; may include development/optional dependencies"
+    },
+    {
+      "ecosystem": "python",
+      "name": "packaging",
+      "version": "26.3",
+      "license": "Apache-2.0 OR BSD-2-Clause",
+      "scope": "local validation environment; may include development/optional dependencies"
+    },
+    {
+      "ecosystem": "python",
+      "name": "pathspec",
+      "version": "1.1.1",
+      "license": "License :: OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)",
+      "scope": "local validation environment; may include development/optional dependencies"
+    },
+    {
+      "ecosystem": "python",
+      "name": "platformdirs",
+      "version": "4.12.4",
+      "license": "MIT",
+      "scope": "local validation environment; may include development/optional dependencies"
+    },
+    {
+      "ecosystem": "python",
+      "name": "pluggy",
+      "version": "1.6.0",
+      "license": "MIT",
+      "scope": "local validation environment; may include development/optional dependencies"
+    },
+    {
+      "ecosystem": "python",
+      "name": "pre_commit",
+      "version": "4.6.2",
+      "license": "MIT",
+      "scope": "local validation environment; may include development/optional dependencies"
+    },
+    {
+      "ecosystem": "python",
+      "name": "pytest",
+      "version": "9.1.1",
+      "license": "MIT",
+      "scope": "local validation environment; may include development/optional dependencies"
+    },
+    {
+      "ecosystem": "python",
+      "name": "pytest-cov",
+      "version": "7.1.0",
+      "license": "MIT",
+      "scope": "local validation environment; may include development/optional dependencies"
+    },
+    {
+      "ecosystem": "python",
+      "name": "python-discovery",
+      "version": "1.6.2",
+      "license": "See upstream package license text (metadata contains full terms)",
+      "scope": "local validation environment; may include development/optional dependencies"
+    },
+    {
+      "ecosystem": "python",
+      "name": "ruff",
+      "version": "0.17.0",
+      "license": "MIT",
+      "scope": "local validation environment; may include development/optional dependencies"
+    },
+    {
+      "ecosystem": "python",
+      "name": "types-PyYAML",
+      "version": "6.0.12.20260906",
+      "license": "Apache-2.0",
+      "scope": "local validation environment; may include development/optional dependencies"
+    },
+    {
+      "ecosystem": "python",
+      "name": "typing_extensions",
+      "version": "4.16.0",
+      "license": "PSF-2.0",
+      "scope": "local validation environment; may include development/optional dependencies"
+    },
+    {
+      "ecosystem": "python",
+      "name": "virtualenv",
+      "version": "21.14.6",
+      "license": "MIT",
+      "scope": "local validation environment; may include development/optional dependencies"
+    }
+  ]
+}

@@ -1,0 +1,2634 @@
+{
+ "meta": {
+  "project": "acme-shop",
+  "pull_request": {
+   "title": "Rank VIP orders and dedupe imports",
+   "base": "main",
+   "head": "feature/vip-ranking"
+  },
+  "plex_version": "plex 0.1.0",
+  "python": "3.14.0",
+  "platform": "Darwin arm64",
+  "analysis_ms": 226.9,
+  "command": "plex analyze . --compare-base --base-ref main --no-cache --json out/plex.json --md out/plex.md --sarif out/plex.sarif --comment out/plex.comment.md --check-run out/plex.check_run.json",
+  "config": "include:\n  - \"src/**/*.py\"\nmin_function_lines: 0\n"
+ },
+ "sources": {
+  "base": {
+   "src/shop/__init__.py": "",
+   "src/shop/models.py": "from dataclasses import dataclass\n\n\n@dataclass\nclass Customer:\n    id: int\n    name: str\n    tier: str = \"standard\"\n",
+   "src/shop/orders.py": "import json\n\nimport requests\n\nfrom .models import Customer\n\n\ndef find_vip_orders(orders, vip_ids):\n    vip = []\n    for order in orders:\n        if order[\"customer_id\"] in vip_ids:\n            vip.append(order)\n    return vip\n\n\ndef load_customers(session, orders):\n    customers = []\n    for order in orders:\n        customers.append(session.query(Customer).filter_by(id=order[\"customer_id\"]).first())\n    return customers\n\n\ndef enrich(orders):\n    for order in orders:\n        resp = requests.get(f\"https://api.example.com/rates/{order['currency']}\")\n        order[\"rate\"] = resp.json()[\"rate\"]\n    return orders\n\n\ndef render_receipt(lines):\n    out = \"\"\n    for line in lines:\n        out += f\"{line['sku']}: {line['qty']}\\n\"\n    return out\n\n\ndef serialize(orders):\n    payloads = []\n    for order in orders:\n        payloads.append(json.dumps(order))\n    return payloads\n",
+   "src/shop/search.py": "import re\n\nEMAIL = re.compile(r\"^(a+)+$\")\n\n\ndef match_skus(skus, prefix):\n    hits = []\n    for sku in skus:\n        if re.search(r\"^[A-Z]{3}-\\d+\", sku) and sku.startswith(prefix):\n            hits.append(sku)\n    return hits\n\n\ndef cheapest(prices):\n    return sorted(prices)[0]\n\n\ndef has_discount(codes):\n    return any([c.startswith(\"SALE\") for c in codes])\n\n\ndef is_region(code):\n    return code in [\"EU\", \"US\", \"APAC\"]\n\n\ndef tags_for(product, tags=[]):\n    tags.append(product)\n    return tags\n",
+   "src/shop/worker.py": "import time\n\n\nasync def poll(queue):\n    while True:\n        item = await queue.get()\n        time.sleep(0.5)\n        print(item)\n\n\ndef first_token(header):\n    return header.split(\",\")[0]\n\n\ndef stats(counts):\n    if len(counts) > 0:\n        total = sum([c for c in counts])\n        return total\n    return 0\n"
+  },
+  "head": {
+   "src/shop/__init__.py": "",
+   "src/shop/models.py": "from dataclasses import dataclass\n\n\n@dataclass\nclass Customer:\n    id: int\n    name: str\n    tier: str = \"standard\"\n",
+   "src/shop/orders.py": "import json\n\nimport requests\n\nfrom .models import Customer\n\n\ndef find_vip_orders(orders, vip_ids):\n    vip = []\n    for order in orders:\n        for vip_id in vip_ids:\n            if order[\"customer_id\"] == vip_id:\n                vip.append(order)\n    vip.sort(key=lambda o: o[\"total\"], reverse=True)\n    return vip\n\n\ndef load_customers(session, orders):\n    customers = []\n    for order in orders:\n        customers.append(session.query(Customer).filter_by(id=order[\"customer_id\"]).first())\n    return customers\n\n\ndef enrich(orders):\n    for order in orders:\n        resp = requests.get(f\"https://api.example.com/rates/{order['currency']}\")\n        order[\"rate\"] = resp.json()[\"rate\"]\n    return orders\n\n\ndef render_receipt(lines):\n    out = \"\"\n    for line in lines:\n        out += f\"{line['sku']}: {line['qty']}\\n\"\n    return out\n\n\ndef dedupe(orders):\n    unique = []\n    for order in orders:\n        for seen in unique:\n            if seen[\"id\"] == order[\"id\"]:\n                break\n        else:\n            unique.append(order)\n    unique.sort(key=lambda o: o[\"id\"])\n    return unique\n\n\ndef serialize(orders):\n    payloads = []\n    for order in orders:\n        payloads.append(json.dumps(order))\n    return payloads\n",
+   "src/shop/search.py": "import re\n\nEMAIL = re.compile(r\"^(a+)+$\")\n\n\ndef match_skus(skus, prefix):\n    hits = []\n    for sku in skus:\n        if re.search(r\"^[A-Z]{3}-\\d+\", sku) and sku.startswith(prefix):\n            hits.append(sku)\n    return hits\n\n\ndef cheapest(prices):\n    return sorted(prices)[0]\n\n\ndef has_discount(codes):\n    return any([c.startswith(\"SALE\") for c in codes])\n\n\ndef is_region(code):\n    return code in [\"EU\", \"US\", \"APAC\"]\n\n\ndef tags_for(product, tags=[]):\n    tags.append(product)\n    return tags\n",
+   "src/shop/worker.py": "import time\n\n\nasync def poll(queue):\n    while True:\n        item = await queue.get()\n        time.sleep(0.5)\n        print(item)\n\n\ndef first_token(header):\n    return header.split(\",\")[0]\n\n\ndef stats(counts):\n    if len(counts) > 0:\n        total = sum([c for c in counts])\n        return total\n    return 0\n"
+  }
+ },
+ "report": {
+  "schema_version": 7,
+  "generated_at": "2026-10-05T12:40:55.873512Z",
+  "repo_root": "acme-shop",
+  "changed_only": false,
+  "base_ref": "main",
+  "regression_mode": true,
+  "findings": [
+   {
+    "file": "src/shop/orders.py",
+    "qualname": "load_customers",
+    "function_id": "plex:eb8aca997c8abaca",
+    "lineno": 21,
+    "end_lineno": 22,
+    "severity": "medium",
+    "complexity_hint": "Rule: Database call inside loop",
+    "confidence": 0.6,
+    "risk_score": 2.6,
+    "signals": {
+     "loops": 0,
+     "max_loop_depth": 0,
+     "recursion": false,
+     "sort_calls": 0,
+     "comprehension": 0
+    },
+    "body_hash": "a34786cc4686675c384dc0d0052bed9111d9ab6a",
+    "explanation": "Database call `query()` inside a loop may cause N+1 queries.",
+    "suggestions": [
+     "Batch queries or prefetch related data before the loop.",
+     "Move queries outside loops or use select_related/prefetch_related."
+    ],
+    "rule_id": "plex.db-in-loop",
+    "rule_name": "Database call inside loop",
+    "dynamic": null
+   },
+   {
+    "file": "src/shop/orders.py",
+    "qualname": "enrich",
+    "function_id": "plex:f7f005c349a75681",
+    "lineno": 27,
+    "end_lineno": 29,
+    "severity": "medium",
+    "complexity_hint": "Rule: HTTP request inside loop",
+    "confidence": 0.6,
+    "risk_score": 2.6,
+    "signals": {
+     "loops": 0,
+     "max_loop_depth": 0,
+     "recursion": false,
+     "sort_calls": 0,
+     "comprehension": 0
+    },
+    "body_hash": "0a770524191db4fcab4136df1113028f5a2134fd",
+    "explanation": "HTTP request `requests.get()` inside a loop may cause severe latency bottlenecks.",
+    "suggestions": [
+     "Batch requests or use concurrent async fetching (e.g., asyncio.gather or a connection pool).",
+     "Move HTTP calls outside the loop or cache responses."
+    ],
+    "rule_id": "plex.http-in-loop",
+    "rule_name": "HTTP request inside loop",
+    "dynamic": null
+   },
+   {
+    "file": "src/shop/search.py",
+    "qualname": "<module>",
+    "function_id": "",
+    "lineno": 3,
+    "end_lineno": 3,
+    "severity": "medium",
+    "complexity_hint": "Rule: Potential catastrophic regex",
+    "confidence": 0.5,
+    "risk_score": 2.6,
+    "signals": {
+     "loops": 0,
+     "max_loop_depth": 0,
+     "recursion": false,
+     "sort_calls": 0,
+     "comprehension": 0
+    },
+    "body_hash": "",
+    "explanation": "Regex pattern may cause catastrophic backtracking.",
+    "suggestions": [
+     "Avoid nested quantifiers or use non-greedy patterns.",
+     "Consider precompiling with safe patterns or using regex timeouts."
+    ],
+    "rule_id": "plex.regex-catastrophic",
+    "rule_name": "Potential catastrophic regex",
+    "dynamic": null
+   },
+   {
+    "file": "src/shop/worker.py",
+    "qualname": "poll",
+    "function_id": "plex:4d41ee5eb41fac9a",
+    "lineno": 7,
+    "end_lineno": 8,
+    "severity": "medium",
+    "complexity_hint": "Rule: Synchronous blocking I/O in async function",
+    "confidence": 0.85,
+    "risk_score": 2.6,
+    "signals": {
+     "loops": 0,
+     "max_loop_depth": 0,
+     "recursion": false,
+     "sort_calls": 0,
+     "comprehension": 0
+    },
+    "body_hash": "e2857d5e2627cb599f62eaa005150bee199bba81",
+    "explanation": "Synchronous blocking `time.sleep()` inside async function freezes the event loop.",
+    "suggestions": [
+     "Replace with `await asyncio.sleep(...)` to allow concurrent tasks to run."
+    ],
+    "rule_id": "plex.sync-io-in-async",
+    "rule_name": "Synchronous blocking I/O in async function",
+    "dynamic": null
+   },
+   {
+    "file": "src/shop/orders.py",
+    "qualname": "find_vip_orders",
+    "function_id": "plex:e0f82506fd9bba25",
+    "lineno": 8,
+    "end_lineno": 15,
+    "severity": "medium",
+    "complexity_hint": "O(n^2) candidate",
+    "confidence": 0.75,
+    "risk_score": 2.1,
+    "signals": {
+     "loops": 2,
+     "max_loop_depth": 2,
+     "recursion": false,
+     "sort_calls": 1,
+     "comprehension": 0
+    },
+    "body_hash": "c946d76bfadc5d9f7a0020cf058831613f1c6a43",
+    "explanation": "Nested loops detected.",
+    "suggestions": [
+     "Consider pre-indexing or batching to avoid nested iteration.",
+     "Sort once outside loops or use a heap for top-k."
+    ],
+    "rule_id": "",
+    "rule_name": "",
+    "dynamic": null
+   },
+   {
+    "file": "src/shop/orders.py",
+    "qualname": "dedupe",
+    "function_id": "plex:f51ec293c792ff19",
+    "lineno": 39,
+    "end_lineno": 48,
+    "severity": "medium",
+    "complexity_hint": "O(n^2) candidate",
+    "confidence": 0.75,
+    "risk_score": 2.1,
+    "signals": {
+     "loops": 2,
+     "max_loop_depth": 2,
+     "recursion": false,
+     "sort_calls": 1,
+     "comprehension": 0
+    },
+    "body_hash": "14154e84a98115fbb919e131e2386ecf5ea96a97",
+    "explanation": "Nested loops detected.",
+    "suggestions": [
+     "Consider pre-indexing or batching to avoid nested iteration.",
+     "Sort once outside loops or use a heap for top-k."
+    ],
+    "rule_id": "",
+    "rule_name": "",
+    "dynamic": null
+   },
+   {
+    "file": "src/shop/orders.py",
+    "qualname": "render_receipt",
+    "function_id": "plex:326072759de14ae5",
+    "lineno": 35,
+    "end_lineno": 36,
+    "severity": "low",
+    "complexity_hint": "Rule: String concatenation in loop",
+    "confidence": 0.7,
+    "risk_score": 1.6,
+    "signals": {
+     "loops": 0,
+     "max_loop_depth": 0,
+     "recursion": false,
+     "sort_calls": 0,
+     "comprehension": 0
+    },
+    "body_hash": "66fd508080aab8d079365a4c0cea94397cb10f32",
+    "explanation": "Repeated string concatenation on `out` in loop causes quadratic memory copying.",
+    "suggestions": [
+     "Collect substring chunks in a list and join them with `''.join(chunks)` after the loop.",
+     "Use io.StringIO if streaming large textual output."
+    ],
+    "rule_id": "plex.string-concat-in-loop",
+    "rule_name": "String concatenation in loop",
+    "dynamic": null
+   },
+   {
+    "file": "src/shop/orders.py",
+    "qualname": "serialize",
+    "function_id": "plex:6c48d19024b54b6f",
+    "lineno": 54,
+    "end_lineno": 55,
+    "severity": "low",
+    "complexity_hint": "Rule: JSON serialization inside loop",
+    "confidence": 0.6,
+    "risk_score": 1.6,
+    "signals": {
+     "loops": 0,
+     "max_loop_depth": 0,
+     "recursion": false,
+     "sort_calls": 0,
+     "comprehension": 0
+    },
+    "body_hash": "376a4a5abe1b803548abe13a684bad5f4097bad3",
+    "explanation": "JSON `dumps()` inside loop can be expensive.",
+    "suggestions": [
+     "Batch serialization or move it outside the loop."
+    ],
+    "rule_id": "plex.json-in-loop",
+    "rule_name": "JSON serialization inside loop",
+    "dynamic": null
+   },
+   {
+    "file": "src/shop/search.py",
+    "qualname": "match_skus",
+    "function_id": "plex:21f0f2d9548feb91",
+    "lineno": 9,
+    "end_lineno": 11,
+    "severity": "low",
+    "complexity_hint": "Rule: Uncompiled regex inside loop",
+    "confidence": 0.6,
+    "risk_score": 1.6,
+    "signals": {
+     "loops": 0,
+     "max_loop_depth": 0,
+     "recursion": false,
+     "sort_calls": 0,
+     "comprehension": 0
+    },
+    "body_hash": "36b0a737d031af8af1521c28ad8790f7df540d22",
+    "explanation": "Uncompiled `re.search()` inside loop; precompiling with `re.compile()` avoids repeated pattern parsing.",
+    "suggestions": [
+     "Compile regex patterns outside the loop with `pattern = re.compile(...)` and reuse."
+    ],
+    "rule_id": "plex.uncompiled-regex-in-loop",
+    "rule_name": "Uncompiled regex inside loop",
+    "dynamic": null
+   },
+   {
+    "file": "src/shop/search.py",
+    "qualname": "cheapest",
+    "function_id": "plex:6809ac1feb49cd9b",
+    "lineno": 15,
+    "end_lineno": 15,
+    "severity": "low",
+    "complexity_hint": "Rule: sorted()[0] or sorted()[-1] instead of min() or max()",
+    "confidence": 0.9,
+    "risk_score": 1.6,
+    "signals": {
+     "loops": 0,
+     "max_loop_depth": 0,
+     "recursion": false,
+     "sort_calls": 0,
+     "comprehension": 0
+    },
+    "body_hash": "67d9da1fe442535585933d9699ae4548b2d09c32",
+    "explanation": "Calling `sorted(...)[0]` executes in O(n log n) time and allocates a full list; `min()` executes in O(n) time with O(1) memory.",
+    "suggestions": [
+     "Replace with `min(...)`."
+    ],
+    "rule_id": "plex.sorted-min-max",
+    "rule_name": "sorted()[0] or sorted()[-1] instead of min() or max()",
+    "dynamic": null
+   },
+   {
+    "file": "src/shop/search.py",
+    "qualname": "has_discount",
+    "function_id": "plex:1c89f5f372693827",
+    "lineno": 19,
+    "end_lineno": 19,
+    "severity": "low",
+    "complexity_hint": "Rule: Eager list comprehension in any() or all() short-circuiting call",
+    "confidence": 0.9,
+    "risk_score": 1.6,
+    "signals": {
+     "loops": 0,
+     "max_loop_depth": 0,
+     "recursion": false,
+     "sort_calls": 0,
+     "comprehension": 0
+    },
+    "body_hash": "79d87e337814e6d4539956f2abb304d28fd1fb75",
+    "explanation": "Eager list comprehension inside `any()` evaluates all elements upfront and defeats short-circuiting.",
+    "suggestions": [
+     "Pass a generator expression to `any()` instead (`any(... for ... in ...)`)."
+    ],
+    "rule_id": "plex.short-circuit-comprehension",
+    "rule_name": "Eager list comprehension in any() or all() short-circuiting call",
+    "dynamic": null
+   },
+   {
+    "file": "src/shop/search.py",
+    "qualname": "is_region",
+    "function_id": "plex:0533d63242e26048",
+    "lineno": 23,
+    "end_lineno": 23,
+    "severity": "low",
+    "complexity_hint": "Rule: Membership test against list literal instead of set",
+    "confidence": 0.9,
+    "risk_score": 1.6,
+    "signals": {
+     "loops": 0,
+     "max_loop_depth": 0,
+     "recursion": false,
+     "sort_calls": 0,
+     "comprehension": 0
+    },
+    "body_hash": "0872b1d83068acc03e8bf53d065cb0a9f7ce8f2c",
+    "explanation": "Testing membership `in [...]` against a list literal allocates a new list on every evaluation and executes in O(n) time.",
+    "suggestions": [
+     "Use a set literal `{...}` instead for O(1) lookup and compile-time constant folding."
+    ],
+    "rule_id": "plex.membership-in-literal-list",
+    "rule_name": "Membership test against list literal instead of set",
+    "dynamic": null
+   },
+   {
+    "file": "src/shop/search.py",
+    "qualname": "tags_for",
+    "function_id": "plex:97955586e503d73b",
+    "lineno": 26,
+    "end_lineno": 28,
+    "severity": "low",
+    "complexity_hint": "Rule: Mutable default argument in function definition",
+    "confidence": 0.95,
+    "risk_score": 1.6,
+    "signals": {
+     "loops": 0,
+     "max_loop_depth": 0,
+     "recursion": false,
+     "sort_calls": 0,
+     "comprehension": 0
+    },
+    "body_hash": "8b535ee792ed649d92096cc1c8a89de3c677dc98",
+    "explanation": "Mutable default argument `tags` retains state across invocations, risking subtle bugs and memory retention.",
+    "suggestions": [
+     "Replace `tags` default with `None` and initialize inside the function body (`if tags is None: tags = ...`)."
+    ],
+    "rule_id": "plex.mutable-default-arg",
+    "rule_name": "Mutable default argument in function definition",
+    "dynamic": null
+   },
+   {
+    "file": "src/shop/worker.py",
+    "qualname": "first_token",
+    "function_id": "plex:03bf8cf705f5ca5f",
+    "lineno": 12,
+    "end_lineno": 12,
+    "severity": "low",
+    "complexity_hint": "Rule: Unbounded string split before indexing",
+    "confidence": 0.9,
+    "risk_score": 1.6,
+    "signals": {
+     "loops": 0,
+     "max_loop_depth": 0,
+     "recursion": false,
+     "sort_calls": 0,
+     "comprehension": 0
+    },
+    "body_hash": "bf5b76fb97556254d3e4054649b24e6d79890ee4",
+    "explanation": "`header.split(',')[0]` splits entire string into a list without `maxsplit`; providing `maxsplit=1` avoids allocating all tokens.",
+    "suggestions": [
+     "Pass `maxsplit=1` (e.g. `header.split(',', 1)[0]`) to avoid token list allocation."
+    ],
+    "rule_id": "plex.str-split-maxsplit",
+    "rule_name": "Unbounded string split before indexing",
+    "dynamic": null
+   },
+   {
+    "file": "src/shop/worker.py",
+    "qualname": "stats",
+    "function_id": "plex:4be1ea04bc109652",
+    "lineno": 16,
+    "end_lineno": 19,
+    "severity": "info",
+    "complexity_hint": "Rule: Unnecessary len() call in boolean context",
+    "confidence": 0.9,
+    "risk_score": 0.9,
+    "signals": {
+     "loops": 0,
+     "max_loop_depth": 0,
+     "recursion": false,
+     "sort_calls": 0,
+     "comprehension": 0
+    },
+    "body_hash": "7d59a50909c8e620e4a3fdcd53af4f59b7c7d7dc",
+    "explanation": "Unnecessary `len(...)` call in comparison with 0; truthiness tests (`if x:`, `if not x:`) are faster and idiomatic.",
+    "suggestions": [
+     "Use boolean truthiness directly (`if seq:` or `if not seq:`)."
+    ],
+    "rule_id": "plex.unnecessary-len",
+    "rule_name": "Unnecessary len() call in boolean context",
+    "dynamic": null
+   },
+   {
+    "file": "src/shop/worker.py",
+    "qualname": "stats",
+    "function_id": "plex:4be1ea04bc109652",
+    "lineno": 17,
+    "end_lineno": 19,
+    "severity": "info",
+    "complexity_hint": "Rule: Unnecessary list comprehension passed to iterable consumer",
+    "confidence": 0.85,
+    "risk_score": 0.9,
+    "signals": {
+     "loops": 0,
+     "max_loop_depth": 0,
+     "recursion": false,
+     "sort_calls": 0,
+     "comprehension": 0
+    },
+    "body_hash": "7d59a50909c8e620e4a3fdcd53af4f59b7c7d7dc",
+    "explanation": "List comprehension passed to `sum()` allocates an unnecessary intermediate list; generator expression streams items without allocation.",
+    "suggestions": [
+     "Use generator expression `sum(... for ... in ...)`."
+    ],
+    "rule_id": "plex.unnecessary-comprehension-in-call",
+    "rule_name": "Unnecessary list comprehension passed to iterable consumer",
+    "dynamic": null
+   },
+   {
+    "file": "src/shop/search.py",
+    "qualname": "has_discount",
+    "function_id": "plex:1c89f5f372693827",
+    "lineno": 18,
+    "end_lineno": 19,
+    "severity": "info",
+    "complexity_hint": "O(n) candidate",
+    "confidence": 0.65,
+    "risk_score": 0.6,
+    "signals": {
+     "loops": 1,
+     "max_loop_depth": 1,
+     "recursion": false,
+     "sort_calls": 0,
+     "comprehension": 1
+    },
+    "body_hash": "79d87e337814e6d4539956f2abb304d28fd1fb75",
+    "explanation": "Loop count 1 with max depth 1.",
+    "suggestions": [
+     "Batch work or use vectorized/data-structure-based lookups."
+    ],
+    "rule_id": "",
+    "rule_name": "",
+    "dynamic": null
+   },
+   {
+    "file": "src/shop/worker.py",
+    "qualname": "stats",
+    "function_id": "plex:4be1ea04bc109652",
+    "lineno": 15,
+    "end_lineno": 19,
+    "severity": "info",
+    "complexity_hint": "O(n) candidate",
+    "confidence": 0.65,
+    "risk_score": 0.6,
+    "signals": {
+     "loops": 1,
+     "max_loop_depth": 1,
+     "recursion": false,
+     "sort_calls": 0,
+     "comprehension": 1
+    },
+    "body_hash": "7d59a50909c8e620e4a3fdcd53af4f59b7c7d7dc",
+    "explanation": "Loop count 1 with max depth 1.",
+    "suggestions": [
+     "Batch work or use vectorized/data-structure-based lookups."
+    ],
+    "rule_id": "",
+    "rule_name": "",
+    "dynamic": null
+   },
+   {
+    "file": "src/shop/search.py",
+    "qualname": "cheapest",
+    "function_id": "plex:6809ac1feb49cd9b",
+    "lineno": 14,
+    "end_lineno": 15,
+    "severity": "info",
+    "complexity_hint": "O(n log n) candidate",
+    "confidence": 0.7,
+    "risk_score": 0.5,
+    "signals": {
+     "loops": 0,
+     "max_loop_depth": 0,
+     "recursion": false,
+     "sort_calls": 1,
+     "comprehension": 0
+    },
+    "body_hash": "67d9da1fe442535585933d9699ae4548b2d09c32",
+    "explanation": "Sorting calls detected (1).",
+    "suggestions": [
+     "Avoid repeated sorting in hot paths."
+    ],
+    "rule_id": "",
+    "rule_name": "",
+    "dynamic": null
+   },
+   {
+    "file": "src/shop/orders.py",
+    "qualname": "load_customers",
+    "function_id": "plex:eb8aca997c8abaca",
+    "lineno": 18,
+    "end_lineno": 22,
+    "severity": "info",
+    "complexity_hint": "O(n) candidate",
+    "confidence": 0.65,
+    "risk_score": 0.4,
+    "signals": {
+     "loops": 1,
+     "max_loop_depth": 1,
+     "recursion": false,
+     "sort_calls": 0,
+     "comprehension": 0
+    },
+    "body_hash": "a34786cc4686675c384dc0d0052bed9111d9ab6a",
+    "explanation": "Loop count 1 with max depth 1.",
+    "suggestions": [
+     "Batch work or use vectorized/data-structure-based lookups."
+    ],
+    "rule_id": "",
+    "rule_name": "",
+    "dynamic": null
+   },
+   {
+    "file": "src/shop/orders.py",
+    "qualname": "enrich",
+    "function_id": "plex:f7f005c349a75681",
+    "lineno": 25,
+    "end_lineno": 29,
+    "severity": "info",
+    "complexity_hint": "O(n) candidate",
+    "confidence": 0.65,
+    "risk_score": 0.4,
+    "signals": {
+     "loops": 1,
+     "max_loop_depth": 1,
+     "recursion": false,
+     "sort_calls": 0,
+     "comprehension": 0
+    },
+    "body_hash": "0a770524191db4fcab4136df1113028f5a2134fd",
+    "explanation": "Loop count 1 with max depth 1.",
+    "suggestions": [
+     "Batch work or use vectorized/data-structure-based lookups."
+    ],
+    "rule_id": "",
+    "rule_name": "",
+    "dynamic": null
+   },
+   {
+    "file": "src/shop/orders.py",
+    "qualname": "render_receipt",
+    "function_id": "plex:326072759de14ae5",
+    "lineno": 32,
+    "end_lineno": 36,
+    "severity": "info",
+    "complexity_hint": "O(n) candidate",
+    "confidence": 0.65,
+    "risk_score": 0.4,
+    "signals": {
+     "loops": 1,
+     "max_loop_depth": 1,
+     "recursion": false,
+     "sort_calls": 0,
+     "comprehension": 0
+    },
+    "body_hash": "66fd508080aab8d079365a4c0cea94397cb10f32",
+    "explanation": "Loop count 1 with max depth 1.",
+    "suggestions": [
+     "Batch work or use vectorized/data-structure-based lookups."
+    ],
+    "rule_id": "",
+    "rule_name": "",
+    "dynamic": null
+   },
+   {
+    "file": "src/shop/orders.py",
+    "qualname": "serialize",
+    "function_id": "plex:6c48d19024b54b6f",
+    "lineno": 51,
+    "end_lineno": 55,
+    "severity": "info",
+    "complexity_hint": "O(n) candidate",
+    "confidence": 0.65,
+    "risk_score": 0.4,
+    "signals": {
+     "loops": 1,
+     "max_loop_depth": 1,
+     "recursion": false,
+     "sort_calls": 0,
+     "comprehension": 0
+    },
+    "body_hash": "376a4a5abe1b803548abe13a684bad5f4097bad3",
+    "explanation": "Loop count 1 with max depth 1.",
+    "suggestions": [
+     "Batch work or use vectorized/data-structure-based lookups."
+    ],
+    "rule_id": "",
+    "rule_name": "",
+    "dynamic": null
+   },
+   {
+    "file": "src/shop/search.py",
+    "qualname": "match_skus",
+    "function_id": "plex:21f0f2d9548feb91",
+    "lineno": 6,
+    "end_lineno": 11,
+    "severity": "info",
+    "complexity_hint": "O(n) candidate",
+    "confidence": 0.65,
+    "risk_score": 0.4,
+    "signals": {
+     "loops": 1,
+     "max_loop_depth": 1,
+     "recursion": false,
+     "sort_calls": 0,
+     "comprehension": 0
+    },
+    "body_hash": "36b0a737d031af8af1521c28ad8790f7df540d22",
+    "explanation": "Loop count 1 with max depth 1.",
+    "suggestions": [
+     "Batch work or use vectorized/data-structure-based lookups."
+    ],
+    "rule_id": "",
+    "rule_name": "",
+    "dynamic": null
+   },
+   {
+    "file": "src/shop/worker.py",
+    "qualname": "poll",
+    "function_id": "plex:4d41ee5eb41fac9a",
+    "lineno": 4,
+    "end_lineno": 8,
+    "severity": "info",
+    "complexity_hint": "O(n) candidate",
+    "confidence": 0.65,
+    "risk_score": 0.4,
+    "signals": {
+     "loops": 1,
+     "max_loop_depth": 1,
+     "recursion": false,
+     "sort_calls": 0,
+     "comprehension": 0
+    },
+    "body_hash": "e2857d5e2627cb599f62eaa005150bee199bba81",
+    "explanation": "Loop count 1 with max depth 1.",
+    "suggestions": [
+     "Batch work or use vectorized/data-structure-based lookups."
+    ],
+    "rule_id": "",
+    "rule_name": "",
+    "dynamic": null
+   },
+   {
+    "file": "src/shop/search.py",
+    "qualname": "is_region",
+    "function_id": "plex:0533d63242e26048",
+    "lineno": 22,
+    "end_lineno": 23,
+    "severity": "info",
+    "complexity_hint": "O(1) / O(log n) candidate",
+    "confidence": 0.4,
+    "risk_score": 0.0,
+    "signals": {
+     "loops": 0,
+     "max_loop_depth": 0,
+     "recursion": false,
+     "sort_calls": 0,
+     "comprehension": 0
+    },
+    "body_hash": "0872b1d83068acc03e8bf53d065cb0a9f7ce8f2c",
+    "explanation": "O(1) / O(log n) candidate based on static signals.",
+    "suggestions": [],
+    "rule_id": "",
+    "rule_name": "",
+    "dynamic": null
+   },
+   {
+    "file": "src/shop/search.py",
+    "qualname": "tags_for",
+    "function_id": "plex:97955586e503d73b",
+    "lineno": 26,
+    "end_lineno": 28,
+    "severity": "info",
+    "complexity_hint": "O(1) / O(log n) candidate",
+    "confidence": 0.4,
+    "risk_score": 0.0,
+    "signals": {
+     "loops": 0,
+     "max_loop_depth": 0,
+     "recursion": false,
+     "sort_calls": 0,
+     "comprehension": 0
+    },
+    "body_hash": "8b535ee792ed649d92096cc1c8a89de3c677dc98",
+    "explanation": "O(1) / O(log n) candidate based on static signals.",
+    "suggestions": [],
+    "rule_id": "",
+    "rule_name": "",
+    "dynamic": null
+   },
+   {
+    "file": "src/shop/worker.py",
+    "qualname": "first_token",
+    "function_id": "plex:03bf8cf705f5ca5f",
+    "lineno": 11,
+    "end_lineno": 12,
+    "severity": "info",
+    "complexity_hint": "O(1) / O(log n) candidate",
+    "confidence": 0.4,
+    "risk_score": 0.0,
+    "signals": {
+     "loops": 0,
+     "max_loop_depth": 0,
+     "recursion": false,
+     "sort_calls": 0,
+     "comprehension": 0
+    },
+    "body_hash": "bf5b76fb97556254d3e4054649b24e6d79890ee4",
+    "explanation": "O(1) / O(log n) candidate based on static signals.",
+    "suggestions": [],
+    "rule_id": "",
+    "rule_name": "",
+    "dynamic": null
+   }
+  ],
+  "regressions": [
+   {
+    "file": "src/shop/orders.py",
+    "qualname": "find_vip_orders",
+    "function_id": "plex:e0f82506fd9bba25",
+    "lineno": 8,
+    "base_risk_score": 0.4,
+    "head_risk_score": 2.1,
+    "base_hint": "O(n) candidate",
+    "head_hint": "O(n^2) candidate",
+    "risk_delta": 1.7,
+    "hint_delta": 3,
+    "regression_severity": "medium",
+    "explanation": "Loop depth increased 1 -> 2.",
+    "suggestions": [
+     "Reduce nested loops by precomputing lookups or indexing with dict/set.",
+     "Sort once outside loops or use a heap for top-k."
+    ],
+    "base_signals": {
+     "loops": 1,
+     "max_loop_depth": 1,
+     "recursion": false,
+     "sort_calls": 0,
+     "comprehension": 0
+    },
+    "head_signals": {
+     "loops": 2,
+     "max_loop_depth": 2,
+     "recursion": false,
+     "sort_calls": 1,
+     "comprehension": 0
+    },
+    "dynamic": null
+   }
+  ],
+  "stats": {
+   "findings_total": 28,
+   "regressions_total": 1,
+   "severity_counts": {
+    "medium": 6,
+    "low": 8,
+    "info": 14
+   },
+   "hint_counts": {
+    "Rule: Database call inside loop": 1,
+    "Rule: HTTP request inside loop": 1,
+    "Rule: Potential catastrophic regex": 1,
+    "Rule: Synchronous blocking I/O in async function": 1,
+    "O(n^2) candidate": 2,
+    "Rule: String concatenation in loop": 1,
+    "Rule: JSON serialization inside loop": 1,
+    "Rule: Uncompiled regex inside loop": 1,
+    "Rule: sorted()[0] or sorted()[-1] instead of min() or max()": 1,
+    "Rule: Eager list comprehension in any() or all() short-circuiting call": 1,
+    "Rule: Membership test against list literal instead of set": 1,
+    "Rule: Mutable default argument in function definition": 1,
+    "Rule: Unbounded string split before indexing": 1,
+    "Rule: Unnecessary len() call in boolean context": 1,
+    "Rule: Unnecessary list comprehension passed to iterable consumer": 1,
+    "O(n) candidate": 8,
+    "O(n log n) candidate": 1,
+    "O(1) / O(log n) candidate": 3
+   },
+   "max_risk_score": 2.6,
+   "avg_risk_score": 1.1892857142857145,
+   "max_regression_delta": 1.7
+  },
+  "diffs": [
+   {
+    "file": "src/shop/orders.py",
+    "qualname": "find_vip_orders",
+    "function_id": "plex:e0f82506fd9bba25",
+    "lineno": 8,
+    "change_type": "changed",
+    "trend": "worse",
+    "base_risk_score": 0.4,
+    "head_risk_score": 2.1,
+    "base_hint": "O(n) candidate",
+    "head_hint": "O(n^2) candidate",
+    "risk_delta": 1.7,
+    "hint_delta": 3,
+    "regression_severity": "medium"
+   },
+   {
+    "file": "src/shop/orders.py",
+    "qualname": "dedupe",
+    "function_id": "plex:f51ec293c792ff19",
+    "lineno": 39,
+    "change_type": "added",
+    "trend": "new",
+    "base_risk_score": null,
+    "head_risk_score": 2.1,
+    "base_hint": null,
+    "head_hint": "O(n^2) candidate",
+    "risk_delta": null,
+    "hint_delta": null,
+    "regression_severity": null
+   }
+  ],
+  "suppressions": []
+ },
+ "rules": [
+  {
+   "id": "plex.db-in-loop",
+   "name": "Database call inside loop",
+   "severity": "high",
+   "stability": "stable",
+   "tags": [
+    "performance",
+    "orm",
+    "database"
+   ],
+   "description": "Detects potential N+1 patterns by spotting ORM/SQL calls in loops."
+  },
+  {
+   "id": "plex.json-in-loop",
+   "name": "JSON serialization inside loop",
+   "severity": "medium",
+   "stability": "experimental",
+   "tags": [
+    "performance",
+    "serialization"
+   ],
+   "description": "Detects json.dumps/loads in tight loops."
+  },
+  {
+   "id": "plex.pandas-iterrows",
+   "name": "Pandas row iteration in loop",
+   "severity": "medium",
+   "stability": "experimental",
+   "tags": [
+    "performance",
+    "pandas"
+   ],
+   "description": "Detects row-by-row pandas usage in loops."
+  },
+  {
+   "id": "plex.regex-catastrophic",
+   "name": "Potential catastrophic regex",
+   "severity": "high",
+   "stability": "experimental",
+   "tags": [
+    "performance",
+    "regex"
+   ],
+   "description": "Detects regex patterns that may cause catastrophic backtracking."
+  },
+  {
+   "id": "plex.http-in-loop",
+   "name": "HTTP request inside loop",
+   "severity": "high",
+   "stability": "stable",
+   "tags": [
+    "performance",
+    "network",
+    "http"
+   ],
+   "description": "Detects unbatched network and HTTP calls in loops."
+  },
+  {
+   "id": "plex.string-concat-in-loop",
+   "name": "String concatenation in loop",
+   "severity": "medium",
+   "stability": "stable",
+   "tags": [
+    "performance",
+    "string",
+    "memory"
+   ],
+   "description": "Detects repeated string concatenation in loops causing O(n^2) reallocation."
+  },
+  {
+   "id": "plex.unbounded-file-io",
+   "name": "File I/O inside loop",
+   "severity": "high",
+   "stability": "stable",
+   "tags": [
+    "performance",
+    "io",
+    "filesystem"
+   ],
+   "description": "Detects repetitive file open and read/write operations inside loops."
+  },
+  {
+   "id": "plex.uncompiled-regex-in-loop",
+   "name": "Uncompiled regex inside loop",
+   "severity": "medium",
+   "stability": "experimental",
+   "tags": [
+    "performance",
+    "regex"
+   ],
+   "description": "Detects direct re.search/match calls inside loops."
+  },
+  {
+   "id": "plex.linear-search-in-loop",
+   "name": "Linear search inside loop",
+   "severity": "high",
+   "stability": "stable",
+   "tags": [
+    "performance",
+    "algorithmic",
+    "complexity"
+   ],
+   "description": "Detects linear membership testing (x in list) inside loops causing quadratic behavior."
+  },
+  {
+   "id": "plex.sync-io-in-async",
+   "name": "Synchronous blocking I/O in async function",
+   "severity": "high",
+   "stability": "experimental",
+   "tags": [
+    "performance",
+    "async",
+    "concurrency",
+    "event-loop"
+   ],
+   "description": "Detects synchronous blocking operations (time.sleep, open, requests) inside async coroutines that block the event loop."
+  },
+  {
+   "id": "plex.deepcopy-in-loop",
+   "name": "Deepcopy inside loop",
+   "severity": "high",
+   "stability": "experimental",
+   "tags": [
+    "performance",
+    "memory",
+    "allocation"
+   ],
+   "description": "Detects copy.deepcopy calls inside loops causing extensive object traversal and allocation overhead."
+  },
+  {
+   "id": "plex.repeated-sort-in-loop",
+   "name": "Sorting inside loop",
+   "severity": "medium",
+   "stability": "experimental",
+   "tags": [
+    "performance",
+    "algorithmic",
+    "complexity"
+   ],
+   "description": "Detects sorted() or list.sort() calls inside loops causing O(n * m log m) complexity."
+  },
+  {
+   "id": "plex.redundant-comprehension",
+   "name": "Redundant comprehension or conversion call",
+   "severity": "low",
+   "stability": "stable",
+   "tags": [
+    "performance",
+    "idiomatic",
+    "allocation"
+   ],
+   "description": "Detects redundant wrapping of list/set/dict comprehensions or generator expressions in list(), set(), or dict() calls."
+  },
+  {
+   "id": "plex.unnecessary-dict-keys",
+   "name": "Unnecessary dict.keys() iteration or membership check",
+   "severity": "low",
+   "stability": "stable",
+   "tags": [
+    "performance",
+    "idiomatic",
+    "lookup"
+   ],
+   "description": "Detects redundant .keys() calls in 'for ... in d.keys()' and 'x in d.keys()' membership tests."
+  },
+  {
+   "id": "plex.unnecessary-len",
+   "name": "Unnecessary len() call in boolean context",
+   "severity": "low",
+   "stability": "stable",
+   "tags": [
+    "performance",
+    "idiomatic"
+   ],
+   "description": "Detects len(x) > 0, len(x) == 0, and len(x) != 0 in conditions; truthiness checks (if x:, if not x:) are more idiomatic and faster."
+  },
+  {
+   "id": "plex.math-pow-vs-operator",
+   "name": "math.pow() or pow() in loop instead of multiplication operator",
+   "severity": "medium",
+   "stability": "stable",
+   "tags": [
+    "performance",
+    "math",
+    "numerical"
+   ],
+   "description": "Detects math.pow(x, 2) or pow(x, 2) in loops; x * x executes 3-5x faster in tight numerical loops."
+  },
+  {
+   "id": "plex.dict-get-fallback",
+   "name": "Double dictionary lookup instead of dict.get()",
+   "severity": "low",
+   "stability": "stable",
+   "tags": [
+    "performance",
+    "dictionary",
+    "lookup"
+   ],
+   "description": "Detects 'if k in d: v = d[k] else: v = default' pattern; dict.get() performs a single hash lookup instead of two."
+  },
+  {
+   "id": "plex.mutable-default-arg",
+   "name": "Mutable default argument in function definition",
+   "severity": "medium",
+   "stability": "stable",
+   "tags": [
+    "memory",
+    "correctness",
+    "performance"
+   ],
+   "description": "Detects mutable default arguments ([], {}, set()) in function definitions; defaults are instantiated once at module load, leading to state leaks across calls."
+  },
+  {
+   "id": "plex.manual-list-extend",
+   "name": "Manual loop append instead of list.extend()",
+   "severity": "medium",
+   "stability": "stable",
+   "tags": [
+    "performance",
+    "idiomatic",
+    "loop"
+   ],
+   "description": "Detects 'for item in seq: out.append(item)'; list.extend() performs a single pre-allocation in C and executes 2-4x faster."
+  },
+  {
+   "id": "plex.unclosed-resource",
+   "name": "Resource opened without context manager",
+   "severity": "medium",
+   "stability": "stable",
+   "tags": [
+    "resource",
+    "io",
+    "performance"
+   ],
+   "description": "Detects open() calls outside of 'with' statements, risking unclosed file descriptors and deferred garbage collection stalls."
+  },
+  {
+   "id": "plex.short-circuit-comprehension",
+   "name": "Eager list comprehension in any() or all() short-circuiting call",
+   "severity": "medium",
+   "stability": "stable",
+   "tags": [
+    "performance",
+    "comprehension",
+    "memory"
+   ],
+   "description": "Detects any([x for x in seq]) and all([x for x in seq]); eagerly allocating a list prevents short-circuiting and wastes memory."
+  },
+  {
+   "id": "plex.sorted-min-max",
+   "name": "sorted()[0] or sorted()[-1] instead of min() or max()",
+   "severity": "medium",
+   "stability": "stable",
+   "tags": [
+    "performance",
+    "algorithmic",
+    "sorting"
+   ],
+   "description": "Detects sorted(seq)[0] or sorted(seq)[-1]; min() and max() run in linear O(n) time and O(1) space instead of O(n log n) sort."
+  },
+  {
+   "id": "plex.unnecessary-comprehension-in-call",
+   "name": "Unnecessary list comprehension passed to iterable consumer",
+   "severity": "low",
+   "stability": "stable",
+   "tags": [
+    "performance",
+    "comprehension",
+    "memory"
+   ],
+   "description": "Detects sum([...]) and tuple([...]); passing generator expression avoids intermediate list allocation."
+  },
+  {
+   "id": "plex.membership-in-literal-list",
+   "name": "Membership test against list literal instead of set",
+   "severity": "medium",
+   "stability": "stable",
+   "tags": [
+    "performance",
+    "membership",
+    "collection"
+   ],
+   "description": "Detects `x in [...]` or `x not in [...]`; list literals allocate a new list heap object on every evaluation and perform O(n) search. Using a set literal `{...}` compiles to a constant frozenset with O(1) lookup."
+  },
+  {
+   "id": "plex.unnecessary-lambda",
+   "name": "Unnecessary lambda wrapping single function call",
+   "severity": "low",
+   "stability": "stable",
+   "tags": [
+    "performance",
+    "functional",
+    "overhead"
+   ],
+   "description": "Detects `lambda x: f(x)` wrappers; passing `f` directly avoids extra Python call frame allocation and function invocation overhead."
+  },
+  {
+   "id": "plex.dict-get-default-none",
+   "name": "Redundant None default in dict.get()",
+   "severity": "low",
+   "stability": "stable",
+   "tags": [
+    "performance",
+    "idiomatic",
+    "dictionary"
+   ],
+   "description": "Detects `dict.get(key, None)`; None is already the default return value for dict.get(), so passing None explicitly is redundant."
+  },
+  {
+   "id": "plex.unnecessary-async-def",
+   "name": "Unnecessary async def coroutine",
+   "severity": "medium",
+   "stability": "stable",
+   "tags": [
+    "performance",
+    "async",
+    "concurrency"
+   ],
+   "description": "Detects `async def` coroutines containing no await/async with/async for expressions, which incur coroutine allocation and event loop overhead."
+  },
+  {
+   "id": "plex.unnecessary-enumerate",
+   "name": "Unused index in enumerate() loop",
+   "severity": "low",
+   "stability": "stable",
+   "tags": [
+    "performance",
+    "collections",
+    "loops"
+   ],
+   "description": "Detects `for idx, item in enumerate(...)` where `idx` is never referenced, incurring unnecessary tuple construction and counter tracking."
+  },
+  {
+   "id": "plex.dict-items-value-unused",
+   "name": "Unused value in dict.items() iteration",
+   "severity": "low",
+   "stability": "stable",
+   "tags": [
+    "performance",
+    "collections",
+    "loops",
+    "dictionary"
+   ],
+   "description": "Detects `for key, value in d.items()` loops where `value` is unused, incurring unnecessary 2-tuple allocations on every iteration."
+  },
+  {
+   "id": "plex.dict-items-comprehension-to-copy",
+   "name": "Dict comprehension duplicating dict.items()",
+   "severity": "medium",
+   "stability": "stable",
+   "tags": [
+    "performance",
+    "dictionary",
+    "collections"
+   ],
+   "description": "Detects `{k: v for k, v in d.items()}` which can be replaced with `d.copy()`, avoiding Python loop overhead and running ~8.5x faster."
+  },
+  {
+   "id": "plex.redundant-collection-call",
+   "name": "Redundant nested collection constructor call",
+   "severity": "low",
+   "stability": "stable",
+   "tags": [
+    "performance",
+    "collections",
+    "memory"
+   ],
+   "description": "Detects redundant nested collection calls like `list(list(x))` or `set(set(x))` that allocate redundant intermediate memory."
+  },
+  {
+   "id": "plex.redundant-fstring",
+   "name": "Redundant f-string with no formatted expressions",
+   "severity": "low",
+   "stability": "stable",
+   "tags": [
+    "performance",
+    "strings",
+    "idiomatic"
+   ],
+   "description": "Detects f-strings that contain no interpolated expressions and can be written as plain string literals."
+  },
+  {
+   "id": "plex.str-startswith-tuple",
+   "name": "Multiple startswith() or endswith() calls can use tuple argument",
+   "severity": "low",
+   "stability": "stable",
+   "tags": [
+    "performance",
+    "strings",
+    "idiomatic"
+   ],
+   "description": "Detects multiple startswith() or endswith() calls on the same string joined with 'or' and suggests combining them into a single call with a tuple."
+  },
+  {
+   "id": "plex.dict-fromkeys",
+   "name": "Dictionary comprehension with constant value can use dict.fromkeys()",
+   "severity": "low",
+   "stability": "stable",
+   "tags": [
+    "performance",
+    "collections",
+    "idiomatic"
+   ],
+   "description": "Detects dictionary comprehensions of the form '{k: <constant> for k in keys}' and suggests 'dict.fromkeys(keys, <constant>)' for faster C-level hash table allocation."
+  },
+  {
+   "id": "plex.itertools-chain-from-iterable",
+   "name": "itertools.chain(*iterables) can use itertools.chain.from_iterable()",
+   "severity": "low",
+   "stability": "stable",
+   "tags": [
+    "performance",
+    "collections",
+    "memory",
+    "idiomatic"
+   ],
+   "description": "Detects 'itertools.chain(*iterables)' unpacking an iterable and suggests 'itertools.chain.from_iterable(iterables)' to avoid argument tuple allocation."
+  },
+  {
+   "id": "plex.try-except-dict-get",
+   "name": "try-except KeyError instead of dict.get()",
+   "severity": "low",
+   "stability": "stable",
+   "tags": [
+    "performance",
+    "exceptions",
+    "dictionary",
+    "lookup"
+   ],
+   "description": "Detects 'try: var = d[k] except KeyError: var = default' patterns and suggests 'd.get(k, default)' to eliminate expensive exception handling."
+  },
+  {
+   "id": "plex.try-except-pop-default",
+   "name": "try-except KeyError around dict.pop() instead of default argument",
+   "severity": "low",
+   "stability": "stable",
+   "tags": [
+    "performance",
+    "exceptions",
+    "dictionary"
+   ],
+   "description": "Detects 'try: d.pop(k) except KeyError: pass' or assignment fallback and suggests 'd.pop(k, default)'."
+  },
+  {
+   "id": "plex.if-pass-else-invert",
+   "name": "Empty if-pass-else branch can invert condition",
+   "severity": "low",
+   "stability": "stable",
+   "tags": [
+    "performance",
+    "control-flow",
+    "idiomatic"
+   ],
+   "description": "Detects 'if condition: pass else: body' and suggests inverting the condition to eliminate the empty branch and jump opcodes."
+  },
+  {
+   "id": "plex.isinstance-tuple",
+   "name": "Multiple isinstance() checks can use tuple argument",
+   "severity": "low",
+   "stability": "stable",
+   "tags": [
+    "performance",
+    "types",
+    "idiomatic"
+   ],
+   "description": "Detects multiple isinstance(x, T) checks on the same target chained with 'or' and suggests combining them into isinstance(x, (T1, T2))."
+  },
+  {
+   "id": "plex.itertools-islice",
+   "name": "Slicing list() or tuple() of iterable instead of itertools.islice()",
+   "severity": "medium",
+   "stability": "stable",
+   "tags": [
+    "performance",
+    "memory",
+    "iterators",
+    "itertools"
+   ],
+   "description": "Detects list(seq)[:n] and tuple(seq)[:n] patterns that realize entire sequences in memory before slicing; itertools.islice() consumes lazily with O(1) allocation."
+  },
+  {
+   "id": "plex.re-sub-literal",
+   "name": "re.sub() with literal string pattern instead of str.replace()",
+   "severity": "low",
+   "stability": "stable",
+   "tags": [
+    "performance",
+    "regex",
+    "strings"
+   ],
+   "description": "Detects re.sub() calls with literal patterns and replacements lacking regex metacharacters; str.replace() bypasses the regex engine and runs 3x faster."
+  },
+  {
+   "id": "plex.str-removeprefix-suffix",
+   "name": "Manual prefix or suffix slicing instead of removeprefix/removesuffix",
+   "severity": "low",
+   "stability": "stable",
+   "tags": [
+    "performance",
+    "strings",
+    "idiomatic"
+   ],
+   "description": "Detects 'if s.startswith(p): s = s[len(p):]' or 'if s.endswith(suf): s = s[:-len(suf)]' and suggests s.removeprefix(p) or s.removesuffix(suf)."
+  },
+  {
+   "id": "plex.math-log-base",
+   "name": "math.log() with base 2 or 10 instead of math.log2() or math.log10()",
+   "severity": "low",
+   "stability": "stable",
+   "tags": [
+    "performance",
+    "math",
+    "numerical"
+   ],
+   "description": "Detects math.log(x, 2) and math.log(x, 10) calls; specialized math.log2() and math.log10() use direct C/FPU instructions, running 2x faster."
+  },
+  {
+   "id": "plex.try-except-next-default",
+   "name": "try-except StopIteration around next() instead of default argument",
+   "severity": "low",
+   "stability": "stable",
+   "tags": [
+    "performance",
+    "iterators",
+    "exceptions"
+   ],
+   "description": "Detects 'try: v = next(it) except StopIteration: v = default' and suggests 'v = next(it, default)' to avoid exception frame unwinding."
+  },
+  {
+   "id": "plex.str-split-maxsplit",
+   "name": "Unbounded string split before indexing",
+   "severity": "medium",
+   "stability": "stable",
+   "tags": [
+    "performance",
+    "string",
+    "allocation"
+   ],
+   "description": "Detects s.split(...)[0] or s.rsplit(...)[-1] without maxsplit; supplying maxsplit avoids allocating and traversing a list of all tokens."
+  },
+  {
+   "id": "plex.filter-truthy",
+   "name": "Comprehension truthiness filtering instead of filter(None, ...)",
+   "severity": "low",
+   "stability": "stable",
+   "tags": [
+    "performance",
+    "comprehension",
+    "builtins"
+   ],
+   "description": "Detects [x for x in seq if x]; list(filter(None, seq)) executes truthiness filtering in C with 1.5x speedup and lower memory overhead."
+  },
+  {
+   "id": "plex.all-in-superset",
+   "name": "Membership iteration in all() instead of set.issuperset()",
+   "severity": "medium",
+   "stability": "stable",
+   "tags": [
+    "performance",
+    "set",
+    "lookup"
+   ],
+   "description": "Detects all(x in b for x in a); set(b).issuperset(a) is up to 3.5x faster, avoiding bytecode iteration and generator framing."
+  }
+ ],
+ "fixable_rules": [
+  "plex.all-in-superset",
+  "plex.dict-fromkeys",
+  "plex.dict-get-default-none",
+  "plex.dict-get-fallback",
+  "plex.dict-items-comprehension-to-copy",
+  "plex.dict-items-value-unused",
+  "plex.filter-truthy",
+  "plex.if-pass-else-invert",
+  "plex.isinstance-tuple",
+  "plex.itertools-chain-from-iterable",
+  "plex.itertools-islice",
+  "plex.linear-search-in-loop",
+  "plex.manual-list-extend",
+  "plex.math-log-base",
+  "plex.math-pow-vs-operator",
+  "plex.membership-in-literal-list",
+  "plex.mutable-default-arg",
+  "plex.re-sub-literal",
+  "plex.redundant-collection-call",
+  "plex.redundant-comprehension",
+  "plex.redundant-fstring",
+  "plex.short-circuit-comprehension",
+  "plex.sorted-min-max",
+  "plex.str-removeprefix-suffix",
+  "plex.str-split-maxsplit",
+  "plex.str-startswith-tuple",
+  "plex.string-concat-in-loop",
+  "plex.sync-io-in-async",
+  "plex.try-except-dict-get",
+  "plex.try-except-next-default",
+  "plex.try-except-pop-default",
+  "plex.uncompiled-regex-in-loop",
+  "plex.unnecessary-async-def",
+  "plex.unnecessary-comprehension-in-call",
+  "plex.unnecessary-dict-keys",
+  "plex.unnecessary-enumerate",
+  "plex.unnecessary-lambda",
+  "plex.unnecessary-len"
+ ],
+ "fixes": {
+  "src/shop/orders.py::plex.string-concat-in-loop": {
+   "file": "src/shop/orders.py",
+   "rule_id": "plex.string-concat-in-loop",
+   "diff": "--- a/src/shop/orders.py\n+++ b/src/shop/orders.py\n@@ -26,6 +26,8 @@\n def render_receipt(lines):\n     out = ''\n+    out_chunks = []\n     for line in lines:\n-        out += f\"{line['sku']}: {line['qty']}\\n\"\n+        out_chunks.append(f\"{line['sku']}: {line['qty']}\\n\")\n+    out = ''.join(out_chunks)\n     return out\n \n"
+  },
+  "src/shop/search.py::plex.membership-in-literal-list": {
+   "file": "src/shop/search.py",
+   "rule_id": "plex.membership-in-literal-list",
+   "diff": "--- a/src/shop/search.py\n+++ b/src/shop/search.py\n@@ -16,5 +16,5 @@\n \n def is_region(code):\n-    return code in ['EU', 'US', 'APAC']\n+    return code in {'EU', 'US', 'APAC'}\n \n def tags_for(product, tags=[]):\n"
+  },
+  "src/shop/search.py::plex.mutable-default-arg": {
+   "file": "src/shop/search.py",
+   "rule_id": "plex.mutable-default-arg",
+   "diff": "--- a/src/shop/search.py\n+++ b/src/shop/search.py\n@@ -18,5 +18,7 @@\n     return code in ['EU', 'US', 'APAC']\n \n-def tags_for(product, tags=[]):\n+def tags_for(product, tags=None):\n+    if tags is None:\n+        tags = []\n     tags.append(product)\n     return tags\n"
+  },
+  "src/shop/search.py::plex.short-circuit-comprehension": {
+   "file": "src/shop/search.py",
+   "rule_id": "plex.short-circuit-comprehension",
+   "diff": "--- a/src/shop/search.py\n+++ b/src/shop/search.py\n@@ -13,5 +13,5 @@\n \n def has_discount(codes):\n-    return any([c.startswith('SALE') for c in codes])\n+    return any((c.startswith('SALE') for c in codes))\n \n def is_region(code):\n"
+  },
+  "src/shop/search.py::plex.sorted-min-max": {
+   "file": "src/shop/search.py",
+   "rule_id": "plex.sorted-min-max",
+   "diff": "--- a/src/shop/search.py\n+++ b/src/shop/search.py\n@@ -10,5 +10,5 @@\n \n def cheapest(prices):\n-    return sorted(prices)[0]\n+    return min(prices)\n \n def has_discount(codes):\n"
+  },
+  "src/shop/search.py::plex.uncompiled-regex-in-loop": {
+   "file": "src/shop/search.py",
+   "rule_id": "plex.uncompiled-regex-in-loop",
+   "diff": "--- a/src/shop/search.py\n+++ b/src/shop/search.py\n@@ -4,6 +4,7 @@\n def match_skus(skus, prefix):\n     hits = []\n+    _compiled_re_1 = re.compile('^[A-Z]{3}-\\\\d+')\n     for sku in skus:\n-        if re.search('^[A-Z]{3}-\\\\d+', sku) and sku.startswith(prefix):\n+        if _compiled_re_1.search(sku) and sku.startswith(prefix):\n             hits.append(sku)\n     return hits\n"
+  },
+  "src/shop/worker.py::plex.str-split-maxsplit": {
+   "file": "src/shop/worker.py",
+   "rule_id": "plex.str-split-maxsplit",
+   "diff": "--- a/src/shop/worker.py\n+++ b/src/shop/worker.py\n@@ -8,5 +8,5 @@\n \n def first_token(header):\n-    return header.split(',')[0]\n+    return header.split(',', 1)[0]\n \n def stats(counts):\n"
+  },
+  "src/shop/worker.py::plex.sync-io-in-async": {
+   "file": "src/shop/worker.py",
+   "rule_id": "plex.sync-io-in-async",
+   "diff": "--- a/src/shop/worker.py\n+++ b/src/shop/worker.py\n@@ -1,2 +1,3 @@\n+import asyncio\n import time\n \n@@ -4,5 +5,5 @@\n     while True:\n         item = await queue.get()\n-        time.sleep(0.5)\n+        await asyncio.sleep(0.5)\n         print(item)\n \n"
+  },
+  "src/shop/worker.py::plex.unnecessary-comprehension-in-call": {
+   "file": "src/shop/worker.py",
+   "rule_id": "plex.unnecessary-comprehension-in-call",
+   "diff": "--- a/src/shop/worker.py\n+++ b/src/shop/worker.py\n@@ -12,5 +12,5 @@\n def stats(counts):\n     if len(counts) > 0:\n-        total = sum([c for c in counts])\n+        total = sum((c for c in counts))\n         return total\n     return 0\n"
+  },
+  "src/shop/worker.py::plex.unnecessary-len": {
+   "file": "src/shop/worker.py",
+   "rule_id": "plex.unnecessary-len",
+   "diff": "--- a/src/shop/worker.py\n+++ b/src/shop/worker.py\n@@ -11,5 +11,5 @@\n \n def stats(counts):\n-    if len(counts) > 0:\n+    if counts:\n         total = sum([c for c in counts])\n         return total\n"
+  }
+ },
+ "fix_summary": "Dry-run: 3 file(s) would be modified (10 issue(s)).",
+ "outputs": {
+  "markdown": "# PLEx report\n\n- Generated: `2026-10-05T12:40:55.873512Z`\n- Mode: `full-scan`\n- Base ref: `main`\n- Baseline compare: `enabled`\n- Schema: `v7`\n- Findings: `28`\n- Regressions: `1`\n- Findings by severity: `medium:6, low:8, info:14`\n\n## Regressions vs base\n\n| Severity | Risk Δ | Hint Δ | Base | Head | Location | Why |\n|---|---:|---:|---|---|---|---|\n| medium | +1.700 | +3 | 0.400 / O(n) candidate | 2.100 / O(n^2) candidate | src/shop/orders.py:8 `find_vip_orders` | Loop depth increased 1 -> 2. |\n\n### Fix suggestions\n\n- src/shop/orders.py:8 `find_vip_orders`: Reduce nested loops by precomputing lookups or indexing with dict/set.; Sort once outside loops or use a heap for top-k.\n\n## Change summary (base -> head)\n\n- Added: `1`  Removed: `0`  Changed: `1`\n\n| Type | Trend | Risk (base -> head) | Hint (base -> head) | Location |\n|---|---|---|---|---|\n| changed | worse | 0.400 -> 2.100 | O(n) candidate -> O(n^2) candidate | src/shop/orders.py:8 `find_vip_orders` |\n| added | new | n/a | n/a | src/shop/orders.py:39 `dedupe` |\n\n## Top hotspots (heuristic)\n\n| Severity | Risk | Confidence | Hint | Location |\n|---|---:|---:|---|---|\n| medium | 2.600 | 0.60 | Rule: Database call inside loop | src/shop/orders.py:21 `load_customers` |\n| medium | 2.600 | 0.60 | Rule: HTTP request inside loop | src/shop/orders.py:27 `enrich` |\n| medium | 2.600 | 0.50 | Rule: Potential catastrophic regex | src/shop/search.py:3 `<module>` |\n| medium | 2.600 | 0.85 | Rule: Synchronous blocking I/O in async function | src/shop/worker.py:7 `poll` |\n| medium | 2.100 | 0.75 | O(n^2) candidate | src/shop/orders.py:8 `find_vip_orders` |\n| medium | 2.100 | 0.75 | O(n^2) candidate | src/shop/orders.py:39 `dedupe` |\n| low | 1.600 | 0.70 | Rule: String concatenation in loop | src/shop/orders.py:35 `render_receipt` |\n| low | 1.600 | 0.60 | Rule: JSON serialization inside loop | src/shop/orders.py:54 `serialize` |\n| low | 1.600 | 0.60 | Rule: Uncompiled regex inside loop | src/shop/search.py:9 `match_skus` |\n| low | 1.600 | 0.90 | Rule: sorted()[0] or sorted()[-1] instead of min() or max() | src/shop/search.py:15 `cheapest` |\n\n### Fix suggestions\n\n- src/shop/orders.py:21 `load_customers`: Batch queries or prefetch related data before the loop.; Move queries outside loops or use select_related/prefetch_related.\n- src/shop/orders.py:27 `enrich`: Batch requests or use concurrent async fetching (e.g., asyncio.gather or a connection pool).; Move HTTP calls outside the loop or cache responses.\n- src/shop/search.py:3 `<module>`: Avoid nested quantifiers or use non-greedy patterns.; Consider precompiling with safe patterns or using regex timeouts.\n- src/shop/worker.py:7 `poll`: Replace with `await asyncio.sleep(...)` to allow concurrent tasks to run.\n- src/shop/orders.py:8 `find_vip_orders`: Consider pre-indexing or batching to avoid nested iteration.; Sort once outside loops or use a heap for top-k.\n- src/shop/orders.py:39 `dedupe`: Consider pre-indexing or batching to avoid nested iteration.; Sort once outside loops or use a heap for top-k.\n- src/shop/orders.py:35 `render_receipt`: Collect substring chunks in a list and join them with `''.join(chunks)` after the loop.; Use io.StringIO if streaming large textual output.\n- src/shop/orders.py:54 `serialize`: Batch serialization or move it outside the loop.\n- src/shop/search.py:9 `match_skus`: Compile regex patterns outside the loop with `pattern = re.compile(...)` and reuse.\n- src/shop/search.py:15 `cheapest`: Replace with `min(...)`.\n\n> Notes: PLEx uses static AST heuristics; dynamic verification is optional and best-effort.",
+  "comment": "<!-- plex-comment -->\n### PLEx summary\n\n- Mode: `full-scan`\n- Baseline compare: `enabled`\n- Regressions: `1`\n- Findings: `28`\n- Findings by severity: `medium:6, low:8, info:14`\n- Auto-fixable: `10` (run `plex fix` to remediate automatically)\n\n**Regressions**\n\n| Severity | Risk (base -> head) | Hint (base -> head) | Location | Why |\n|---|---|---|---|---|\n| medium | 0.400 -> 2.100 (+1.700) | O(n) candidate -> O(n^2) candidate | src/shop/orders.py:8 `find_vip_orders` | Loop depth increased 1 -> 2. |\n\n**Fix ideas**\n\n- src/shop/orders.py:8 `find_vip_orders`: Reduce nested loops by precomputing lookups or indexing with dict/set.; Sort once outside loops or use a heap for top-k.",
+  "sarif": {
+   "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+   "version": "2.1.0",
+   "runs": [
+    {
+     "automationDetails": {
+      "id": "plex-analysis"
+     },
+     "invocations": [
+      {
+       "executionSuccessful": true,
+       "endTimeUtc": "2026-10-05T12:40:55.873512Z"
+      }
+     ],
+     "tool": {
+      "driver": {
+       "name": "PLEx",
+       "version": "0.1.0",
+       "rules": [
+        {
+         "id": "plex.hotspot",
+         "name": "Complexity hotspot",
+         "shortDescription": {
+          "text": "Potential complexity hotspot (heuristic)"
+         },
+         "fullDescription": {
+          "text": "Static signals suggest elevated algorithmic complexity in this function."
+         },
+         "help": {
+          "text": "Review loop nesting, recursion, and sorting patterns to confirm complexity.",
+          "markdown": "Static analysis detected signals (loops, recursion, sort calls) that may indicate higher algorithmic complexity. Review the implementation to confirm."
+         },
+         "properties": {
+          "tags": [
+           "performance",
+           "complexity",
+           "plex"
+          ],
+          "precision": "medium"
+         }
+        },
+        {
+         "id": "plex.regression",
+         "name": "Complexity regression",
+         "shortDescription": {
+          "text": "Potential complexity regression vs baseline"
+         },
+         "fullDescription": {
+          "text": "Static signals suggest complexity has increased compared to baseline."
+         },
+         "help": {
+          "text": "Compare baseline and head signals to confirm a regression.",
+          "markdown": "PLEx detected a higher risk score or complexity hint compared to the baseline. Review recent changes for added loops, recursion, or sorting."
+         },
+         "properties": {
+          "tags": [
+           "performance",
+           "complexity",
+           "regression",
+           "plex"
+          ],
+          "precision": "high"
+         }
+        }
+       ]
+      }
+     },
+     "results": [
+      {
+       "ruleId": "plex.hotspot",
+       "level": "warning",
+       "message": {
+        "text": "Rule: Database call inside loop (risk 2.600, load_customers)"
+       },
+       "locations": [
+        {
+         "physicalLocation": {
+          "artifactLocation": {
+           "uri": "src/shop/orders.py"
+          },
+          "region": {
+           "startLine": 21,
+           "endLine": 22
+          }
+         }
+        }
+       ],
+       "properties": {
+        "risk_score": 2.6,
+        "confidence": 0.6,
+        "severity": "medium",
+        "signals": {
+         "loops": 0,
+         "max_loop_depth": 0,
+         "recursion": false,
+         "sort_calls": 0,
+         "comprehension": 0
+        },
+        "explanation": "Database call `query()` inside a loop may cause N+1 queries.",
+        "suggestions": [
+         "Batch queries or prefetch related data before the loop.",
+         "Move queries outside loops or use select_related/prefetch_related."
+        ]
+       }
+      },
+      {
+       "ruleId": "plex.hotspot",
+       "level": "warning",
+       "message": {
+        "text": "Rule: HTTP request inside loop (risk 2.600, enrich)"
+       },
+       "locations": [
+        {
+         "physicalLocation": {
+          "artifactLocation": {
+           "uri": "src/shop/orders.py"
+          },
+          "region": {
+           "startLine": 27,
+           "endLine": 29
+          }
+         }
+        }
+       ],
+       "properties": {
+        "risk_score": 2.6,
+        "confidence": 0.6,
+        "severity": "medium",
+        "signals": {
+         "loops": 0,
+         "max_loop_depth": 0,
+         "recursion": false,
+         "sort_calls": 0,
+         "comprehension": 0
+        },
+        "explanation": "HTTP request `requests.get()` inside a loop may cause severe latency bottlenecks.",
+        "suggestions": [
+         "Batch requests or use concurrent async fetching (e.g., asyncio.gather or a connection pool).",
+         "Move HTTP calls outside the loop or cache responses."
+        ]
+       }
+      },
+      {
+       "ruleId": "plex.hotspot",
+       "level": "warning",
+       "message": {
+        "text": "Rule: Potential catastrophic regex (risk 2.600, <module>)"
+       },
+       "locations": [
+        {
+         "physicalLocation": {
+          "artifactLocation": {
+           "uri": "src/shop/search.py"
+          },
+          "region": {
+           "startLine": 3,
+           "endLine": 3
+          }
+         }
+        }
+       ],
+       "properties": {
+        "risk_score": 2.6,
+        "confidence": 0.5,
+        "severity": "medium",
+        "signals": {
+         "loops": 0,
+         "max_loop_depth": 0,
+         "recursion": false,
+         "sort_calls": 0,
+         "comprehension": 0
+        },
+        "explanation": "Regex pattern may cause catastrophic backtracking.",
+        "suggestions": [
+         "Avoid nested quantifiers or use non-greedy patterns.",
+         "Consider precompiling with safe patterns or using regex timeouts."
+        ]
+       }
+      },
+      {
+       "ruleId": "plex.hotspot",
+       "level": "warning",
+       "message": {
+        "text": "Rule: Synchronous blocking I/O in async function (risk 2.600, poll)"
+       },
+       "locations": [
+        {
+         "physicalLocation": {
+          "artifactLocation": {
+           "uri": "src/shop/worker.py"
+          },
+          "region": {
+           "startLine": 7,
+           "endLine": 8
+          }
+         }
+        }
+       ],
+       "properties": {
+        "risk_score": 2.6,
+        "confidence": 0.85,
+        "severity": "medium",
+        "signals": {
+         "loops": 0,
+         "max_loop_depth": 0,
+         "recursion": false,
+         "sort_calls": 0,
+         "comprehension": 0
+        },
+        "explanation": "Synchronous blocking `time.sleep()` inside async function freezes the event loop.",
+        "suggestions": [
+         "Replace with `await asyncio.sleep(...)` to allow concurrent tasks to run."
+        ]
+       }
+      },
+      {
+       "ruleId": "plex.hotspot",
+       "level": "warning",
+       "message": {
+        "text": "O(n^2) candidate (risk 2.100, dedupe)"
+       },
+       "locations": [
+        {
+         "physicalLocation": {
+          "artifactLocation": {
+           "uri": "src/shop/orders.py"
+          },
+          "region": {
+           "startLine": 39,
+           "endLine": 48
+          }
+         }
+        }
+       ],
+       "properties": {
+        "risk_score": 2.1,
+        "confidence": 0.75,
+        "severity": "medium",
+        "signals": {
+         "loops": 2,
+         "max_loop_depth": 2,
+         "recursion": false,
+         "sort_calls": 1,
+         "comprehension": 0
+        },
+        "explanation": "Nested loops detected.",
+        "suggestions": [
+         "Consider pre-indexing or batching to avoid nested iteration.",
+         "Sort once outside loops or use a heap for top-k."
+        ]
+       }
+      },
+      {
+       "ruleId": "plex.hotspot",
+       "level": "note",
+       "message": {
+        "text": "Rule: String concatenation in loop (risk 1.600, render_receipt)"
+       },
+       "locations": [
+        {
+         "physicalLocation": {
+          "artifactLocation": {
+           "uri": "src/shop/orders.py"
+          },
+          "region": {
+           "startLine": 35,
+           "endLine": 36
+          }
+         }
+        }
+       ],
+       "properties": {
+        "risk_score": 1.6,
+        "confidence": 0.7,
+        "severity": "low",
+        "signals": {
+         "loops": 0,
+         "max_loop_depth": 0,
+         "recursion": false,
+         "sort_calls": 0,
+         "comprehension": 0
+        },
+        "explanation": "Repeated string concatenation on `out` in loop causes quadratic memory copying.",
+        "suggestions": [
+         "Collect substring chunks in a list and join them with `''.join(chunks)` after the loop.",
+         "Use io.StringIO if streaming large textual output."
+        ]
+       }
+      },
+      {
+       "ruleId": "plex.hotspot",
+       "level": "note",
+       "message": {
+        "text": "Rule: JSON serialization inside loop (risk 1.600, serialize)"
+       },
+       "locations": [
+        {
+         "physicalLocation": {
+          "artifactLocation": {
+           "uri": "src/shop/orders.py"
+          },
+          "region": {
+           "startLine": 54,
+           "endLine": 55
+          }
+         }
+        }
+       ],
+       "properties": {
+        "risk_score": 1.6,
+        "confidence": 0.6,
+        "severity": "low",
+        "signals": {
+         "loops": 0,
+         "max_loop_depth": 0,
+         "recursion": false,
+         "sort_calls": 0,
+         "comprehension": 0
+        },
+        "explanation": "JSON `dumps()` inside loop can be expensive.",
+        "suggestions": [
+         "Batch serialization or move it outside the loop."
+        ]
+       }
+      },
+      {
+       "ruleId": "plex.hotspot",
+       "level": "note",
+       "message": {
+        "text": "Rule: Uncompiled regex inside loop (risk 1.600, match_skus)"
+       },
+       "locations": [
+        {
+         "physicalLocation": {
+          "artifactLocation": {
+           "uri": "src/shop/search.py"
+          },
+          "region": {
+           "startLine": 9,
+           "endLine": 11
+          }
+         }
+        }
+       ],
+       "properties": {
+        "risk_score": 1.6,
+        "confidence": 0.6,
+        "severity": "low",
+        "signals": {
+         "loops": 0,
+         "max_loop_depth": 0,
+         "recursion": false,
+         "sort_calls": 0,
+         "comprehension": 0
+        },
+        "explanation": "Uncompiled `re.search()` inside loop; precompiling with `re.compile()` avoids repeated pattern parsing.",
+        "suggestions": [
+         "Compile regex patterns outside the loop with `pattern = re.compile(...)` and reuse."
+        ]
+       }
+      },
+      {
+       "ruleId": "plex.hotspot",
+       "level": "note",
+       "message": {
+        "text": "Rule: sorted()[0] or sorted()[-1] instead of min() or max() (risk 1.600, cheapest)"
+       },
+       "locations": [
+        {
+         "physicalLocation": {
+          "artifactLocation": {
+           "uri": "src/shop/search.py"
+          },
+          "region": {
+           "startLine": 15,
+           "endLine": 15
+          }
+         }
+        }
+       ],
+       "properties": {
+        "risk_score": 1.6,
+        "confidence": 0.9,
+        "severity": "low",
+        "signals": {
+         "loops": 0,
+         "max_loop_depth": 0,
+         "recursion": false,
+         "sort_calls": 0,
+         "comprehension": 0
+        },
+        "explanation": "Calling `sorted(...)[0]` executes in O(n log n) time and allocates a full list; `min()` executes in O(n) time with O(1) memory.",
+        "suggestions": [
+         "Replace with `min(...)`."
+        ]
+       }
+      },
+      {
+       "ruleId": "plex.hotspot",
+       "level": "note",
+       "message": {
+        "text": "Rule: Eager list comprehension in any() or all() short-circuiting call (risk 1.600, has_discount)"
+       },
+       "locations": [
+        {
+         "physicalLocation": {
+          "artifactLocation": {
+           "uri": "src/shop/search.py"
+          },
+          "region": {
+           "startLine": 19,
+           "endLine": 19
+          }
+         }
+        }
+       ],
+       "properties": {
+        "risk_score": 1.6,
+        "confidence": 0.9,
+        "severity": "low",
+        "signals": {
+         "loops": 0,
+         "max_loop_depth": 0,
+         "recursion": false,
+         "sort_calls": 0,
+         "comprehension": 0
+        },
+        "explanation": "Eager list comprehension inside `any()` evaluates all elements upfront and defeats short-circuiting.",
+        "suggestions": [
+         "Pass a generator expression to `any()` instead (`any(... for ... in ...)`)."
+        ]
+       }
+      },
+      {
+       "ruleId": "plex.hotspot",
+       "level": "note",
+       "message": {
+        "text": "Rule: Membership test against list literal instead of set (risk 1.600, is_region)"
+       },
+       "locations": [
+        {
+         "physicalLocation": {
+          "artifactLocation": {
+           "uri": "src/shop/search.py"
+          },
+          "region": {
+           "startLine": 23,
+           "endLine": 23
+          }
+         }
+        }
+       ],
+       "properties": {
+        "risk_score": 1.6,
+        "confidence": 0.9,
+        "severity": "low",
+        "signals": {
+         "loops": 0,
+         "max_loop_depth": 0,
+         "recursion": false,
+         "sort_calls": 0,
+         "comprehension": 0
+        },
+        "explanation": "Testing membership `in [...]` against a list literal allocates a new list on every evaluation and executes in O(n) time.",
+        "suggestions": [
+         "Use a set literal `{...}` instead for O(1) lookup and compile-time constant folding."
+        ]
+       }
+      },
+      {
+       "ruleId": "plex.hotspot",
+       "level": "note",
+       "message": {
+        "text": "Rule: Mutable default argument in function definition (risk 1.600, tags_for)"
+       },
+       "locations": [
+        {
+         "physicalLocation": {
+          "artifactLocation": {
+           "uri": "src/shop/search.py"
+          },
+          "region": {
+           "startLine": 26,
+           "endLine": 28
+          }
+         }
+        }
+       ],
+       "properties": {
+        "risk_score": 1.6,
+        "confidence": 0.95,
+        "severity": "low",
+        "signals": {
+         "loops": 0,
+         "max_loop_depth": 0,
+         "recursion": false,
+         "sort_calls": 0,
+         "comprehension": 0
+        },
+        "explanation": "Mutable default argument `tags` retains state across invocations, risking subtle bugs and memory retention.",
+        "suggestions": [
+         "Replace `tags` default with `None` and initialize inside the function body (`if tags is None: tags = ...`)."
+        ]
+       }
+      },
+      {
+       "ruleId": "plex.hotspot",
+       "level": "note",
+       "message": {
+        "text": "Rule: Unbounded string split before indexing (risk 1.600, first_token)"
+       },
+       "locations": [
+        {
+         "physicalLocation": {
+          "artifactLocation": {
+           "uri": "src/shop/worker.py"
+          },
+          "region": {
+           "startLine": 12,
+           "endLine": 12
+          }
+         }
+        }
+       ],
+       "properties": {
+        "risk_score": 1.6,
+        "confidence": 0.9,
+        "severity": "low",
+        "signals": {
+         "loops": 0,
+         "max_loop_depth": 0,
+         "recursion": false,
+         "sort_calls": 0,
+         "comprehension": 0
+        },
+        "explanation": "`header.split(',')[0]` splits entire string into a list without `maxsplit`; providing `maxsplit=1` avoids allocating all tokens.",
+        "suggestions": [
+         "Pass `maxsplit=1` (e.g. `header.split(',', 1)[0]`) to avoid token list allocation."
+        ]
+       }
+      },
+      {
+       "ruleId": "plex.hotspot",
+       "level": "note",
+       "message": {
+        "text": "Rule: Unnecessary len() call in boolean context (risk 0.900, stats)"
+       },
+       "locations": [
+        {
+         "physicalLocation": {
+          "artifactLocation": {
+           "uri": "src/shop/worker.py"
+          },
+          "region": {
+           "startLine": 16,
+           "endLine": 19
+          }
+         }
+        }
+       ],
+       "properties": {
+        "risk_score": 0.9,
+        "confidence": 0.9,
+        "severity": "info",
+        "signals": {
+         "loops": 0,
+         "max_loop_depth": 0,
+         "recursion": false,
+         "sort_calls": 0,
+         "comprehension": 0
+        },
+        "explanation": "Unnecessary `len(...)` call in comparison with 0; truthiness tests (`if x:`, `if not x:`) are faster and idiomatic.",
+        "suggestions": [
+         "Use boolean truthiness directly (`if seq:` or `if not seq:`)."
+        ]
+       }
+      },
+      {
+       "ruleId": "plex.hotspot",
+       "level": "note",
+       "message": {
+        "text": "Rule: Unnecessary list comprehension passed to iterable consumer (risk 0.900, stats)"
+       },
+       "locations": [
+        {
+         "physicalLocation": {
+          "artifactLocation": {
+           "uri": "src/shop/worker.py"
+          },
+          "region": {
+           "startLine": 17,
+           "endLine": 19
+          }
+         }
+        }
+       ],
+       "properties": {
+        "risk_score": 0.9,
+        "confidence": 0.85,
+        "severity": "info",
+        "signals": {
+         "loops": 0,
+         "max_loop_depth": 0,
+         "recursion": false,
+         "sort_calls": 0,
+         "comprehension": 0
+        },
+        "explanation": "List comprehension passed to `sum()` allocates an unnecessary intermediate list; generator expression streams items without allocation.",
+        "suggestions": [
+         "Use generator expression `sum(... for ... in ...)`."
+        ]
+       }
+      },
+      {
+       "ruleId": "plex.hotspot",
+       "level": "note",
+       "message": {
+        "text": "O(n) candidate (risk 0.600, has_discount)"
+       },
+       "locations": [
+        {
+         "physicalLocation": {
+          "artifactLocation": {
+           "uri": "src/shop/search.py"
+          },
+          "region": {
+           "startLine": 18,
+           "endLine": 19
+          }
+         }
+        }
+       ],
+       "properties": {
+        "risk_score": 0.6,
+        "confidence": 0.65,
+        "severity": "info",
+        "signals": {
+         "loops": 1,
+         "max_loop_depth": 1,
+         "recursion": false,
+         "sort_calls": 0,
+         "comprehension": 1
+        },
+        "explanation": "Loop count 1 with max depth 1.",
+        "suggestions": [
+         "Batch work or use vectorized/data-structure-based lookups."
+        ]
+       }
+      },
+      {
+       "ruleId": "plex.hotspot",
+       "level": "note",
+       "message": {
+        "text": "O(n) candidate (risk 0.600, stats)"
+       },
+       "locations": [
+        {
+         "physicalLocation": {
+          "artifactLocation": {
+           "uri": "src/shop/worker.py"
+          },
+          "region": {
+           "startLine": 15,
+           "endLine": 19
+          }
+         }
+        }
+       ],
+       "properties": {
+        "risk_score": 0.6,
+        "confidence": 0.65,
+        "severity": "info",
+        "signals": {
+         "loops": 1,
+         "max_loop_depth": 1,
+         "recursion": false,
+         "sort_calls": 0,
+         "comprehension": 1
+        },
+        "explanation": "Loop count 1 with max depth 1.",
+        "suggestions": [
+         "Batch work or use vectorized/data-structure-based lookups."
+        ]
+       }
+      },
+      {
+       "ruleId": "plex.hotspot",
+       "level": "note",
+       "message": {
+        "text": "O(n log n) candidate (risk 0.500, cheapest)"
+       },
+       "locations": [
+        {
+         "physicalLocation": {
+          "artifactLocation": {
+           "uri": "src/shop/search.py"
+          },
+          "region": {
+           "startLine": 14,
+           "endLine": 15
+          }
+         }
+        }
+       ],
+       "properties": {
+        "risk_score": 0.5,
+        "confidence": 0.7,
+        "severity": "info",
+        "signals": {
+         "loops": 0,
+         "max_loop_depth": 0,
+         "recursion": false,
+         "sort_calls": 1,
+         "comprehension": 0
+        },
+        "explanation": "Sorting calls detected (1).",
+        "suggestions": [
+         "Avoid repeated sorting in hot paths."
+        ]
+       }
+      },
+      {
+       "ruleId": "plex.hotspot",
+       "level": "note",
+       "message": {
+        "text": "O(n) candidate (risk 0.400, load_customers)"
+       },
+       "locations": [
+        {
+         "physicalLocation": {
+          "artifactLocation": {
+           "uri": "src/shop/orders.py"
+          },
+          "region": {
+           "startLine": 18,
+           "endLine": 22
+          }
+         }
+        }
+       ],
+       "properties": {
+        "risk_score": 0.4,
+        "confidence": 0.65,
+        "severity": "info",
+        "signals": {
+         "loops": 1,
+         "max_loop_depth": 1,
+         "recursion": false,
+         "sort_calls": 0,
+         "comprehension": 0
+        },
+        "explanation": "Loop count 1 with max depth 1.",
+        "suggestions": [
+         "Batch work or use vectorized/data-structure-based lookups."
+        ]
+       }
+      },
+      {
+       "ruleId": "plex.hotspot",
+       "level": "note",
+       "message": {
+        "text": "O(n) candidate (risk 0.400, enrich)"
+       },
+       "locations": [
+        {
+         "physicalLocation": {
+          "artifactLocation": {
+           "uri": "src/shop/orders.py"
+          },
+          "region": {
+           "startLine": 25,
+           "endLine": 29
+          }
+         }
+        }
+       ],
+       "properties": {
+        "risk_score": 0.4,
+        "confidence": 0.65,
+        "severity": "info",
+        "signals": {
+         "loops": 1,
+         "max_loop_depth": 1,
+         "recursion": false,
+         "sort_calls": 0,
+         "comprehension": 0
+        },
+        "explanation": "Loop count 1 with max depth 1.",
+        "suggestions": [
+         "Batch work or use vectorized/data-structure-based lookups."
+        ]
+       }
+      },
+      {
+       "ruleId": "plex.hotspot",
+       "level": "note",
+       "message": {
+        "text": "O(n) candidate (risk 0.400, render_receipt)"
+       },
+       "locations": [
+        {
+         "physicalLocation": {
+          "artifactLocation": {
+           "uri": "src/shop/orders.py"
+          },
+          "region": {
+           "startLine": 32,
+           "endLine": 36
+          }
+         }
+        }
+       ],
+       "properties": {
+        "risk_score": 0.4,
+        "confidence": 0.65,
+        "severity": "info",
+        "signals": {
+         "loops": 1,
+         "max_loop_depth": 1,
+         "recursion": false,
+         "sort_calls": 0,
+         "comprehension": 0
+        },
+        "explanation": "Loop count 1 with max depth 1.",
+        "suggestions": [
+         "Batch work or use vectorized/data-structure-based lookups."
+        ]
+       }
+      },
+      {
+       "ruleId": "plex.hotspot",
+       "level": "note",
+       "message": {
+        "text": "O(n) candidate (risk 0.400, serialize)"
+       },
+       "locations": [
+        {
+         "physicalLocation": {
+          "artifactLocation": {
+           "uri": "src/shop/orders.py"
+          },
+          "region": {
+           "startLine": 51,
+           "endLine": 55
+          }
+         }
+        }
+       ],
+       "properties": {
+        "risk_score": 0.4,
+        "confidence": 0.65,
+        "severity": "info",
+        "signals": {
+         "loops": 1,
+         "max_loop_depth": 1,
+         "recursion": false,
+         "sort_calls": 0,
+         "comprehension": 0
+        },
+        "explanation": "Loop count 1 with max depth 1.",
+        "suggestions": [
+         "Batch work or use vectorized/data-structure-based lookups."
+        ]
+       }
+      },
+      {
+       "ruleId": "plex.hotspot",
+       "level": "note",
+       "message": {
+        "text": "O(n) candidate (risk 0.400, match_skus)"
+       },
+       "locations": [
+        {
+         "physicalLocation": {
+          "artifactLocation": {
+           "uri": "src/shop/search.py"
+          },
+          "region": {
+           "startLine": 6,
+           "endLine": 11
+          }
+         }
+        }
+       ],
+       "properties": {
+        "risk_score": 0.4,
+        "confidence": 0.65,
+        "severity": "info",
+        "signals": {
+         "loops": 1,
+         "max_loop_depth": 1,
+         "recursion": false,
+         "sort_calls": 0,
+         "comprehension": 0
+        },
+        "explanation": "Loop count 1 with max depth 1.",
+        "suggestions": [
+         "Batch work or use vectorized/data-structure-based lookups."
+        ]
+       }
+      },
+      {
+       "ruleId": "plex.hotspot",
+       "level": "note",
+       "message": {
+        "text": "O(n) candidate (risk 0.400, poll)"
+       },
+       "locations": [
+        {
+         "physicalLocation": {
+          "artifactLocation": {
+           "uri": "src/shop/worker.py"
+          },
+          "region": {
+           "startLine": 4,
+           "endLine": 8
+          }
+         }
+        }
+       ],
+       "properties": {
+        "risk_score": 0.4,
+        "confidence": 0.65,
+        "severity": "info",
+        "signals": {
+         "loops": 1,
+         "max_loop_depth": 1,
+         "recursion": false,
+         "sort_calls": 0,
+         "comprehension": 0
+        },
+        "explanation": "Loop count 1 with max depth 1.",
+        "suggestions": [
+         "Batch work or use vectorized/data-structure-based lookups."
+        ]
+       }
+      },
+      {
+       "ruleId": "plex.hotspot",
+       "level": "note",
+       "message": {
+        "text": "O(1) / O(log n) candidate (risk 0.000, is_region)"
+       },
+       "locations": [
+        {
+         "physicalLocation": {
+          "artifactLocation": {
+           "uri": "src/shop/search.py"
+          },
+          "region": {
+           "startLine": 22,
+           "endLine": 23
+          }
+         }
+        }
+       ],
+       "properties": {
+        "risk_score": 0.0,
+        "confidence": 0.4,
+        "severity": "info",
+        "signals": {
+         "loops": 0,
+         "max_loop_depth": 0,
+         "recursion": false,
+         "sort_calls": 0,
+         "comprehension": 0
+        },
+        "explanation": "O(1) / O(log n) candidate based on static signals."
+       }
+      },
+      {
+       "ruleId": "plex.hotspot",
+       "level": "note",
+       "message": {
+        "text": "O(1) / O(log n) candidate (risk 0.000, tags_for)"
+       },
+       "locations": [
+        {
+         "physicalLocation": {
+          "artifactLocation": {
+           "uri": "src/shop/search.py"
+          },
+          "region": {
+           "startLine": 26,
+           "endLine": 28
+          }
+         }
+        }
+       ],
+       "properties": {
+        "risk_score": 0.0,
+        "confidence": 0.4,
+        "severity": "info",
+        "signals": {
+         "loops": 0,
+         "max_loop_depth": 0,
+         "recursion": false,
+         "sort_calls": 0,
+         "comprehension": 0
+        },
+        "explanation": "O(1) / O(log n) candidate based on static signals."
+       }
+      },
+      {
+       "ruleId": "plex.hotspot",
+       "level": "note",
+       "message": {
+        "text": "O(1) / O(log n) candidate (risk 0.000, first_token)"
+       },
+       "locations": [
+        {
+         "physicalLocation": {
+          "artifactLocation": {
+           "uri": "src/shop/worker.py"
+          },
+          "region": {
+           "startLine": 11,
+           "endLine": 12
+          }
+         }
+        }
+       ],
+       "properties": {
+        "risk_score": 0.0,
+        "confidence": 0.4,
+        "severity": "info",
+        "signals": {
+         "loops": 0,
+         "max_loop_depth": 0,
+         "recursion": false,
+         "sort_calls": 0,
+         "comprehension": 0
+        },
+        "explanation": "O(1) / O(log n) candidate based on static signals."
+       }
+      },
+      {
+       "ruleId": "plex.regression",
+       "level": "warning",
+       "message": {
+        "text": "Risk +1.700: O(n) candidate -> O(n^2) candidate (find_vip_orders)"
+       },
+       "locations": [
+        {
+         "physicalLocation": {
+          "artifactLocation": {
+           "uri": "src/shop/orders.py"
+          },
+          "region": {
+           "startLine": 8
+          }
+         }
+        }
+       ],
+       "properties": {
+        "risk_delta": 1.7,
+        "base_hint": "O(n) candidate",
+        "head_hint": "O(n^2) candidate",
+        "base_risk_score": 0.4,
+        "head_risk_score": 2.1,
+        "regression_severity": "medium",
+        "explanation": "Loop depth increased 1 -> 2.",
+        "suggestions": [
+         "Reduce nested loops by precomputing lookups or indexing with dict/set.",
+         "Sort once outside loops or use a heap for top-k."
+        ],
+        "base_signals": {
+         "loops": 1,
+         "max_loop_depth": 1,
+         "recursion": false,
+         "sort_calls": 0,
+         "comprehension": 0
+        },
+        "head_signals": {
+         "loops": 2,
+         "max_loop_depth": 2,
+         "recursion": false,
+         "sort_calls": 1,
+         "comprehension": 0
+        }
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "check_run": {
+   "title": "PLEx analysis",
+   "summary": "- Mode: full-scan\n- Baseline compare: enabled\n- Regressions: 1\n- Findings: 28",
+   "text": "**Regressions**\n\n| Severity | Risk Δ | Hint Δ | Location | Why |\n|---|---:|---:|---|---|\n| medium | +1.700 | +3 | src/shop/orders.py:8 `find_vip_orders` | Loop depth increased 1 -> 2. |",
+   "annotations": [
+    {
+     "path": "src/shop/orders.py",
+     "start_line": 8,
+     "end_line": 8,
+     "annotation_level": "warning",
+     "title": "PLEx regression",
+     "message": "Risk +1.700: O(n) candidate -> O(n^2) candidate (find_vip_orders). Loop depth increased 1 -> 2."
+    }
+   ]
+  }
+ }
+}

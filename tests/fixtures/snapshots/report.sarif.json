@@ -11,6 +11,10 @@
           "executionSuccessful": true
         }
       ],
+      "properties": {
+        "engines": [],
+        "scan_status": "complete"
+      },
       "results": [
         {
           "level": "note",
@@ -29,6 +33,9 @@
           ],
           "message": {
             "text": "O(n) candidate (risk 0.400, helper)"
+          },
+          "partialFingerprints": {
+            "plexFindingId/v1": "d9b1555b73343b63b0f2540e05d616d1ca606f9fe83f7df6057e28908454a20b"
           },
           "properties": {
             "confidence": 0.65,
@@ -60,6 +67,9 @@
           ],
           "message": {
             "text": "Risk +1.700: O(n) candidate -> O(n^2) candidate (Widget.render)"
+          },
+          "partialFingerprints": {
+            "plexFindingId/v1": "0e0464b93fb118ff193f6d2d91eae0f7f37a515e43f16c07ccfcab79a31b9551"
           },
           "properties": {
             "base_hint": "O(n) candidate",

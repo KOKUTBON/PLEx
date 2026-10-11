@@ -54,6 +54,14 @@ def contains_any(items: list[int], targets: list[int]) -> bool:
 
 PLEx reports the repeated linear membership check and can suggest a set-based lookup when the fixer can prove the rewrite is safe. Review changes with `plex fix --diff` before applying them.
 
+Experimental security checks are available separately:
+
+```bash
+plex security verify . --json out/security.json --sarif out/security.sarif
+```
+
+See [xBOUNDARY scope, evidence and limitations](docs/SECURITY_ANALYSIS.md).
+
 ## Capabilities
 
 - Python AST and IR analysis, with optional JavaScript/TypeScript, Java, Kotlin, and Go parsing.

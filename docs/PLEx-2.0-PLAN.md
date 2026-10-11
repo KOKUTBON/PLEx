@@ -492,6 +492,16 @@ Sequencing rationale: reporting must exist before any engine can emit into it; x
 2. **Implemented:** `report/unified.py` + schema bump + `to_dict_v7()` + compat snapshot test.
 3. **Implemented:** `PerformanceProvider` behind the SPI; orchestrator with a single engine.
 4. **Implemented:** `plex providers list|preflight|doctor` and explicit provider registration.
-5. **Next:** spike xBOUNDARY: one end-to-end rule (`xbnd.sql-injection`) with a real data-flow `EvidenceRef` and SARIF `codeFlows`, plus a 20-case corpus.
+5. **Implemented (experimental Python spike):** xBOUNDARY: one end-to-end rule (`xbnd.sql-injection`) with a real data-flow `EvidenceRef` and SARIF `codeFlows`, plus a 20-case corpus.
 
 That sequence lands a shippable, strictly-additive first increment (platform scaffolding + one real security rule) without touching the performance engine's behavior.
+
+
+### Sprint 0 implementation status (2026-10-11)
+
+Steps 1–5 are implemented on the foundation PR. The xBOUNDARY spike is bounded
+intraprocedural Python analysis with one SQL rule, embedded data-flow evidence,
+SARIF codeFlows and the labeled 20-case corpus. It is not the full security engine
+in §6. See [scope and validation](SECURITY_ANALYSIS.md). Next: configurable source,
+sanitizer and sink policy catalogs, followed by bounded cross-function summaries
+and broader corpus validation; shared CLI formats/gates remain unfinished.

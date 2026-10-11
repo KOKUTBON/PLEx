@@ -83,7 +83,9 @@ does not discover or import provider plugins automatically, install external
 tools, implement container workers, enable active testing or add dependencies.
 
 Provider registration/discovery and diagnostics are available as described below.
-SARIF aggregation, xBOUNDARY and external adapters follow.
+The experimental xBOUNDARY provider and shared SARIF export are available.
+See [security analysis](SECURITY_ANALYSIS.md). External adapters and stronger
+worker boundaries remain unfinished.
 See [the 2.0 plan](PLEx-2.0-PLAN.md), [report migration](REPORT_SCHEMA.md), and
 [engine isolation ADR](adr/0002-engine-isolation-model.md).
 

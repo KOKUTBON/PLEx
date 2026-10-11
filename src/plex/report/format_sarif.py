@@ -1,12 +1,106 @@
 from __future__ import annotations
 
+import hashlib
 import json
+from dataclasses import asdict
 from pathlib import Path
+from urllib.parse import quote
 
 from plex import __version__
 
 from .models import PLExReport
+from .performance import performance_findings
 from .severity import sarif_level, severity_from_score
+from .unified import AnalysisFinding
+
+
+def _location(file: str, lineno: int, repo_root: str) -> dict:
+    return {
+        "physicalLocation": {
+            "artifactLocation": {"uri": quote(_relpath(file, repo_root), safe="/:")},
+            "region": {"startLine": max(1, lineno)},
+        }
+    }
+
+
+def _unified_result(finding: AnalysisFinding, repo_root: str) -> dict:
+    result: dict = {
+        "ruleId": finding.rule_id,
+        "level": sarif_level(finding.severity),
+        "message": {"text": finding.message or finding.title},
+        "partialFingerprints": {"plexFindingId/v1": finding.id},
+        "properties": {
+            "engine": finding.engine,
+            "category": finding.category,
+            "severity": finding.severity,
+            "status": finding.status,
+            "confidence": finding.confidence,
+            "cwe": finding.cwe,
+            "owasp": finding.owasp,
+            "remediation": finding.remediation,
+            "evidence": [asdict(evidence) for evidence in finding.evidence],
+            "engine_meta": finding.engine_meta,
+            "cve": finding.cve,
+            "cvss": finding.cvss,
+            "cvss_vector": finding.cvss_vector,
+            "affected_assets": finding.affected_assets,
+            "data_classes": finding.data_classes,
+            "suggestions": finding.suggestions,
+            "correlates_with": finding.correlates_with,
+            "verification": finding.verification,
+            "qualname": finding.qualname,
+            "function_id": finding.function_id,
+        },
+    }
+    if finding.file:
+        result["locations"] = [_location(finding.file, finding.lineno, repo_root)]
+        if finding.end_lineno:
+            result["locations"][0]["physicalLocation"]["region"]["endLine"] = max(
+                1, finding.lineno, finding.end_lineno
+            )
+    embedded = finding.engine_meta.get("dataflow_paths", {})
+    flows = []
+    unavailable = []
+    for evidence in finding.evidence:
+        if evidence.kind != "dataflow_path":
+            continue
+        payload = embedded.get(evidence.ref) if isinstance(embedded, dict) else None
+        if not isinstance(payload, dict):
+            unavailable.append(evidence.ref)
+            continue
+        digest = (
+            "sha256:"
+            + hashlib.sha256(
+                json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+            ).hexdigest()
+        )
+        steps = payload.get("steps")
+        if (
+            digest != evidence.digest
+            or not isinstance(steps, list)
+            or not steps
+            or any(
+                not isinstance(step, dict)
+                or not isinstance(step.get("file"), str)
+                or type(step.get("lineno")) is not int
+                or step["lineno"] < 1
+                or not isinstance(step.get("label"), str)
+                for step in steps
+            )
+        ):
+            unavailable.append(evidence.ref)
+            continue
+        locations = []
+        for order, step in enumerate(steps, start=1):
+            location = _location(step["file"], step["lineno"], repo_root)
+            location["message"] = {"text": step["label"]}
+            locations.append({"location": location, "executionOrder": order})
+        flows.append({"threadFlows": [{"locations": locations}]})
+    if flows:
+        result["codeFlows"] = flows
+    if unavailable:
+        result["properties"]["dataflowEvidenceUnavailable"] = unavailable
+    return result
 
 
 def _relpath(path_str: str, repo_root: str) -> str:
@@ -68,7 +162,8 @@ def to_sarif(report: PLExReport) -> dict:
 
     results: list[dict] = []
     reg_keys = _regression_keys(report)
-    for f in report.findings:
+    mirrors = performance_findings(report)
+    for index, f in enumerate(report.findings):
         if (f.file, f.qualname, f.lineno) in reg_keys:
             continue
         properties = {
@@ -91,7 +186,8 @@ def to_sarif(report: PLExReport) -> dict:
             }
         results.append(
             {
-                "ruleId": "plex.hotspot",
+                "ruleId": f.rule_id or "plex.hotspot",
+                "partialFingerprints": {"plexFindingId/v1": mirrors[index].id},
                 "level": sarif_level(f.severity),
                 "message": {"text": f"{f.complexity_hint} (risk {f.risk_score:.3f}, {f.qualname})"},
                 "locations": [
@@ -111,11 +207,14 @@ def to_sarif(report: PLExReport) -> dict:
             }
         )
 
-    for r in report.regressions:
+    for index, r in enumerate(report.regressions):
         severity = severity_from_score(r.head_risk_score)
         results.append(
             {
                 "ruleId": "plex.regression",
+                "partialFingerprints": {
+                    "plexFindingId/v1": mirrors[len(report.findings) + index].id
+                },
                 "level": sarif_level(severity),
                 "message": {
                     "text": (
@@ -154,18 +253,43 @@ def to_sarif(report: PLExReport) -> dict:
                 "note": regression_dynamic.note,
             }
 
+    mirror_ids = {finding.id for finding in mirrors}
+    for finding in report.findings_unified:
+        if finding.id not in mirror_ids:
+            results.append(_unified_result(finding, report.repo_root))
+    known_rules = {rule["id"] for rule in rules}
+    for finding in report.findings_unified or mirrors:
+        if finding.rule_id not in known_rules:
+            rules.append(
+                {
+                    "id": finding.rule_id,
+                    "name": finding.title,
+                    "shortDescription": {"text": finding.title},
+                    "properties": {"tags": [finding.category, *finding.cwe, *finding.owasp]},
+                }
+            )
+            known_rules.add(finding.rule_id)
+    invocation: dict = {
+        "executionSuccessful": report.scan_status == "complete",
+        "endTimeUtc": report.generated_at,
+    }
+    notifications = [
+        {
+            "level": "error" if run.status == "failed" else "warning",
+            "message": {"text": f"{run.engine}: {run.status}. " + "; ".join(run.limitations)},
+        }
+        for run in report.engines
+        if run.status != "complete"
+    ]
+    if notifications:
+        invocation["toolExecutionNotifications"] = notifications
     return {
         "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
         "version": "2.1.0",
         "runs": [
             {
                 "automationDetails": {"id": "plex-analysis"},
-                "invocations": [
-                    {
-                        "executionSuccessful": True,
-                        "endTimeUtc": report.generated_at,
-                    }
-                ],
+                "invocations": [invocation],
                 "tool": {
                     "driver": {
                         "name": "PLEx",
@@ -174,6 +298,10 @@ def to_sarif(report: PLExReport) -> dict:
                     }
                 },
                 "results": results,
+                "properties": {
+                    "scan_status": report.scan_status,
+                    "engines": [asdict(run) for run in report.engines],
+                },
             }
         ],
     }

@@ -23,7 +23,11 @@ def test_discovery_does_not_import_entry_points(monkeypatch, capsys):
     monkeypatch.setattr(registry_module, "entry_points", lambda **kw: [ep])
     assert main(["providers", "list", "--json"]) == 0
     inventory = json.loads(capsys.readouterr().out)
-    assert [record["id"] for record in inventory["providers"]] == ["external", "performance"]
+    assert [record["id"] for record in inventory["providers"]] == [
+        "external",
+        "performance",
+        "xboundary",
+    ]
     assert "version" not in inventory["providers"][0]
     assert not loads
     assert main(["providers", "preflight", "--json"]) == 0

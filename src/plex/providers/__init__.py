@@ -11,6 +11,7 @@ from .base import (
 from .orchestrator import AnalysisOutcome, run_providers
 from .performance import PerformanceProvider
 from .registry import ProviderRegistry
+from .xboundary import XBoundaryProvider
 
 __all__ = [
     "AnalysisProvider",
@@ -23,4 +24,5 @@ __all__ = [
     "run_providers",
     "PerformanceProvider",
     "ProviderRegistry",
+    "XBoundaryProvider",
 ]

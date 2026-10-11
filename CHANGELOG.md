@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add the experimental Python `xbnd.sql-injection` rule and bundled xBOUNDARY
+  provider, with static data-flow evidence and `plex security verify`.
+- Export shared findings in SARIF with code flows, real rule IDs, fingerprints
+  and incomplete-engine status; retain JSON v8 evidence and v7 rejection.
+- Add a labeled 20-case security corpus and reproducible measurement script.
+
 - Add lazy provider discovery and explicit plugin registration, plus
   `plex providers list|preflight|doctor` with text/JSON diagnostics.
 - Fix provider compatibility snapshots on Python 3.10–3.12 while retaining

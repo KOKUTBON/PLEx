@@ -47,6 +47,7 @@ from plex.report.models import (
     PLExReport,
 )
 from plex.rules.registry import RuleRegistry
+from plex.security.commands import add_security_commands
 from plex.util.logging import setup_logging
 
 log = logging.getLogger(__name__)
@@ -562,12 +563,13 @@ def cmd_report(args: argparse.Namespace) -> int:
             return 1
         return 0
 
-    # Until formatters support all categories, refuse to hide unified-only results.
-    try:
-        report.to_dict_v7()
-    except ValueError as exc:
-        log.error("This formatter supports performance-only reports; use --format json: %s", exc)
-        return 1
+    # JSON and SARIF support unified findings; legacy presentation formats do not.
+    if fmt != "sarif":
+        try:
+            report.to_dict_v7()
+        except ValueError as exc:
+            log.error("This formatter supports performance-only reports; use --format json or sarif: %s", exc)
+            return 1
 
     if fmt == "html":
         out_path = Path(args.out) if args.out else Path("plex-report.html")
@@ -686,6 +688,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub = p.add_subparsers(dest="cmd", required=True)
     add_provider_commands(sub)
+    add_security_commands(sub)
 
     a = sub.add_parser("analyze", help="Analyze a repository")
     _add_analyze_args(a)

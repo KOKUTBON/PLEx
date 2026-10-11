@@ -3,8 +3,8 @@
 New `plex analyze` and `plex baseline` JSON reports use schema **8**. The
 performance analysis, legacy finding arrays, statistics and gating thresholds
 retain their existing meaning. The [provider orchestrator](PROVIDERS.md) now
-wraps the existing performance engine; xBOUNDARY and external adapters are not
-implemented yet.
+wraps the performance engine and experimental [xBOUNDARY SQL spike](SECURITY_ANALYSIS.md).
+External adapters remain unfinished.
 
 ## JSON contract
 
@@ -109,13 +109,16 @@ are not fully expressed in the JSON schema.
 
 ## Current integration limits
 
-Existing performance-only HTML, Markdown, SARIF, comments and summaries retain
-their existing behavior. The report CLI refuses to render a richer or incomplete
-report through these formatters, directing users to JSON to avoid hidden results.
-Direct Python formatter calls still consume the legacy performance arrays;
-use JSON for unified-only findings until those formatters are extended.
-SARIF rule descriptors, fingerprints, multi-engine runs and import support are
-separate follow-up work. The existing Action JSON artifact now uses v8; consumers
+JSON and SARIF support unified findings and engine status. SARIF now preserves
+real performance rule IDs, stable fingerprints, embedded data-flow codeFlows and
+shared finding metadata, without re-emitting performance mirrors. Incomplete
+scans have unsuccessful invocations and execution notifications. SARIF import
+remains unfinished.
+
+HTML, Markdown, comments and summaries still consume legacy performance arrays.
+The report CLI refuses richer/incomplete reports for these formats and directs
+users to JSON or SARIF. Direct calls to these legacy Python formatters still need
+the same caller-side coverage check. The existing Action JSON artifact now uses v8; consumers
 requiring v7 can invoke the CLI with the compatibility flag. The Action does not
 yet expose a dedicated legacy-schema input. The extension and LSP continue using
 legacy performance fields and do not yet display shared security findings.

@@ -231,3 +231,20 @@ def test_shadowed_input_is_not_a_builtin_source(tmp_path):
 def test_conditional_selection_of_constants_is_not_tainted(tmp_path):
     report = scan(tmp_path, 'query = "SELECT 1" if input() else "SELECT 2"\ncursor.execute(query)')
     assert not report.findings_unified
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        'from builtins import int\ndef view(int):\n    cursor.execute(f"SELECT {int(input())}")',
+        'from builtins import int\ndef int(value): return value\ncursor.execute(f"SELECT {int(input())}")',
+        'from builtins import int as convert\ndef view(convert):\n    cursor.execute(f"SELECT {convert(input())}")',
+    ],
+)
+def test_shadowing_imported_numeric_aliases_keeps_taint(tmp_path, source):
+    assert len(scan(tmp_path, source).findings_unified) == 1
+
+
+def test_numeric_default_is_evaluated_in_enclosing_scope(tmp_path):
+    source = 'def view(int=int(input())):\n    cursor.execute(f"SELECT {int}")'
+    assert not scan(tmp_path, source).findings_unified

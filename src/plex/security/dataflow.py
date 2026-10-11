@@ -235,23 +235,33 @@ class SQLDataflow:
                     *stmt.args.kwonlyargs,
                 ]
                 for arg, default in zip(default_args, defaults, strict=True):
-                    flow = self.expression(default, local, qualname)
+                    flow = self.expression(default, env, qualname)
                     if flow:
                         local[arg.arg] = flow
                 for arg in args:
                     if isinstance(arg.annotation, ast.Subscript):
-                        flow = self.expression(arg.annotation, local, qualname)
+                        flow = self.expression(arg.annotation, env, qualname)
                         if flow:
                             local[arg.arg] = flow
+                for arg in [
+                    *args,
+                    *([stmt.args.vararg] if stmt.args.vararg else []),
+                    *([stmt.args.kwarg] if stmt.args.kwarg else []),
+                ]:
+                    self.aliases.pop(arg.arg, None)
+                self.aliases.pop(stmt.name, None)
+                local[stmt.name] = ()
                 child_name = f"{qualname}.{stmt.name}" if qualname else stmt.name
                 self.block(stmt.body, local, child_name)
                 self.aliases = saved_aliases
+                self.aliases.pop(stmt.name, None)
                 env[stmt.name] = ()
             elif isinstance(stmt, ast.ClassDef):
                 saved_aliases = dict(self.aliases)
                 child_name = f"{qualname}.{stmt.name}" if qualname else stmt.name
                 self.block(stmt.body, dict(env), child_name)
                 self.aliases = saved_aliases
+                self.aliases.pop(stmt.name, None)
                 env[stmt.name] = ()
             elif isinstance(stmt, (ast.Assign, ast.AnnAssign, ast.AugAssign)):
                 flow = self.expression(stmt.value, env, qualname)

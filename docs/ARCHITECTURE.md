@@ -21,6 +21,8 @@ This document describes the runtime architecture. For implementation details:
 
 ```
 CLI (plex analyze)
+  -> provider orchestrator (preflight + execution boundary)
+  -> PerformanceProvider -> native analysis pipeline
   -> config resolve + defaults merge
   -> file discovery / changed-file selection
   -> language analyzers -> FunctionFinding list
@@ -39,7 +41,12 @@ CLI (plex analyze)
   - Configuration loading, schema, template presets, path validation.
 - `src/plex/analyze`
   - Static signal extraction, identity hashing, regression logic, dynamic checks,
-    hot-path enrichment, cache, and orchestration helpers.
+    hot-path enrichment, cache, shared request options and the native pipeline.
+- `src/plex/providers`
+  - Provider SPI, sequential orchestration and the performance reference provider.
+- `src/plex/sandbox`
+  - Execution-boundary protocol and the native in-process backend; stronger
+    worker backends are not implemented yet.
 - `src/plex/ir`
   - Language-neutral module/function/call representation used by rules and
     call graph weighting.
@@ -50,7 +57,7 @@ CLI (plex analyze)
 - `src/plex/git`
   - Diff and file-at-ref helpers used for changed-only analysis and baselines.
 - `src/plex/cli.py`
-  - Application service/facade that orchestrates the full flow.
+  - Command parsing, provider dispatch, presentation outputs and exit handling.
 
 ## Core data contracts
 
@@ -108,3 +115,6 @@ Rules consume the IR and emit diagnostics without formatting output or mutating
 global state. The CLI coordinates configuration, analysis, reporting, and gates.
 Dataclasses define the shared contracts, and registries provide extension points
 for rules and language handlers.
+
+See [Provider SPI](PROVIDERS.md) for lifecycle, partial-result semantics and the
+current execution-boundary limits.

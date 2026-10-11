@@ -22,7 +22,9 @@ class RuleRegistry:
         for rule in BUILTIN_RULES:
             self.register(rule)
 
-    def load_plugins(self, plugin_modules: Iterable[str]) -> None:
+    def load_plugins(
+        self, plugin_modules: Iterable[str], failures: list[str] | None = None
+    ) -> None:
         for module_path in plugin_modules:
             module_path = str(module_path).strip()
             if not module_path:
@@ -31,6 +33,8 @@ class RuleRegistry:
                 module = importlib.import_module(module_path)
             except Exception as exc:
                 log.warning("Failed to load rule plugin %s (%s)", module_path, exc)
+                if failures is not None:
+                    failures.append(f"Rule plugin unavailable: {module_path}")
                 continue
             if hasattr(module, "register"):
                 try:
@@ -38,6 +42,8 @@ class RuleRegistry:
                     continue
                 except Exception as exc:
                     log.warning("Rule plugin register() failed for %s (%s)", module_path, exc)
+                    if failures is not None:
+                        failures.append(f"Rule plugin registration failed: {module_path}")
                     continue
             rules = getattr(module, "RULES", None)
             if isinstance(rules, list):
@@ -46,6 +52,8 @@ class RuleRegistry:
                         self.register(rule)
             else:
                 log.warning("Rule plugin %s has no RULES or register()", module_path)
+                if failures is not None:
+                    failures.append(f"Rule plugin has no registration interface: {module_path}")
 
 
 def run_rules(
@@ -55,11 +63,12 @@ def run_rules(
     severity_overrides: dict[str, str] | None = None,
     plugin_modules: list[str] | None = None,
     stability: str | None = None,
+    failures: list[str] | None = None,
 ) -> list[RuleFinding]:
     registry = RuleRegistry()
     registry.load_builtin()
     if plugin_modules:
-        registry.load_plugins(plugin_modules)
+        registry.load_plugins(plugin_modules, failures)
 
     enabled_set = {r.strip() for r in (enabled_rules or []) if str(r).strip()}
     disabled_set = {r.strip() for r in (disabled_rules or []) if str(r).strip()}
@@ -78,6 +87,8 @@ def run_rules(
             results = list(rule.apply(context))
         except Exception as exc:
             log.warning("Rule %s failed: %s", rule.id, exc)
+            if failures is not None:
+                failures.append(f"Rule execution failed: {rule.id}")
             continue
         suppression_ctx = getattr(context, "suppression_context", None)
         for finding in results:

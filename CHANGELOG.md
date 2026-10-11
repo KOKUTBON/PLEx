@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Introduce the provider SPI and sequential orchestrator; extract the native
+  performance pipeline and preserve successful-scan output and gate behavior.
+- Record known incomplete analysis and rule/plugin failures as partial scans,
+  preserve v8 results, and return a nonzero CLI status.
 - Add schema v8 JSON reports with shared findings, evidence and engine execution
   records; mirror performance results without changing legacy statistics/gates.
 - Support v7 JSON reading and lossless export with `--legacy-schema 7`; add

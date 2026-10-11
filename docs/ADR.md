@@ -48,5 +48,6 @@ Create an ADR when a change:
 
 These records start [PLEx 2.0 sprint 0](PLEx-2.0-PLAN.md#17-first-concrete-steps-sprint-0).
 They describe proposed contracts. The initial [v8 schema and v7 compatibility
-increment](REPORT_SCHEMA.md) is implemented; provider orchestration and SARIF
-aggregation remain follow-up work.
+increment](REPORT_SCHEMA.md) and [performance provider](PROVIDERS.md) are
+implemented; provider discovery, stronger workers and SARIF aggregation remain
+follow-up work.

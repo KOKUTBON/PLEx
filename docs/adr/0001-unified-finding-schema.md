@@ -127,6 +127,7 @@ policy; performance risk thresholds do not automatically apply to security.
   of lossy downgrade and malformed/unsupported schema input.
 - [ ] Test mirrored counts, distinct occurrences, fingerprint stability and
   independence from checkout-root paths.
-- [ ] Extract PerformanceProvider and preserve existing pipeline behavior.
+- [x] Extract PerformanceProvider and preserve successful pipeline behavior;
+  surface known incomplete runs explicitly (see [provider guide](../PROVIDERS.md)).
 - [ ] Validate SARIF descriptors, fingerprints, imports and engine run statuses.
 - [ ] Update bundled consumers and publish migration documentation.

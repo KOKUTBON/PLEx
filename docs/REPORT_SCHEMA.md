@@ -2,8 +2,9 @@
 
 New `plex analyze` and `plex baseline` JSON reports use schema **8**. The
 performance analysis, legacy finding arrays, statistics and gating thresholds
-retain their existing meaning. This increment adds the shared report model;
-it does not implement xBOUNDARY, external providers or the provider orchestrator.
+retain their existing meaning. The [provider orchestrator](PROVIDERS.md) now
+wraps the existing performance engine; xBOUNDARY and external adapters are not
+implemented yet.
 
 ## JSON contract
 

@@ -40,3 +40,11 @@ Create an ADR when a change:
 - Keep ADRs concise and specific to one decision.
 - Prefer multiple small ADRs over one large omnibus ADR.
 - Link to code paths, issues, and PRs for traceability.
+
+## Records
+
+- [0001 Unified finding schema and legacy compatibility](adr/0001-unified-finding-schema.md) — proposed.
+- [0002 Engine isolation and execution boundaries](adr/0002-engine-isolation-model.md) — proposed.
+
+These records start [PLEx 2.0 sprint 0](PLEx-2.0-PLAN.md#17-first-concrete-steps-sprint-0).
+They describe proposed contracts; the current runtime still uses schema v7.

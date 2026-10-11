@@ -142,6 +142,9 @@ def test_published_schema_validates_catalog(tmp_path):
         {"version": True},
         {"version": 1, "sinks": {"log": []}},
         {"version": 1, "sources": {"http": ["a[]"]}},
+        {"version": 1, "sources": {"http": ["api.valué"]}},
+        {"version": 1, "sources": {"http": ["api.value\n"]}},
+        {"version": 1, "sources": {"http\n": []}},
     ):
         with pytest.raises(jsonschema.ValidationError):
             jsonschema.validate(invalid, schema)

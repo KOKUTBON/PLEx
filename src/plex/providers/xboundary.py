@@ -15,6 +15,7 @@ from plex.report.unified import AnalysisFinding, EngineRun, Severity
 from plex.rules.base import RuleContext
 from plex.sandbox import Sandbox
 from plex.security.dataflow import SQLDataflow
+from plex.security.policy import PolicyError, load_policy
 from plex.security.sql_injection import SCOPE_LIMITATIONS, SQLInjectionRule
 
 from .base import AnalysisTask, EngineCapability, FindingSink, PreflightResult, ProviderEnv
@@ -40,7 +41,7 @@ class XBoundaryProvider:
         if env.sandbox.isolation != "none" or not env.sandbox.supports("none"):
             return PreflightResult(False, ("xBOUNDARY worker backends are not implemented",))
         options = env.task.options
-        if options.keys() - {"include", "exclude", "max_files"}:
+        if options.keys() - {"include", "exclude", "max_files", "policy"}:
             return PreflightResult(False, ("Unknown xBOUNDARY options",))
         for key in ("include", "exclude"):
             values = options.get(key, [])
@@ -51,6 +52,10 @@ class XBoundaryProvider:
         maximum = options.get("max_files", 200)
         if type(maximum) is not int or maximum < 1:
             return PreflightResult(False, ("max_files must be a positive integer",))
+        try:
+            load_policy(env.task.repo_root, options.get("policy"))
+        except PolicyError as exc:
+            return PreflightResult(False, (str(exc),))
         return PreflightResult(True)
 
     def run(self, task: AnalysisTask, sink: FindingSink, sandbox: Sandbox) -> EngineRun:
@@ -65,6 +70,7 @@ class XBoundaryProvider:
             )
         limitations: list[str] = []
         root = task.repo_root.resolve()
+        policy = load_policy(root, task.options.get("policy"))
         include = task.options.get("include") or ["**/*.py"]
         exclude = [*PLExConfig().exclude, *task.options.get("exclude", [])]
         sources: dict[str, str] = {}
@@ -113,6 +119,7 @@ class XBoundaryProvider:
             for finding in analyze_source(Path(file), source)
         ]
         context = RuleContext(root, sources, native, build_ir_modules(root, sources, native), {})
+        context.security_policy["catalog"] = policy
         for file in sources:
             if context.ast_for_path(file) is None:
                 limitations.append(f"Python syntax could not be parsed: {file}")
@@ -150,7 +157,7 @@ class XBoundaryProvider:
             if isinstance(data, SQLDataflow):
                 limitations.extend(f"{file}: {reason}" for reason in data.limitations)
         # Scope limitations describe the model, while operational gaps mark partial coverage.
-        scope_limits = list(SCOPE_LIMITATIONS)
+        scope_limits = [*SCOPE_LIMITATIONS, f"Security policy catalog: {policy.digest}"]
         if context.suppressed_findings:
             scope_limits.append(f"Rule suppressions applied: {len(context.suppressed_findings)}")
         return EngineRun(

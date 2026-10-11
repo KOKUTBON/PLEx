@@ -19,6 +19,8 @@ from .sql_injection import SQLInjectionRule
 
 def cmd_security_verify(args: argparse.Namespace) -> int:
     options = {"include": args.include, "exclude": args.exclude, "max_files": args.max_files}
+    if args.policy:
+        options["policy"] = args.policy
     report = run_providers(
         AnalysisTask(Path(args.path).resolve(), options=options), [XBoundaryProvider()]
     ).report()
@@ -78,6 +80,9 @@ def add_security_commands(sub: Any) -> None:
     )
     verify.add_argument(
         "--exclude", action="append", default=[], help="Additional excluded path/glob (repeatable)"
+    )
+    verify.add_argument(
+        "--policy", help="Security catalog YAML (relative to target; default: .plex/security.yml)"
     )
     verify.add_argument("--max-files", type=int, default=200)
     verify.add_argument("--fail-on-severity", choices=["info", "low", "medium", "high", "critical"])

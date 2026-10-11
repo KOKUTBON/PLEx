@@ -13,12 +13,13 @@ from plex.report.unified import EvidenceRef, finding_id
 from plex.rules.base import Rule, RuleContext, RuleFinding
 
 from .dataflow import SQLDataflow
+from .policy import SecurityPolicy
 
 SCOPE_LIMITATIONS = [
     "Python intraprocedural analysis; no cross-function summaries or receiver type resolution",
     "Path-insensitive branches; one representative source path per SQL sink",
-    "No heap/object alias tracking, custom sanitizer summaries or deferred global-state modeling",
-    "Only modeled request/input/FastAPI sources and execute/executemany/executescript sinks",
+    "No heap/object alias tracking, deferred global-state modeling",
+    "Built-in catalogs plus declared policy patterns; custom sanitizers are trusted assumptions",
 ]
 
 
@@ -35,7 +36,8 @@ class SQLInjectionRule(Rule):
             tree = context.ast_for_path(file)
             if tree is None:
                 continue
-            scanner = SQLDataflow(file)
+            policy = context.security_policy.get("catalog")
+            scanner = SQLDataflow(file, policy if isinstance(policy, SecurityPolicy) else None)
             context.dataflow[file] = scanner
             occurrences: dict[tuple[str, str], int] = {}
             for flow in scanner.analyze(tree):
@@ -90,6 +92,7 @@ class SQLInjectionRule(Rule):
                     engine_meta={
                         "finding_id": identity,
                         "stability": self.stability,
+                        "policy_digest": scanner.policy.digest,
                         "dataflow_paths": {ref: payload},
                     },
                 )

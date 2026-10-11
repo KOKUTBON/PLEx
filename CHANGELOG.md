@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add versioned `.plex/security.yml` source, SQL sanitizer and SQL sink catalogs,
+  with strict preflight validation, `--policy` override and report digests.
+
 - Add the experimental Python `xbnd.sql-injection` rule and bundled xBOUNDARY
   provider, with static data-flow evidence and `plex security verify`.
 - Export shared findings in SARIF with code flows, real rule IDs, fingerprints

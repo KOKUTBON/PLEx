@@ -14,8 +14,7 @@ plex report out/security.json --format sarif -o out/security.sarif
 ```
 
 `verify` names the static check; findings remain `suspected`, never dynamically
-verified. A finding means a modeled untrusted value reaches statement text in an
-`execute`, `executemany` or `executescript` method call. Receivers are identified
+verified. A finding means a modeled untrusted value reaches statement text in a built-in SQL sink or a declared policy sink. Receivers are identified
 by method name, without database type resolution. Review findings before acting.
 The rule maps to [CWE-89](https://cwe.mitre.org/data/definitions/89.html) and
 [OWASP A05:2025 Injection](https://top10.owasp.org/2025/A05_2025-Injection/).
@@ -49,6 +48,54 @@ cursor.execute(f"SELECT * FROM users WHERE name='{value}'")  # suspected injecti
 Binding an additional parameter does not make an already interpolated SQL
 statement safe. SQL wrapper calls such as `sqlalchemy.text` preserve taint.
 
+## Configurable catalogs
+
+The provider automatically reads `.plex/security.yml` under the target root.
+Use `plex security verify . --policy policies/security.yml` to override it;
+relative paths resolve against the target root. Library callers use the `policy`
+task option. Explicit missing files, malformed YAML, duplicate keys, unknown
+fields and unsupported policy versions stop preflight and make the CLI exit 1.
+The [v1 JSON schema](../schema/security-policy-v1.schema.json) describes the
+accepted shape. Runtime limits are 64 KiB per file and 256 distinct patterns per
+section. Parsing uses a safe YAML loader and never imports policy symbols.
+
+```yaml
+version: 1
+sources:
+  http_request: [gateway.request_value, events.payload]
+sanitizers:
+  sql: [project.sql.bind_value]
+sinks:
+  sql: [database.run_statement]
+```
+
+Catalogs extend the built-in model; empty lists do not disable defaults. Source
+group names organize the catalog and have no data-class semantics. Sinks and
+sanitizers currently accept only the `sql` group. Privacy invariants and other
+sink categories are rejected until implemented.
+
+Patterns match complete, case-sensitive dotted names after import-alias
+resolution. A `*` dotted segment matches any suffix, including further dots;
+`gateway.*` matches calls and property reads under `gateway`. Bare names are
+also accepted. Sources match calls or value reads. SQL sinks inspect the first
+positional argument or the `query`/`sql`/`statement`/`operation` keywords, as the
+built-in sinks do. Custom APIs with different argument positions need a future
+signature-aware model.
+
+A sanitizer declaration trusts the named call to remove SQL taint from its
+return value. It does not analyze or verify its implementation. Names are
+lexical declarations without receiver-type resolution; choose narrow patterns
+and review them. Sources take precedence when a name is also a sanitizer.
+Nested sink calls are still checked before sanitizer propagation. Unknown calls
+continue to preserve taint unless declared. Built-in numeric sanitizers retain
+their shadowing checks.
+
+Every engine run records a SHA-256 digest of the normalized extension catalogs,
+including runs with no findings. Findings carry the same digest in
+`engine_meta.policy_digest`; ordering, duplicate patterns and source-group names
+do not change it. The digest identifies these declarations, while the provider
+version identifies the built-in model. JSON and SARIF preserve this provenance.
+
 ## Evidence and reports
 
 Each finding includes a `dataflow_path` EvidenceRef and a self-contained payload
@@ -78,8 +125,7 @@ The dedicated security command scans Python files under its source root,
 including `__init__.py`. Standard generated/dependency/test directories are
 excluded using PLExConfig's default exclusions. `--include GLOB` and
 `--exclude PATH_OR_GLOB` are repeatable; `--max-files` defaults to 200. This spike
-uses its own explicit selection options; it does not load `.plex.yml` or a
-security policy file. Symbolic-link directories are excluded and symbolic-link
+uses its own explicit selection options; it does not load `.plex.yml`. Symbolic-link directories are excluded and symbolic-link
 files are not read. Individual files larger than 1 MB are skipped.
 
 Unreadable files, parse failures, selected symbolic-link files, file/loop limits
@@ -102,8 +148,8 @@ results; they do not establish that the code is safe.
 This is an intraprocedural, path-insensitive spike with one representative trace
 per sink. It does not resolve receiver types, follow heap/object aliases, compute
 cross-function summaries, model deferred global changes or prove path
-feasibility. Custom sources/sanitizers, additional languages and the proposed
-`.plex/security.yml` policy catalog remain future work. Zero findings means no
+feasibility. Cross-function sanitizer summaries and additional languages remain
+future work. Zero findings means no
 modeled flow was detected, not that the application is secure.
 
 ## Corpus and reproducible measurement
@@ -116,7 +162,7 @@ request reads, suppression, identities, partial scans and report conversion.
 These fixtures are small examples, not a production precision/recall study.
 
 ```bash
-pytest tests/test_xboundary.py
+pytest tests/test_xboundary.py tests/test_security_policy.py
 python scripts/benchmark_security.py --iterations 5
 ```
 

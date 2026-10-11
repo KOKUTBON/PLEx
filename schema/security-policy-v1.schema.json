@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PLEx security policy v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version"
+  ],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1
+    },
+    "sources": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[A-Za-z_]\\w*$"
+      },
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "pattern": "^[A-Za-z_]\\w*(?:\\.(?:[A-Za-z_]\\w*|\\*))*$"
+        }
+      }
+    },
+    "sanitizers": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sql": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z_]\\w*(?:\\.(?:[A-Za-z_]\\w*|\\*))*$"
+          }
+        }
+      }
+    },
+    "sinks": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sql": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z_]\\w*(?:\\.(?:[A-Za-z_]\\w*|\\*))*$"
+          }
+        }
+      }
+    }
+  }
+}

@@ -5,6 +5,8 @@ from __future__ import annotations
 import ast
 from dataclasses import dataclass
 
+from .policy import SecurityPolicy
+
 
 @dataclass(frozen=True)
 class FlowStep:
@@ -40,8 +42,9 @@ def join(*flows: Flow) -> Flow:
 
 
 class SQLDataflow:
-    def __init__(self, file: str) -> None:
+    def __init__(self, file: str, policy: SecurityPolicy | None = None) -> None:
         self.file = file
+        self.policy = policy or SecurityPolicy()
         self.flows: dict[tuple[str, int, int], SQLFlow] = {}
         self.limitations: list[str] = []
         self.aliases: dict[str, str] = {}
@@ -61,6 +64,8 @@ class SQLDataflow:
     def source(self, node: ast.AST) -> str:
         target = node.func if isinstance(node, ast.Call) else node
         name = self.name(target)
+        if self.policy.matches(name, self.policy.sources):
+            return name
         if isinstance(node, ast.Call) and name in {"input", "builtins.input"}:
             return name
         if name.startswith("flask.request"):
@@ -101,7 +106,8 @@ class SQLDataflow:
         if node is None:
             return ()
         if isinstance(node, ast.Name):
-            return env.get(node.id, ())
+            source = self.source(node)
+            return (self.step(node, "source", source),) if source else env.get(node.id, ())
         if isinstance(node, ast.Lambda):
             self.limitations.append("Lambda bodies are not analyzed")
             return ()
@@ -138,11 +144,15 @@ class SQLDataflow:
                 else ()
             )
             name = self.name(node.func)
-            if isinstance(node.func, ast.Attribute) and node.func.attr in {
-                "execute",
-                "executemany",
-                "executescript",
-            }:
+            if self.policy.matches(name, self.policy.sinks) or (
+                isinstance(node.func, ast.Attribute)
+                and node.func.attr
+                in {
+                    "execute",
+                    "executemany",
+                    "executescript",
+                }
+            ):
                 query = (
                     values[0]
                     if values
@@ -154,7 +164,7 @@ class SQLDataflow:
                     )
                 )
                 if query:
-                    steps = (*query, self.step(node, "sink", node.func.attr))
+                    steps = (*query, self.step(node, "sink", name))
                     self.flows.setdefault(
                         (qualname, node.lineno, node.col_offset), SQLFlow(node, qualname, steps)
                     )
@@ -165,6 +175,8 @@ class SQLDataflow:
                 source = ""
             if source:
                 return (self.step(node, "source", source),)
+            if self.policy.matches(name, self.policy.sanitizers):
+                return ()
             if name in {"int", "float", "builtins.int", "builtins.float"} and not shadowed:
                 return ()
             return join(receiver, *values, *keywords.values())

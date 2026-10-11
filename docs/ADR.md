@@ -47,4 +47,6 @@ Create an ADR when a change:
 - [0002 Engine isolation and execution boundaries](adr/0002-engine-isolation-model.md) — proposed.
 
 These records start [PLEx 2.0 sprint 0](PLEx-2.0-PLAN.md#17-first-concrete-steps-sprint-0).
-They describe proposed contracts; the current runtime still uses schema v7.
+They describe proposed contracts. The initial [v8 schema and v7 compatibility
+increment](REPORT_SCHEMA.md) is implemented; provider orchestration and SARIF
+aggregation remain follow-up work.

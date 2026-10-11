@@ -14,7 +14,9 @@ or binary evidence. `format_sarif.py` exports every ordinary finding under
 New engines need one evidence contract without changing existing performance
 analysis, baseline matching or gating semantics.
 
-This ADR specifies future behavior. It does not change the runtime schema.
+This ADR specifies the target contract. The initial schema/JSON increment is
+implemented as described in [the migration guide](../REPORT_SCHEMA.md); provider
+orchestration and SARIF changes remain future work.
 
 ## Decision
 
@@ -115,13 +117,13 @@ Land this design first. Implement models, schema validation, JSON readers and
 legacy serialization next; then wrap performance analysis and update SARIF.
 Before changing the default output to v8, verify all bundled formatters, Action,
 LSP and extension consumers, and document the legacy flag and migration. Runtime
-schema remains v7 until that implementation lands. Security gating needs its own
+schema is now v8 with explicit v7 export. Security gating needs its own
 policy; performance risk thresholds do not automatically apply to security.
 
 ## Follow-up Tasks
 
-- [ ] Implement shared types, EngineRun and schema v8 validation.
-- [ ] Add v7 fixture byte-equality and v7/v8 round-trip tests, including rejection
+- [x] Implement shared types, EngineRun and schema v8 validation.
+- [x] Add v7 fixture byte-equality and v7/v8 round-trip tests, including rejection
   of lossy downgrade and malformed/unsupported schema input.
 - [ ] Test mirrored counts, distinct occurrences, fingerprint stability and
   independence from checkout-root paths.

@@ -9,6 +9,7 @@ import time
 from collections import Counter
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import TypedDict, cast
 
@@ -74,6 +75,7 @@ from plex.report.severity import (
     severity_from_score,
     severity_rank,
 )
+from plex.report.unified import EngineRun
 from plex.rules.base import RuleContext, RuleFinding
 from plex.rules.registry import RuleRegistry, run_rules
 from plex.util.languages import normalize_languages
@@ -1009,6 +1011,8 @@ def _build_report(
 
 
 def cmd_analyze(args: argparse.Namespace) -> int:
+    started_at = datetime.now(timezone.utc).isoformat()
+    started_clock = time.monotonic()
     repo_root = Path(args.path).resolve()
     config_paths = [Path(p) for p in args.config] if args.config else None
     cfg = load_config(repo_root, config_paths)
@@ -1481,8 +1485,20 @@ def cmd_analyze(args: argparse.Namespace) -> int:
                 warn_regression_risk_delta,
             )
 
+    report = dataclasses.replace(
+        report,
+        engines=[
+            EngineRun(
+                engine="performance",
+                version=__version__,
+                status="complete",
+                started_at=started_at,
+                duration_ms=(time.monotonic() - started_clock) * 1000,
+            )
+        ],
+    )
     if args.json_path:
-        write_json(report, Path(args.json_path))
+        write_json(report, Path(args.json_path), legacy_schema=getattr(args, "legacy_schema", None))
         log.info("Wrote JSON report to %s", args.json_path)
 
     if args.html_path:
@@ -2011,6 +2027,30 @@ def cmd_report(args: argparse.Namespace) -> int:
     top_n = int(args.top) if args.top is not None else 50
     interactive = not getattr(args, "legacy", False)
 
+    legacy_schema = getattr(args, "legacy_schema", None)
+    if legacy_schema is not None and fmt != "json":
+        log.error("--legacy-schema applies only to --format json")
+        return 1
+    if fmt == "json":
+        try:
+            report = dataclasses.replace(report, schema_version=SCHEMA_VERSION)
+            data = report.to_dict_v7() if legacy_schema == 7 else report.to_dict()
+            if args.out:
+                write_json(report, Path(args.out), legacy_schema=legacy_schema)
+            else:
+                print(json.dumps(data, indent=2, allow_nan=False))
+        except ValueError as exc:
+            log.error("Cannot export report: %s", exc)
+            return 1
+        return 0
+
+    # Until formatters support all categories, refuse to hide unified-only results.
+    try:
+        report.to_dict_v7()
+    except ValueError as exc:
+        log.error("This formatter supports performance-only reports; use --format json: %s", exc)
+        return 1
+
     if fmt == "html":
         out_path = Path(args.out) if args.out else Path("plex-report.html")
         write_html(report, out_path, top_n=top_n, interactive=interactive)
@@ -2104,6 +2144,13 @@ def cmd_hook_config(args: argparse.Namespace) -> int:
 
 def _add_analyze_args(a: argparse.ArgumentParser) -> None:
     a.add_argument("path", nargs="?", default=".", help="Repo root (default: .)")
+    a.add_argument(
+        "--legacy-schema",
+        type=int,
+        choices=[7],
+        default=None,
+        help="Emit schema v7 for JSON output (default: v8)",
+    )
     a.add_argument(
         "--config",
         action="append",
@@ -2749,7 +2796,7 @@ def build_parser() -> argparse.ArgumentParser:
     rep_p.add_argument(
         "--format",
         "-f",
-        choices=["html", "markdown", "md", "comment", "sarif", "summary"],
+        choices=["html", "markdown", "md", "comment", "sarif", "summary", "json"],
         default="html",
         help="Report output format (default: html)",
     )
@@ -2761,6 +2808,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     rep_p.add_argument(
         "--top", type=int, default=50, help="Max findings/regressions to display (default: 50)"
+    )
+    rep_p.add_argument(
+        "--legacy-schema",
+        type=int,
+        choices=[7],
+        default=None,
+        help="Emit lossless schema v7 JSON (requires --format json)",
     )
     rep_p.add_argument(
         "--legacy",

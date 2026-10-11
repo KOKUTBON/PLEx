@@ -10,6 +10,7 @@ from .base import (
 )
 from .orchestrator import AnalysisOutcome, run_providers
 from .performance import PerformanceProvider
+from .registry import ProviderRegistry
 
 __all__ = [
     "AnalysisProvider",
@@ -21,4 +22,5 @@ __all__ = [
     "AnalysisOutcome",
     "run_providers",
     "PerformanceProvider",
+    "ProviderRegistry",
 ]

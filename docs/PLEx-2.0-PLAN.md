@@ -488,10 +488,10 @@ Sequencing rationale: reporting must exist before any engine can emit into it; x
 
 ## 17. First concrete steps (sprint 0)
 
-1. ADR: unified finding schema (v8) + engine isolation model.
-2. Implement `report/unified.py` + schema bump + `to_dict_v7()` + compat snapshot test.
-3. Extract `PerformanceProvider` behind the SPI; wire orchestrator with a single engine.
-4. Stand up `plex providers list|preflight|doctor`.
-5. Spike xBOUNDARY: one end-to-end rule (`xbnd.sql-injection`) with a real data-flow `EvidenceRef` and SARIF `codeFlows`, plus a 20-case corpus.
+1. **Implemented:** ADR: unified finding schema (v8) + engine isolation model.
+2. **Implemented:** `report/unified.py` + schema bump + `to_dict_v7()` + compat snapshot test.
+3. **Implemented:** `PerformanceProvider` behind the SPI; orchestrator with a single engine.
+4. **Implemented:** `plex providers list|preflight|doctor` and explicit provider registration.
+5. **Next:** spike xBOUNDARY: one end-to-end rule (`xbnd.sql-injection`) with a real data-flow `EvidenceRef` and SARIF `codeFlows`, plus a 20-case corpus.
 
 That sequence lands a shippable, strictly-additive first increment (platform scaffolding + one real security rule) without touching the performance engine's behavior.

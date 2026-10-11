@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add lazy provider discovery and explicit plugin registration, plus
+  `plex providers list|preflight|doctor` with text/JSON diagnostics.
+- Fix provider compatibility snapshots on Python 3.10–3.12 while retaining
+  checks of function identity derivation.
+
 - Introduce the provider SPI and sequential orchestrator; extract the native
   performance pipeline and preserve successful-scan output and gate behavior.
 - Record known incomplete analysis and rule/plugin failures as partial scans,

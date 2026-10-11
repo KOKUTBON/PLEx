@@ -10,6 +10,7 @@ from types import SimpleNamespace
 import pytest
 
 from plex.analyze import pipeline
+from plex.analyze.identity import stable_function_id
 from plex.providers import AnalysisTask, EngineCapability, PerformanceProvider, run_providers
 from plex.providers.base import ProviderEnv
 from plex.report.format_json import read_json, write_json
@@ -53,6 +54,20 @@ class StubProvider:
         return EngineRun(self.capability.id, self.version, "complete", isolation=sandbox.isolation)
 
 
+def normalize_runtime_identities(report: dict) -> dict:
+    # The pre-refactor snapshot was generated with Python 3.13. AST dumps and
+    # their derived hashes differ across Python versions; compare all other data.
+    report = json.loads(json.dumps(report))
+    for finding in report["findings"]:
+        assert finding["body_hash"]
+        assert finding["function_id"] == stable_function_id(
+            finding["file"], finding["qualname"], finding["body_hash"]
+        )
+        finding["body_hash"] = "<runtime-body-hash>"
+        finding["function_id"] = "<runtime-function-id>"
+    return report
+
+
 def test_performance_provider_matches_pre_refactor_cli() -> None:
     provider = PerformanceProvider()
     report = run_providers(AnalysisTask(PROJECT), [provider]).report()
@@ -60,7 +75,7 @@ def test_performance_provider_matches_pre_refactor_cli() -> None:
     actual["generated_at"] = "<generated>"
     actual["repo_root"] = "<repo>"
     expected = json.loads((ROOT / "tests/fixtures/providers/pre_provider.v7.json").read_text())
-    assert actual == expected
+    assert normalize_runtime_identities(actual) == normalize_runtime_identities(expected)
     assert provider.last_result is not None and provider.last_result.exit_code == 0
     assert report.engines[0].status == report.scan_status == "complete"
     assert report.engines[0].isolation == "none"
@@ -87,9 +102,8 @@ def test_cli_uses_provider_and_preserves_legacy_output(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stderr
     actual = json.loads(output.read_text())
     actual.update(generated_at="<generated>", repo_root="<repo>")
-    assert actual == json.loads(
-        (ROOT / "tests/fixtures/providers/pre_provider.v7.json").read_text()
-    )
+    expected = json.loads((ROOT / "tests/fixtures/providers/pre_provider.v7.json").read_text())
+    assert normalize_runtime_identities(actual) == normalize_runtime_identities(expected)
 
 
 def test_performance_analysis_never_executes_target_by_default(tmp_path: Path) -> None:

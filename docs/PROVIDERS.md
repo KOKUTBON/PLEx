@@ -82,7 +82,67 @@ Python code. The SPI does not isolate plugin imports or execution. This incremen
 does not discover or import provider plugins automatically, install external
 tools, implement container workers, enable active testing or add dependencies.
 
-Provider registration/discovery and `plex providers list|preflight|doctor` are
-the next increment. SARIF aggregation, xBOUNDARY and external adapters follow.
+Provider registration/discovery and diagnostics are available as described below.
+SARIF aggregation, xBOUNDARY and external adapters follow.
 See [the 2.0 plan](PLEx-2.0-PLAN.md), [report migration](REPORT_SCHEMA.md), and
 [engine isolation ADR](adr/0002-engine-isolation-model.md).
+
+
+## Inventory and prerequisite checks
+
+```bash
+plex providers list --json
+plex providers preflight . --provider performance --json
+plex providers doctor . --json
+```
+
+`list` reports bundled capabilities/version and installed `plex.providers` entry
+point names and import targets. Entry point discovery reads metadata without
+importing external provider code. External versions/capabilities remain unknown
+until explicitly loaded. `preflight` and `doctor` check only `performance` by
+default. Repeat `--provider ID` to select installed providers. Unknown providers,
+load errors, unmet prerequisites and unavailable execution boundaries return
+exit 1 with reasons; successful checks return 0. `doctor` also reports PLEx and
+Python versions and implemented isolation levels. These commands never call
+`run`, perform analysis, install dependencies, or configure external tools.
+Provider preflight implementations are responsible for their own readiness and
+authorization checks; they must not execute a target or initiate active testing.
+Only in-process execution is currently available.
+
+## Registering trusted providers
+
+`ProviderRegistry` rejects duplicate IDs, invalid contracts and factories whose
+returned engine ID differs from the registered name. Each factory must return a
+fresh object implementing the SPI. For installed packages, declare a named
+zero-argument factory (a provider class also works):
+
+```toml
+[project.entry-points."plex.providers"]
+example = "example_package:ExampleProvider"
+```
+
+The entry point name must match `capability.id`. Names use lowercase letters,
+digits, hyphens or underscores, starting with a letter. Discovery does not enable
+installed providers automatically. For an unpackaged module, explicit import is
+available on diagnostic commands:
+
+```bash
+plex providers preflight . --provider-plugin example_package:ExampleProvider --json
+```
+
+Explicit plugins are included in default checks for that invocation. When
+`--provider` is present, it selects the exact check list. `--provider-plugin` is
+repeatable and imports trusted Python code even with `list`. Import/preflight
+exceptions are reported by type without exposing raw exception messages.
+
+Library callers can load a selected entry point and pass it to the orchestrator:
+
+```python
+from plex.providers import AnalysisTask, ProviderRegistry, run_providers
+
+registry = ProviderRegistry.discover()
+outcome = run_providers(AnalysisTask(Path(".").resolve()), [registry.load("example")])
+```
+
+The `analyze` CLI continues to select the bundled performance provider; selecting
+multiple engines in that command awaits shared formatter and gate support.

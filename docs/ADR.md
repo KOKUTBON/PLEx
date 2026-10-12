@@ -52,6 +52,7 @@ Create an ADR when a change:
 - [0007 Native artifact intelligence (PLEx Inspect)](adr/0007-native-artifact-inspection.md) — proposed.
 - [0008 Integrated intelligence and cross-engine repair verification](adr/0008-integrated-intelligence-and-repair.md) — proposed.
 - [0009 Declared coverage matrix, supply chain analysis, and comparative validation harness](adr/0009-coverage-and-comparative-validation.md) — accepted.
+- [0010 PLEx 2.0 cohesive release architecture and native platform ownership](adr/0010-plex-2-0-cohesive-release.md) — accepted.
 
 These records document key architectural decisions for [PLEx 2.0](PLEx-2.0-PLAN.md).
 

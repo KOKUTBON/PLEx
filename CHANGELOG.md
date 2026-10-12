@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- PLEx 2.0 native platform release readiness: cohesive multi-engine orchestration across
+  Performance, xBOUNDARY (static taint), PLEx Inspect (ELF binary intelligence), PLEx Validate
+  (active reproduction), Supply Chain & IaC, and PLEx Repair (closed-loop remediation).
+  Unified CLI subcommands (`analyze`, `inspect`, `validate`, `remediate`, `coverage`, `benchmark`),
+  comprehensive cohesive test suite (`tests/test_cohesive_release_readiness.py`), Schema v8
+  JSON and SARIF 2.1.0 report generation, ADR 0010, and PLEx 2.0 Migration Guide (`docs/MIGRATION_2.0.md`).
+
 - Add declared platform coverage matrix, native supply chain and configuration security,
   and comparative validation harness (`plex.coverage`, `plex.supply_chain`, `plex.bench.comparative`,
   `plex coverage`, `plex benchmark --comparative`). Provides declared capability inventory

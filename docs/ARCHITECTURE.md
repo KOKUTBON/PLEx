@@ -20,18 +20,19 @@ This document describes the runtime architecture. For implementation details:
 ## Runtime pipeline
 
 ```
-CLI (plex analyze)
+CLI (plex analyze | inspect | validate | remediate | coverage | benchmark)
   -> provider orchestrator (preflight + execution boundary)
-  -> PerformanceProvider -> native analysis pipeline
-  -> config resolve + defaults merge
-  -> file discovery / changed-file selection
-  -> language analyzers -> FunctionFinding list
-  -> optional IR build
-  -> optional rules + call graph + hot-path weighting
-  -> optional baseline compare + regressions
-  -> optional dynamic verification
-  -> report assembly (PLExReport)
-  -> formatters (json/md/html/sarif/snippets/checks/annotations/notify)
+  -> Multi-Engine Analysis:
+      - PerformanceProvider (complexity & loop analysis)
+      - XBoundaryProvider (AST taint tracking & static security)
+      - SupplyChainProvider (dependency manifests & IaC config)
+  -> Dedicated Native Subcommands:
+      - InspectEngine (pure-Python ELF structural & hardening audit)
+      - ValidateEngine (scoped active HTTP reproduction)
+      - RemediationCoordinator (closed-loop 5-gate patch verification)
+  -> ProjectGraph (relational provenance linking findings, routes, active tests, repairs)
+  -> Report assembly (PLExReport Schema v8)
+  -> formatters (json/sarif/md/html/annotations)
   -> gating evaluation (exit code)
 ```
 
@@ -43,17 +44,32 @@ CLI (plex analyze)
   - Static signal extraction, identity hashing, regression logic, dynamic checks,
     hot-path enrichment, cache, shared request options and the native pipeline.
 - `src/plex/providers`
-  - Provider SPI, sequential orchestration and the performance reference provider.
+  - Provider SPI, sequential orchestration, performance, xboundary, and supply chain providers.
+- `src/plex/security`
+  - xBOUNDARY AST dataflow and interprocedural taint propagation rules (SQLi, cmdi, traversal, eval).
+- `src/plex/inspect`
+  - Pure-Python ELF binary parser, section/symbol extraction, and compiler hardening mitigation checks.
+- `src/plex/validate`
+  - Scoped active testing engine, route discovery, deterministic HTTP reproduction recipes, and authorization guardrails.
+- `src/plex/supply_chain`
+  - Dependency manifest parsers (`requirements.txt`, `poetry.lock`, `Pipfile.lock`), offline CVE advisories, Dockerfile and IaC rules.
+- `src/plex/repair`
+  - Deterministic fixers (`SQLParameterizeFixer`), `PatchCandidate` contracts, and 5-stage `RepairVerificationRunner`.
+- `src/plex/graph`
+  - `ProjectGraph` v1 relational model connecting source findings, AST routes, active evidence, and repair audits.
+- `src/plex/coverage`
+  - Authoritative declared coverage matrix across all seven lifecycle surfaces.
+- `src/plex/bench`
+  - Comparative validation and accuracy benchmark harness calculating confusion matrices, precision, recall, and repair fidelity.
 - `src/plex/sandbox`
-  - Execution-boundary protocol and the native in-process backend; stronger
-    worker backends are not implemented yet.
+  - `InProcessSandbox`, `SubprocessSandbox`, environment scrubbing (`SAFE_ENV_ALLOWLIST`), and `disposable_workspace`.
 - `src/plex/ir`
   - Language-neutral module/function/call representation used by rules and
     call graph weighting.
 - `src/plex/rules`
   - Built-in rule implementations and plugin registry.
 - `src/plex/report`
-  - Canonical report dataclasses and all output formatters.
+  - Canonical report dataclasses (Schema v8) and all output formatters (JSON, SARIF 2.1.0, Markdown).
 - `src/plex/git`
   - Diff and file-at-ref helpers used for changed-only analysis and baselines.
 - `src/plex/cli.py`

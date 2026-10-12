@@ -1,7 +1,8 @@
-# Experimental xBOUNDARY SQL-injection analysis
+# Experimental xBOUNDARY injection analysis
 
-xBOUNDARY is PLEx's bundled native security provider. This first spike implements
-one experimental Python rule, `xbnd.sql-injection`, using the existing rule SDK,
+xBOUNDARY is PLEx's bundled native security provider. The provider implements two
+experimental Python rules, `xbnd.sql-injection` and `xbnd.command-injection`,
+using the existing rule SDK,
 Python AST and function IR. It performs static analysis without importing or
 executing target code. It adds no mandatory dependency.
 
@@ -14,9 +15,11 @@ plex report out/security.json --format sarif -o out/security.sarif
 ```
 
 `verify` names the static check; findings remain `suspected`, never dynamically
-verified. A finding means a modeled untrusted value reaches statement text in a built-in SQL sink or a declared policy sink. Receivers are identified
-by method name, without database type resolution. Review findings before acting.
-The rule maps to [CWE-89](https://cwe.mitre.org/data/definitions/89.html) and
+verified. A finding means a modeled untrusted value reaches SQL statement text or shell
+command text. SQL receivers are identified by method name, without database type
+resolution. Review findings before acting. The rules map to
+[CWE-89](https://cwe.mitre.org/data/definitions/89.html) and
+[CWE-78](https://cwe.mitre.org/data/definitions/78.html), respectively, and
 [OWASP A05:2025 Injection](https://top10.owasp.org/2025/A05_2025-Injection/).
 
 ## What the spike tracks
@@ -31,12 +34,13 @@ use the conventional names `request` or `self.request`.
 The pass tracks assignments, augmented assignment, interpolation, `%`, `.format`,
 concatenation, conservative container propagation, comprehensions, branch joins,
 with blocks and try/except branches. Loops use at most eight propagation passes.
-Built-in `int`/`float` conversion removes SQL-string taint; a shadowed function
+Built-in `int`/`float` conversion removes string taint for both rules; a shadowed function
 with that name does not. HTML escaping and arbitrary unknown function calls do
 not remove taint. No claim is made that an unknown sanitizer is SQL-safe.
 
-Only SQL statement text is checked, including the `query`, `sql`, `statement`
-and `operation` keywords. Untrusted values in a separate parameter argument do
+The SQL rule checks statement text in `execute`, `executemany`, `executescript`,
+Django `.objects.raw()` and imported `django.db.models.expressions.RawSQL`,
+including the `query`, `sql`, `statement`, `operation` and `raw_query` keywords. Untrusted values in a separate parameter argument do
 not taint constant statement text:
 
 ```python
@@ -47,6 +51,41 @@ cursor.execute(f"SELECT * FROM users WHERE name='{value}'")  # suspected injecti
 
 Binding an additional parameter does not make an already interpolated SQL
 statement safe. SQL wrapper calls such as `sqlalchemy.text` preserve taint.
+
+## Shell command model
+
+`xbnd.command-injection` models `os.system`, `posix.system`, `os.popen`,
+`subprocess.getoutput` and `subprocess.getstatusoutput`. It also checks
+`subprocess.run`, `Popen`, `call`, `check_call` and `check_output` when `shell`
+is a literal truthy value. Native import aliases are resolved; locally shadowed
+API names are not treated as native sinks. Dynamic shell flags or unpacked
+keyword arguments preserve possible flows and mark coverage incomplete.
+
+```python
+import subprocess
+
+value = request.GET["name"]
+subprocess.run(f"echo {value}", shell=True)  # suspected shell injection
+subprocess.run(["echo", value], shell=False)  # no modeled shell interpretation
+```
+
+Literal argument lists invoking `sh`/`bash`/`dash`/`zsh`/`ksh` with `-c`, `cmd`
+with `/c`, or `powershell`/`pwsh` with `-Command` are also checked. Additional
+interpreter arguments mark coverage incomplete. Indirectly constructed shell
+argument lists and Windows implicit batch-file shells are outside the model.
+A separate argument list does not establish safety from executable or argument
+injection, which this rule does not model.
+
+There is no universal shell quoting sanitizer: unknown quoting calls, including
+`shlex.quote`, preserve taint. Quoted argument values can therefore produce
+conservative findings. Shell grammar and operating system affect quoting safety;
+review context before suppressing a finding. See Python's
+[subprocess security considerations](https://docs.python.org/3/library/subprocess.html#security-considerations).
+
+Both rules share the bounded helper model, sources, evidence, suppressions and
+report formats described below. SQL policy sanitizers and sinks affect only the
+SQL rule; custom policy sources affect both. Command catalogs are not accepted
+by policy version 1.
 
 ## Configurable catalogs
 
@@ -78,7 +117,7 @@ Patterns match complete, case-sensitive dotted names after import-alias
 resolution. A `*` dotted segment matches any suffix, including further dots;
 `gateway.*` matches calls and property reads under `gateway`. Bare names are
 also accepted. Sources match calls or value reads. SQL sinks inspect the first
-positional argument or the `query`/`sql`/`statement`/`operation` keywords, as the
+positional argument or the `query`/`sql`/`statement`/`operation`/`raw_query` keywords, as the
 built-in sinks do. Custom APIs with different argument positions need a future
 signature-aware model.
 
@@ -100,7 +139,7 @@ version identifies the built-in model. JSON and SARIF preserve this provenance.
 
 Direct calls to uniquely bound, undecorated synchronous functions at module
 scope now propagate arguments into the helper and its return value back to the
-caller. The pass also checks SQL sinks inside called helpers. It binds
+caller. The pass also checks modeled sinks inside called helpers. It binds
 positional-only, positional and keyword-only arguments; modeled defaults retain
 their definition-time flow. Caller locals stay separate from callee locals.
 Parameter shadowing, imports and module reassignment prevent incorrect helper
@@ -235,10 +274,12 @@ helper chains. These fixtures are synthetic examples, not a production
 precision/recall study.
 
 ```bash
-pytest tests/test_xboundary.py tests/test_security_policy.py tests/test_security_functions.py tests/test_security_modules.py
+pytest tests/test_xboundary.py tests/test_security_policy.py tests/test_security_functions.py tests/test_security_modules.py tests/test_command_injection.py tests/test_security_realworld.py
 python scripts/benchmark_security.py --iterations 5
 python scripts/benchmark_security.py --corpus same-module --iterations 5
 python scripts/benchmark_security.py --corpus cross-module --iterations 5
+python scripts/benchmark_security.py --corpus command --iterations 5
+python scripts/benchmark_security.py --corpus pygoat --iterations 5
 ```
 
 A local Python 3.14 run on 2026-10-11 scanned the 20 fixtures in a median 5.961 ms
@@ -256,3 +297,38 @@ root. A local Python 3.14 run on 2026-10-12 measured a median 9.521 ms for all
 twelve scans across five runs (TP=8, TN=4, FP=0, FN=0). This includes per-project
 provider/report overhead and is not directly comparable to the single-root
 corpus timings above.
+
+
+The [24-case command corpus](../tests/fixtures/security/command_injection.json)
+covers native shell APIs, aliases, helpers, explicit interpreters and constant or
+separate-argument controls. These are synthetic examples.
+
+The [PyGoat manifest](../tests/fixtures/security/pygoat/manifest.json) pins three
+function excerpts from the MIT-licensed, deliberately vulnerable
+[PyGoat training application](https://github.com/adeyosemanputra/pygoat/tree/19d17cc8874861142b330636d068bbde54e86b85).
+The fixtures retain upstream code with dedentation and minimal import headers;
+the manifest records source locations and SHA-256 hashes. Two public dummy password seeds in the SQL excerpt trigger Gitleaks generic
+API-key detection; `.gitleaksignore` records only their exact historical
+commit/file/rule/line fingerprints. Other findings remain subject to scanning.
+The upstream
+[license](../tests/fixtures/security/pygoat/LICENSE.md) is retained. The two
+positive excerpts exercise a request-to-shell flow and Django raw SQL; the
+negative excerpt has no modeled shell invocation. That label does not assert
+absence of other vulnerabilities. Tests check exact rule counts and fixture
+hashes without executing the target code. This is a small training-app check,
+not a production accuracy study. Benchmark precision/recall is case-level;
+exact per-rule finding counts are checked separately by regression tests.
+
+With both rules enabled, a local Python 3.14 run on 2026-10-12 produced:
+
+| Corpus | Cases | TP | TN | FP | FN | Median of 5 runs (ms) |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| SQL intraprocedural | 20 | 10 | 10 | 0 | 0 | 12.749 |
+| SQL local helpers | 20 | 11 | 9 | 0 | 0 | 12.777 |
+| SQL cross-module projects | 12 | 8 | 4 | 0 | 0 | 14.343 |
+| Shell commands | 24 | 16 | 8 | 0 | 0 | 13.729 |
+| PyGoat excerpts | 3 | 2 | 1 | 0 | 0 | 11.796 |
+
+Both rules currently run separate bounded passes over the shared AST cache, so
+these timings include more work than the earlier SQL-only measurements. They
+are machine-dependent fixture results under the exclusions above.

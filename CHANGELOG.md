@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add explicit multi-engine static analysis to `plex analyze` via `--checks`, supporting
+  `performance`, `security` (or both), with unified JSON v8 and SARIF reports,
+  Markdown presentation, severity and category gating, incomplete-run nonzero exits,
+  and backwards-compatible performance defaults.
+
 - Add experimental `xbnd.command-injection` with bounded local/project flows,
   native shell sinks, explicit interpreter checks, evidence and suppressions.
   Dynamic subprocess options report incomplete coverage; SQL policy sanitizers

@@ -11,6 +11,22 @@ from typing import Any
 def add_analyze_args(a: argparse.ArgumentParser) -> None:
     a.add_argument("path", nargs="?", default=".", help="Repo root (default: .)")
     a.add_argument(
+        "--checks",
+        default=None,
+        help="Comma-separated analysis engines to run: performance, security (default: performance)",
+    )
+    a.add_argument(
+        "--security-policy",
+        default=None,
+        help="Security catalog YAML (relative to target; default: .plex/security.yml)",
+    )
+    a.add_argument(
+        "--security-max-files",
+        type=int,
+        default=200,
+        help="Maximum Python files to analyze for security (default: 200)",
+    )
+    a.add_argument(
         "--legacy-schema",
         type=int,
         choices=[7],
@@ -439,10 +455,13 @@ def analysis_namespace(repo_root: Path, options: Mapping[str, Any]) -> argparse.
     parser = argparse.ArgumentParser(add_help=False)
     add_analyze_args(parser)
     defaults = vars(parser.parse_args([]))
-    unknown = options.keys() - defaults.keys()
+    perf_raw = options.get("performance")
+    perf_opts: Mapping[str, Any] = perf_raw if isinstance(perf_raw, Mapping) else options
+    filtered = {k: v for k, v in perf_opts.items() if k not in {"xboundary", "security"}}
+    unknown = filtered.keys() - defaults.keys()
     if unknown:
         raise ValueError(f"Unknown performance options: {sorted(unknown)}")
-    defaults.update(options)
+    defaults.update(filtered)
     defaults["path"] = str(repo_root)
     return argparse.Namespace(**defaults)
 

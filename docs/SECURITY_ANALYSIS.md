@@ -219,11 +219,13 @@ integrity checks, not authentication of a provider. See the
 [OASIS SARIF specification](https://docs.oasis-open.org/sarif/sarif/v2.1.0/os/sarif-v2.1.0-os.html).
 
 JSON v8 and SARIF support mixed provider results without re-emitting mirrored
-performance findings. V7 export refuses security results. HTML, Markdown and
-other legacy performance renderers still reject richer reports. `plex analyze`
-continues to select performance only; multi-engine CLI selection awaits shared
-presentation/gate support. Library callers may pass both providers to
-`run_providers`, using each provider's supported task options.
+performance findings. V7 export refuses security results. HTML and
+other legacy performance renderers reject richer reports. `plex analyze`
+supports explicit multi-engine static selection via `--checks performance,security`
+(defaulting to performance-only for backwards compatibility). Multi-engine runs
+emit unified v8 JSON and multi-run SARIF, include security findings in Markdown summaries,
+and apply category and severity gates across all selected engines. Library callers may
+pass both providers to `run_providers`, using each provider's supported task options.
 
 ## Scope, exits and suppressions
 

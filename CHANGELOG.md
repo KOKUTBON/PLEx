@@ -1,5 +1,15 @@
 # Changelog
 
+- Add xBOUNDARY Wave 4 Broken Object Level Authorization & Tenant Boundary rule
+  (`xbnd.broken-tenant-isolation`, CWE-639 / CWE-284 / CWE-862, OWASP A01:2025 Broken Access Control, API1:2023 BOLA).
+  `BrokenTenantIsolationRule` inspects route handler and API endpoint ASTs (Flask, FastAPI, Django) for multi-tenant database
+  queries filtering on client-supplied ID parameters (`id`, `pk`, `doc_id`, `project_id`, `uuid`, etc.) without tenant or
+  organization scoping (`tenant_id`, `org_id`, `workspace_id`, etc.). Automatically exempts queries with tenant field filters,
+  queries originating from authenticated parent tenant models (`current_tenant.documents...`, `current_user.projects...`),
+  functions with explicit tenant authorization guards (`check_tenant_access()`, `@tenant_required`), post-query ownership
+  assertions, and inline `# plex: ignore[xbnd.broken-tenant-isolation]` directives. Directly integrated with the `xboundary`
+  provider, unified schema v8, CLI severity gates, and coverage matrix.
+
 - Add automated privacy & boundary security fixers in `plex.repair`:
   `InsecureCookieFixer` (`fix.insecure-cookie`, `xbnd.insecure-cookie`, CWE-614 / CWE-1004 / OWASP A05:2025) and
   `SensitiveLogRedactFixer` (`fix.sensitive-log-redact`, `xbnd.sensitive-data-leak`, CWE-532 / CWE-359 / OWASP A09:2025).

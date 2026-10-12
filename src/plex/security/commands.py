@@ -14,6 +14,7 @@ from plex.report.format_json import write_json
 from plex.report.format_sarif import write_sarif
 from plex.report.severity import severity_rank
 
+from .broken_tenant_isolation import BrokenTenantIsolationRule
 from .command_injection import CommandInjectionRule
 from .eval_injection import CodeEvalInjectionRule
 from .insecure_cookie import InsecureCookieRule
@@ -64,6 +65,7 @@ def cmd_security_rules(args: argparse.Namespace) -> int:
         SensitiveDataLeakRule(),
         InsecureCookieRule(),
         WeakCryptoRule(),
+        BrokenTenantIsolationRule(),
     )
     details = [
         {

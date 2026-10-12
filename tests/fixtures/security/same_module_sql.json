@@ -1,0 +1,102 @@
+[
+  {
+    "name": "source-return",
+    "source": "def read():\n return input()\ncursor.execute(read())",
+    "expected": 1
+  },
+  {
+    "name": "argument-to-sink",
+    "source": "def run(value):\n cursor.execute(value)\nrun(input())",
+    "expected": 1
+  },
+  {
+    "name": "return-chain",
+    "source": "def wrap(x):\n return f\"SELECT {x}\"\ndef build(x):\n return wrap(x)\ncursor.execute(build(input()))",
+    "expected": 1
+  },
+  {
+    "name": "constant-return",
+    "source": "def fixed(x):\n return \"SELECT 1\"\ncursor.execute(fixed(input()))",
+    "expected": 0
+  },
+  {
+    "name": "numeric-return",
+    "source": "def numeric(x):\n return int(x)\ncursor.execute(f\"SELECT {numeric(input())}\")",
+    "expected": 0
+  },
+  {
+    "name": "bound-parameter",
+    "source": "def run(value):\n cursor.execute(\"SELECT ?\", (value,))\nrun(input())",
+    "expected": 0
+  },
+  {
+    "name": "unused-argument",
+    "source": "def select(a, b):\n return a\ncursor.execute(select(\"SELECT 1\", input()))",
+    "expected": 0
+  },
+  {
+    "name": "keyword",
+    "source": "def run(*, value):\n cursor.execute(value)\nrun(value=input())",
+    "expected": 1
+  },
+  {
+    "name": "positional-only",
+    "source": "def run(value, /):\n cursor.execute(value)\nrun(input())",
+    "expected": 1
+  },
+  {
+    "name": "default-source",
+    "source": "def read(value=input()):\n return value\ncursor.execute(read())",
+    "expected": 1
+  },
+  {
+    "name": "default-clean",
+    "source": "def read(value=\"SELECT 1\"):\n return value\ncursor.execute(read())",
+    "expected": 0
+  },
+  {
+    "name": "default-capture-tainted",
+    "source": "seed=input()\ndef read(value=seed):\n return value\nseed=\"clean\"\ncursor.execute(read())",
+    "expected": 1
+  },
+  {
+    "name": "default-capture-clean",
+    "source": "seed=\"clean\"\ndef read(value=seed):\n return value\nseed=input()\ncursor.execute(read())",
+    "expected": 0
+  },
+  {
+    "name": "branch-returns",
+    "source": "def choose(value):\n if flag:\n  return \"clean\"\n return value\ncursor.execute(choose(input()))",
+    "expected": 1
+  },
+  {
+    "name": "forward-helper",
+    "source": "def view():\n run(input())\ndef run(value):\n cursor.execute(value)",
+    "expected": 1
+  },
+  {
+    "name": "parameter-shadow",
+    "source": "def fixed(x):\n return \"clean\"\ndef view(fixed):\n cursor.execute(fixed(input()))",
+    "expected": 1
+  },
+  {
+    "name": "reassignment",
+    "source": "def fixed(x):\n return \"clean\"\nfixed=unknown\ncursor.execute(fixed(input()))",
+    "expected": 1
+  },
+  {
+    "name": "caller-locals-isolated",
+    "source": "value=\"clean\"\ndef read():\n return value\ndef view():\n value=input()\n cursor.execute(read())",
+    "expected": 0
+  },
+  {
+    "name": "callee-locals-isolated",
+    "source": "value=input()\ndef read():\n value=\"clean\"\n return value\ncursor.execute(read())",
+    "expected": 0
+  },
+  {
+    "name": "no-return",
+    "source": "def discard(x):\n pass\ncursor.execute(discard(input()))",
+    "expected": 0
+  }
+]

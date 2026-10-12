@@ -1,5 +1,14 @@
 # Changelog
 
+- Add automated vulnerable dependency upgrade fixer in `plex.repair` (`DependencyUpgradeFixer`, `fix.dependency-upgrade`, `dep.vulnerable-version`, CWE-1395):
+  Automatically upgrades known vulnerable packages in requirements manifests (`requirements.txt`) to safe fixed versions
+  recommended by security advisories (e.g. `requests==2.31.0`, `paramiko==2.10.1`, `urllib3==1.26.5`), preserving comments,
+  options, and environment markers. Constructs versioned `PatchCandidate` contracts.
+
+- Add native active sensitive credential and secret leak testing in `plex.validate` (`SensitiveDataLeakRecipe`, `val.sensitive-data-leak`, `xbnd.sensitive-data-leak`, CWE-200 / CWE-532 / OWASP A01:2025):
+  Executes deterministic probing across baseline, verbose debug (`?debug=1`), and unhandled error response surfaces to detect
+  exposed AWS access keys, RSA/EC private keys, JWT tokens, unredacted API secrets, and cleartext passwords in HTTP responses.
+
 - Add automated code evaluation fixer in `plex.repair` (`CodeEvalFixer`, `fix.code-eval`, `xbnd.code-eval-taint`, CWE-94 / CWE-95 / OWASP A05:2025):
   Automatically migrates unsafe dynamic code evaluation sinks (`eval()`, `builtins.eval()`) to safe `ast.literal_eval()` while
   injecting `import ast` when required, eliminating arbitrary code execution risks. Constructs versioned `PatchCandidate` contracts.

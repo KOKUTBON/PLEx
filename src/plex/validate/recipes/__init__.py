@@ -10,6 +10,7 @@ from .injection import (
     PathTraversalRecipe,
     SQLInjectionRecipe,
 )
+from .sensitive_data import SensitiveDataLeakRecipe
 from .ssrf import SSRFRecipe
 
 __all__ = [
@@ -19,6 +20,7 @@ __all__ = [
     "RoleMatrixRecipe",
     "SQLInjectionRecipe",
     "SSRFRecipe",
+    "SensitiveDataLeakRecipe",
     "TenantIsolationRecipe",
     "TestRecipe",
     "TestResult",

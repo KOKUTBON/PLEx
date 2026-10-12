@@ -19,8 +19,10 @@ from plex.repair.models import PatchCandidate, RepairRecord
 from plex.repair.path_boundary import PathBoundaryFixer
 from plex.repair.plaintext_secret import PlaintextSecretFixer
 from plex.repair.runner import RepairVerificationRunner, apply_unified_diff
+from plex.repair.safe_deserialization import SafeDeserializationFixer
 from plex.repair.sensitive_log_redact import SensitiveLogRedactFixer
 from plex.repair.sql_parameterize import SQLParameterizeFixer
+from plex.repair.ssrf_validate import SSRFUrlValidateFixer
 from plex.repair.tenant_boundary import TenantBoundaryFixer
 from plex.repair.tls_verify import TLSVerifyFixer
 from plex.report.unified import AnalysisFinding
@@ -67,6 +69,8 @@ class RemediationCoordinator:
             TenantBoundaryFixer(),
             TLSVerifyFixer(),
             PlaintextSecretFixer(),
+            SafeDeserializationFixer(),
+            SSRFUrlValidateFixer(),
             DockerUserFixer(),
             DockerTagPinFixer(),
         ]

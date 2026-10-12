@@ -253,7 +253,7 @@ A “better” release claim requires published evidence on the named dimensions
 | Shell-command rule, code-eval taint, path traversal, deserialization, SSRF | Implemented | `xbnd.command-injection`, `xbnd.path-traversal`, `xbnd.code-eval-taint`, `xbnd.unsafe-deserialization`, `xbnd.ssrf` |
 | JSON/SARIF unified multi-engine reporting & severity gates | Implemented | `plex analyze --checks all --json --sarif` |
 | Hardened isolation & sandboxes | Implemented | `InProcessSandbox`, `SubprocessSandbox`, env allowlist, `disposable_workspace` ([ADR 0002](adr/0002-engine-isolation-model.md)) |
-| Native artifact intelligence (PLEx Inspect) | Implemented | Pure-Python 32/64-bit ELF parser, hardening checks, `plex inspect` ([ADR 0007](adr/0007-native-artifact-inspection.md)) |
+| Native artifact intelligence (PLEx Inspect) | Implemented | Pure-Python 32/64-bit ELF and Mach-O parser, hardening checks, `plex inspect` ([ADR 0007](adr/0007-native-artifact-inspection.md)) |
 | Native active application testing (PLEx Validate) | Implemented | `ScopedHttpClient`, route discovery, HTTP reproduction recipes, `plex validate` ([ADR 0006](adr/0006-native-active-validation.md)) |
 | Closed-loop remediation & multi-engine verification (PLEx Repair) | Implemented | `SQLParameterizeFixer`, `CommandArrayFixer`, `PathBoundaryFixer`, `DockerUserFixer`, `DockerTagPinFixer`, 5-gate `RepairVerificationRunner`, `plex remediate` ([ADR 0008](adr/0008-integrated-intelligence-and-repair.md)) |
 | Supply chain & IaC security | Implemented | Manifest parsers, offline CVE correlation, AST call-graph reachability, Dockerfile & TLS rules (`cfg.*`, `dep.*`) |
@@ -270,13 +270,13 @@ All six pillars natively implemented with zero mandatory external dependencies.
 | **P1 — Existing foundation** | Unified reports, provider SPI, experimental xBOUNDARY | **Completed** (Schema v8, provider orchestrator) |
 | **P2 — Shared workflow and execution contracts** | Multi-engine CLI selection/formats/gates; initial graph/evidence/repair schemas; hardened worker foundations | **Completed** (`ProjectGraph`, `disposable_workspace`, env allowlist) |
 | **P3 — First verified source repair** | Native xBOUNDARY → repair → regression-test slice; additional source families | **Completed** (`SQLParameterizeFixer`, `CommandArrayFixer`, `PathBoundaryFixer`, `RepairVerificationRunner`) |
-| **P4 — Native artifact intelligence** | PLEx Inspect ELF intake, backend interface, static evidence/rules, source/artifact links | **Completed** (Pure-Python ELF parser, `bin.*` rules, `plex inspect`) |
+| **P4 — Native artifact intelligence** | PLEx Inspect ELF & Mach-O intake, backend interface, static evidence/rules, source/artifact links | **Completed** (Pure-Python ELF/Mach-O parser, `bin.*` rules, `plex inspect`) |
 | **P5 — Native active validation** | PLEx Validate route/hypothesis/test engine; authorized workers; local injection and role/tenant fixtures | **Completed** (`ScopedHttpClient`, route discovery, `plex validate`) |
 | **P6 — Integrated intelligence and repair** | Source/artifact/runtime correlation; native repair plans and verification across engines | **Completed** (`RemediationCoordinator`, `GraphCorrelator`, `plex remediate`) |
 | **P7 — Coverage and comparative validation** | Dependency/configuration checks, declared coverage matrix, held-out corpora and pinned baseline comparisons | **Completed** (`CoverageInventory`, `SupplyChainScanner`, `plex benchmark --comparative`) |
 | **P8 — PLEx 2.0 release** | Cohesive CLI/API/dashboard/editor/CI, migration docs, reproducible packages and supported native pillars | **Completed** (Cohesive test suite, `MIGRATION_2.0.md`, [ADR 0010](adr/0010-plex-2-0-cohesive-release.md)) |
 
-All milestones P0–P8 successfully verified with 100% test pass rate across 940 tests.
+All milestones P0–P8 successfully verified with 100% test pass rate across 949 tests.
 
 No next milestone is “wrap REA” or “wrap Strix.” Any interoperability work is separately justified after the native path is useful.
 

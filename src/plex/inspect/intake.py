@@ -21,7 +21,14 @@ def detect_format(header: bytes) -> ArtifactFormat:
     if header.startswith(b"MZ"):
         return "pe"
     if header.startswith(
-        (b"\xfe\xed\xfa\xce", b"\xfe\xed\xfa\xcf", b"\xcf\xfa\xed\xfe", b"\xca\xfe\xba\xbe")
+        (
+            b"\xfe\xed\xfa\xce",
+            b"\xfe\xed\xfa\xcf",
+            b"\xce\xfa\xed\xfe",
+            b"\xcf\xfa\xed\xfe",
+            b"\xca\xfe\xba\xbe",
+            b"\xbe\xba\xfe\xca",
+        )
     ):
         return "macho"
     if header.startswith(b"PK\x03\x04"):

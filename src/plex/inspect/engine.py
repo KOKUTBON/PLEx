@@ -20,6 +20,7 @@ from plex.report.unified import (
 
 from .elf import parse_elf
 from .intake import ArtifactIntakeError, intake_artifact
+from .macho import parse_macho
 from .models import ArtifactDescriptor
 from .rules import evaluate_artifact_rules
 
@@ -49,9 +50,9 @@ class InspectEngine:
             )
             return self._build_report(resolved, [], [run_failed], "failed")
 
-        if fmt != "elf":
+        if fmt not in ("elf", "macho"):
             limitation = (
-                f"Binary format '{fmt}' is not yet supported natively (ELF is primary format)"
+                f"Binary format '{fmt}' is not yet supported natively (ELF is primary format; Mach-O supported)"
             )
             run_partial = EngineRun(
                 engine="inspect",
@@ -62,15 +63,20 @@ class InspectEngine:
             )
             return self._build_report(resolved, [], [run_partial], "partial")
 
-        # Parse ELF binary
+        # Parse binary structure
         try:
-            descriptor = parse_elf(data, str(resolved), sha256)
+            if fmt == "elf":
+                descriptor = parse_elf(data, str(resolved), sha256)
+            elif fmt == "macho":
+                descriptor = parse_macho(data, str(resolved), sha256)
+            else:
+                raise ValueError(f"Unhandled binary format: {fmt}")
         except Exception as exc:
             run_err = EngineRun(
                 engine="inspect",
                 version="1.0.0",
                 status="failed",
-                limitations=[f"ELF parsing failed: {exc}"],
+                limitations=[f"{fmt.upper()} parsing failed: {exc}"],
                 isolation="process",
             )
             return self._build_report(resolved, [], [run_err], "failed")

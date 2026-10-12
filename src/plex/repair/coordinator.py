@@ -14,9 +14,11 @@ from plex.providers import AnalysisTask, SupplyChainProvider, XBoundaryProvider,
 from plex.repair.command_array import CommandArrayFixer
 from plex.repair.docker_tag_pin import DockerTagPinFixer
 from plex.repair.docker_user import DockerUserFixer
+from plex.repair.insecure_cookie import InsecureCookieFixer
 from plex.repair.models import PatchCandidate, RepairRecord
 from plex.repair.path_boundary import PathBoundaryFixer
 from plex.repair.runner import RepairVerificationRunner, apply_unified_diff
+from plex.repair.sensitive_log_redact import SensitiveLogRedactFixer
 from plex.repair.sql_parameterize import SQLParameterizeFixer
 from plex.report.unified import AnalysisFinding
 from plex.validate.authz import parse_authorization, validate_authorization
@@ -57,6 +59,8 @@ class RemediationCoordinator:
             SQLParameterizeFixer(),
             CommandArrayFixer(),
             PathBoundaryFixer(),
+            InsecureCookieFixer(),
+            SensitiveLogRedactFixer(),
             DockerUserFixer(),
             DockerTagPinFixer(),
         ]

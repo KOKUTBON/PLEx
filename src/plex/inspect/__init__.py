@@ -16,6 +16,7 @@ from .models import (
     HardeningProperties,
     RelroMode,
 )
+from .pe import parse_pe
 from .rules import evaluate_artifact_rules
 
 __all__ = [
@@ -34,4 +35,5 @@ __all__ = [
     "intake_artifact",
     "parse_elf",
     "parse_macho",
+    "parse_pe",
 ]

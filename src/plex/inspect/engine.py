@@ -22,6 +22,7 @@ from .elf import parse_elf
 from .intake import ArtifactIntakeError, intake_artifact
 from .macho import parse_macho
 from .models import ArtifactDescriptor
+from .pe import parse_pe
 from .rules import evaluate_artifact_rules
 
 log = logging.getLogger(__name__)
@@ -50,9 +51,9 @@ class InspectEngine:
             )
             return self._build_report(resolved, [], [run_failed], "failed")
 
-        if fmt not in ("elf", "macho"):
+        if fmt not in ("elf", "macho", "pe"):
             limitation = (
-                f"Binary format '{fmt}' is not yet supported natively (ELF is primary format; Mach-O supported)"
+                f"Binary format '{fmt}' is not yet supported natively (ELF, Mach-O, and PE supported)"
             )
             run_partial = EngineRun(
                 engine="inspect",
@@ -69,6 +70,8 @@ class InspectEngine:
                 descriptor = parse_elf(data, str(resolved), sha256)
             elif fmt == "macho":
                 descriptor = parse_macho(data, str(resolved), sha256)
+            elif fmt == "pe":
+                descriptor = parse_pe(data, str(resolved), sha256)
             else:
                 raise ValueError(f"Unhandled binary format: {fmt}")
         except Exception as exc:

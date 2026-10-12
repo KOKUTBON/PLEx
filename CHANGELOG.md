@@ -1,5 +1,16 @@
 # Changelog
 
+- Add pure-Python 32-bit and 64-bit Windows Portable Executable (PE32 / PE32+) binary structural parser
+  (`parse_pe`, `src/plex/inspect/pe.py`) in `plex.inspect` with zero external dependencies (no `pefile` or dumpbin).
+  Structural parser extracts DOS headers (`MZ`), PE signature, COFF file headers (machine architectures: x86/i386,
+  x64/AMD64, ARM, ARM64), Optional Headers (PE32/PE32+), Data Directories (Export, Import, Security/Authenticode,
+  Relocations, Exception tables), and Section Headers (`.text`, `.data`, `.rdata`, `.reloc`). Resolves RVAs to file
+  offsets to parse Import Directory Tables (DLLs and imported functions) and Export Tables. Evaluates native compiler
+  hardening mitigations (ASLR via `IMAGE_DLLCHARACTERISTICS_DYNAMIC_BASE`, DEP/NX via `IMAGE_DLLCHARACTERISTICS_NX_COMPAT`,
+  Control Flow Guard CFG via `IMAGE_DLLCHARACTERISTICS_GUARD_CF`, SafeSEH/NO_SEH, and relocation sections), banned C APIs,
+  deprecated cryptography, W^X section permission violations, and embedded secrets. Directly wires into
+  `InspectEngine.inspect` and `plex inspect` CLI.
+
 - Add xBOUNDARY Wave 3 Boundary & Privacy native security rules for sensitive data exposure in logs
   (`xbnd.sensitive-data-leak`, CWE-532, OWASP A09:2025) and insecure cookie configuration (`xbnd.insecure-cookie`,
   CWE-614, CWE-1004, OWASP A05:2025). `SensitiveDataLeakRule` models credentials, tokens, secrets, API keys,

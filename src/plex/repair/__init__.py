@@ -19,8 +19,10 @@ from .models import (
 from .path_boundary import PathBoundaryFixer
 from .plaintext_secret import PlaintextSecretFixer
 from .runner import RepairVerificationRunner, apply_unified_diff
+from .safe_deserialization import SafeDeserializationFixer
 from .sensitive_log_redact import SensitiveLogRedactFixer
 from .sql_parameterize import SQLParameterizeFixer
+from .ssrf_validate import SSRFUrlValidateFixer
 from .tenant_boundary import TenantBoundaryFixer
 from .tls_verify import TLSVerifyFixer
 
@@ -38,6 +40,8 @@ __all__ = [
     "RepairStatus",
     "RepairVerificationRunner",
     "SQLParameterizeFixer",
+    "SSRFUrlValidateFixer",
+    "SafeDeserializationFixer",
     "SensitiveLogRedactFixer",
     "TLSVerifyFixer",
     "TenantBoundaryFixer",

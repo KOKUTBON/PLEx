@@ -9,12 +9,14 @@ from .injection import (
     PathTraversalRecipe,
     SQLInjectionRecipe,
 )
+from .ssrf import SSRFRecipe
 
 __all__ = [
     "CommandInjectionRecipe",
     "PathTraversalRecipe",
     "RoleMatrixRecipe",
     "SQLInjectionRecipe",
+    "SSRFRecipe",
     "TenantIsolationRecipe",
     "TestRecipe",
     "TestResult",

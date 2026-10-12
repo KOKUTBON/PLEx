@@ -1,5 +1,17 @@
 # Changelog
 
+- Add native active Server-Side Request Forgery testing in `plex.validate` (`SSRFRecipe`, `val.ssrf`, CWE-918, OWASP A10:2025):
+  Executes deterministic probing against correlated route destination parameters using loopback (`127.0.0.1:8080`) and cloud metadata
+  (`169.254.169.254`) targets to actively reproduce or refute SSRF vulnerabilities with verifiable proof.
+
+- Add automated safe deserialization fixer in `plex.repair` (`SafeDeserializationFixer`, `fix.safe-deserialization`, CWE-502, OWASP A08:2025):
+  Automatically migrates unsafe deserialization sinks (`yaml.load()` without loader to `yaml.safe_load()`, pinning unsafe loaders to `yaml.SafeLoader`,
+  and migrating `pickle.loads()` to `json.loads()`). Constructs versioned `PatchCandidate` contracts.
+
+- Add automated SSRF destination allowlist fixer in `plex.repair` (`SSRFUrlValidateFixer`, `fix.ssrf-url-validate`, CWE-918, OWASP A10:2025):
+  Injects destination validation guards (`_validate_url`) wrapping outgoing HTTP client requests (`requests`, `httpx`, `urllib.request`)
+  to prevent requests to loopback, link-local, and private network address ranges.
+
 - Add pure-Python interactive terminal dashboard in `plex.dashboard` (`plex dashboard`, `plex dash`):
   Renders live repository security, performance, and supply chain posture, declared surface coverage inventory,
   findings breakdown, verified fixers readiness, and active validation status using clean ANSI borders and box-drawing layout.

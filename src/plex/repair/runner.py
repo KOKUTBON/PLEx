@@ -6,10 +6,17 @@ import hashlib
 import platform
 import sys
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
-from plex.providers import AnalysisTask, XBoundaryProvider, run_providers
+from plex.providers import (
+    AnalysisTask,
+    PerformanceProvider,
+    XBoundaryProvider,
+    run_providers,
+)
 from plex.repair.models import (
     PatchCandidate,
     RepairRecord,
@@ -73,6 +80,9 @@ class RepairVerificationRunner:
         candidate: PatchCandidate,
         repo_root: Path,
         test_command: list[str] | None = None,
+        check_performance: bool = False,
+        active_checker: Callable[[Path], bool] | None = None,
+        correlator: Any | None = None,
     ) -> RepairRecord:
         """Verify candidate in an isolated disposable copy of repo_root."""
         repair = RepairRecord(candidate=candidate, status="proposed")
@@ -109,6 +119,8 @@ class RepairVerificationRunner:
                 )
                 repair.verification = vrec
                 repair.transition("failed", reason="Target file missing from workspace")
+                if correlator:
+                    correlator.add_verification_run(repair)
                 return repair
 
             orig_content = target_path.read_text(encoding="utf-8")
@@ -145,6 +157,8 @@ class RepairVerificationRunner:
                 )
                 repair.verification = vrec
                 repair.transition("failed", reason="Patched code failed syntax compilation check")
+                if correlator:
+                    correlator.add_verification_run(repair)
                 return repair
 
             # 3. Security analyzer re-scan verification check
@@ -170,7 +184,47 @@ class RepairVerificationRunner:
                 )
             )
 
-            # 4. Optional regression test execution
+            # 4. Optional active reproduction verification (asserts exploit payload is now blocked/fails)
+            active_passed = True
+            if active_checker is not None:
+                t0 = time.monotonic()
+                try:
+                    active_passed = bool(active_checker(workspace))
+                except Exception:
+                    active_passed = False
+                active_duration = (time.monotonic() - t0) * 1000.0
+                checks.append(
+                    VerificationCheck(
+                        name="active_reproduction_blocked",
+                        passed=active_passed,
+                        duration_ms=active_duration,
+                    )
+                )
+
+            # 5. Optional PLEx Performance regression check
+            perf_passed = True
+            if check_performance:
+                t0 = time.monotonic()
+                perf_task = AnalysisTask(repo_root=workspace)
+                perf_res = run_providers(perf_task, [PerformanceProvider()])
+                perf_duration = (time.monotonic() - t0) * 1000.0
+                perf_regressions = [
+                    f
+                    for f in perf_res.findings
+                    if f.severity in ("critical", "high")
+                    and Path(f.file).as_posix() == target_rel.as_posix()
+                ]
+                perf_passed = len(perf_regressions) == 0
+                checks.append(
+                    VerificationCheck(
+                        name="performance_verified",
+                        passed=perf_passed,
+                        duration_ms=perf_duration,
+                        details={"regressions": len(perf_regressions)},
+                    )
+                )
+
+            # 6. Optional regression test execution
             test_passed = True
             if test_command:
                 t0 = time.monotonic()
@@ -194,7 +248,9 @@ class RepairVerificationRunner:
                 )
 
             # Aggregate verification status
-            all_passed = syntax_passed and vuln_cleared and test_passed
+            all_passed = (
+                syntax_passed and vuln_cleared and active_passed and perf_passed and test_passed
+            )
             final_status: VerificationStatus = "verified" if all_passed else "failed"
 
             vrec = VerificationRecord.create(
@@ -208,9 +264,13 @@ class RepairVerificationRunner:
             repair.verification = vrec
             if all_passed:
                 repair.transition(
-                    "verified", reason="All syntax, analyzer, and regression checks passed"
+                    "verified",
+                    reason="All syntax, analyzer, active reproduction, and regression checks passed",
                 )
             else:
                 repair.transition("failed", reason="One or more verification checks failed")
+
+            if correlator:
+                correlator.add_verification_run(repair)
 
         return repair

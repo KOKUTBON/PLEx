@@ -35,6 +35,7 @@ from plex.providers.commands import add_provider_commands
 from plex.providers.orchestrator import run_providers
 from plex.providers.performance import PerformanceProvider
 from plex.providers.xboundary import XBoundaryProvider
+from plex.repair.commands import add_remediate_commands
 from plex.report.annotations import to_github_annotations
 from plex.report.format_check_run import to_check_run_output
 from plex.report.format_comment import to_comment_markdown
@@ -781,6 +782,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_security_commands(sub)
     add_inspect_commands(sub)
     add_validate_commands(sub)
+    add_remediate_commands(sub)
 
     a = sub.add_parser("analyze", help="Analyze a repository")
     _add_analyze_args(a)

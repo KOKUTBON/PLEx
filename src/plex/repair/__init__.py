@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from .commands import add_remediate_commands, cmd_remediate
+from .coordinator import RemediationCoordinator, RemediationPlan
 from .models import (
     PatchCandidate,
     RepairRecord,
@@ -15,6 +17,8 @@ from .sql_parameterize import SQLParameterizeFixer
 
 __all__ = [
     "PatchCandidate",
+    "RemediationCoordinator",
+    "RemediationPlan",
     "RepairRecord",
     "RepairStatus",
     "RepairVerificationRunner",
@@ -22,5 +26,7 @@ __all__ = [
     "VerificationCheck",
     "VerificationRecord",
     "VerificationStatus",
+    "add_remediate_commands",
     "apply_unified_diff",
+    "cmd_remediate",
 ]

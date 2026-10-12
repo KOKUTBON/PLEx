@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add integrated multi-engine intelligence and cross-engine repair verification
+  (`plex.repair.coordinator`, `plex.graph.correlate`, `plex remediate`) linking static
+  xBOUNDARY findings, AST-discovered web framework routes (Flask, FastAPI, Django), active
+  validation reproduction, deterministic parameter-binding patch candidates, multi-engine
+  isolated verification (syntax, security re-scan, active exploit mitigation, PLEx Performance
+  regression checks, functional tests), and relational `ProjectGraph` provenance.
+
 - Add native artifact intelligence and binary inspection engine (`plex.inspect`)
   with pure-Python format detection, 32-bit and 64-bit ELF structural parsing
   (segments, sections, symbol tables, dynamic tags), compiler and linker hardening

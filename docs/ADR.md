@@ -50,6 +50,7 @@ Create an ADR when a change:
 - [0005 REA binary adapter](adr/0005-rea-binary-adapter.md) — proposed.
 - [0006 Native active application testing (PLEx Validate)](adr/0006-native-active-validation.md) — proposed.
 - [0007 Native artifact intelligence (PLEx Inspect)](adr/0007-native-artifact-inspection.md) — proposed.
+- [0008 Integrated intelligence and cross-engine repair verification](adr/0008-integrated-intelligence-and-repair.md) — proposed.
 
 These records document key architectural decisions for [PLEx 2.0](PLEx-2.0-PLAN.md).
 

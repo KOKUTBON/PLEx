@@ -16,7 +16,7 @@ from .dataflow import SQLDataflow
 from .policy import SecurityPolicy
 
 SCOPE_LIMITATIONS = [
-    "Python intraprocedural analysis; no cross-function summaries or receiver type resolution",
+    "Bounded same-module direct-call analysis; no cross-module or receiver type resolution",
     "Path-insensitive branches; one representative source path per SQL sink",
     "No heap/object alias tracking, deferred global-state modeling",
     "Built-in catalogs plus declared policy patterns; custom sanitizers are trusted assumptions",

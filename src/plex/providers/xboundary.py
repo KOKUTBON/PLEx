@@ -144,7 +144,7 @@ class XBoundaryProvider:
                     remediation=item.suggestions,
                     evidence=item.evidence,
                     verification={
-                        "method": "static-intraprocedural-dataflow",
+                        "method": "static-bounded-same-module-dataflow",
                         "status": "suspected",
                     },
                     engine_meta={

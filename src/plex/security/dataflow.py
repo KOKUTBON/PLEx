@@ -1,10 +1,11 @@
-"""Bounded intraprocedural taint tracking for the Python SQL-injection spike."""
+"""Bounded same-module taint tracking for the Python SQL-injection spike."""
 
 from __future__ import annotations
 
 import ast
 from dataclasses import dataclass
 
+from .functions import CallBudget, FunctionCatalog, local_bindings
 from .policy import SecurityPolicy
 
 
@@ -48,9 +49,18 @@ class SQLDataflow:
         self.flows: dict[tuple[str, int, int], SQLFlow] = {}
         self.limitations: list[str] = []
         self.aliases: dict[str, str] = {}
+        self.catalog: FunctionCatalog | None = None
+        self.module_env: Environment = {}
+        self.locals: set[str] = set()
+        self.stack: tuple[str, ...] = ()
+        self.budget = CallBudget()
+        self.returns: list[Flow] = []
+        self.defaults: dict[str, dict[str, Flow]] = {}
 
     def analyze(self, tree: ast.AST) -> list[SQLFlow]:
-        self.block(getattr(tree, "body", []), {}, "")
+        self.catalog = FunctionCatalog(tree)
+        self.module_env = {}
+        self.block(getattr(tree, "body", []), self.module_env, "")
         return list(self.flows.values())
 
     def name(self, node: ast.AST) -> str:
@@ -101,6 +111,103 @@ class SQLDataflow:
         }:
             return name
         return ""
+
+    def local_call(
+        self, node: ast.Call, values: list[Flow], keywords: dict[str | None, Flow]
+    ) -> Flow | None:
+        """Summarize a direct call in its bound argument context; None means unknown."""
+        if not isinstance(node.func, ast.Name) or self.catalog is None:
+            return None
+        name = node.func.id
+        function = self.catalog.functions.get(name)
+        if function is None or name in self.locals or name in self.aliases:
+            return None
+        if not self.catalog.supported(function):
+            self.limitations.append(
+                f"Local call has unsupported signature or function kind: {name}"
+            )
+            return None
+        if name in self.stack or len(self.stack) >= self.budget.max_depth:
+            self.limitations.append("Local call recursion/depth limit reached")
+            return None
+        if self.budget.remaining <= 0:
+            self.limitations.append("Local call expansion limit reached")
+            return None
+        if any(isinstance(arg, ast.Starred) for arg in node.args) or None in keywords:
+            self.limitations.append("Local call argument unpacking is not resolved")
+            return None
+        positional = [*function.args.posonlyargs, *function.args.args]
+        arguments = [*positional, *function.args.kwonlyargs]
+        by_name = {arg.arg: arg for arg in arguments}
+        if len(values) > len(positional) or any(
+            key not in by_name or key in {arg.arg for arg in function.args.posonlyargs}
+            for key in keywords
+        ):
+            self.limitations.append("Local call arguments could not be bound")
+            return None
+        bound = {arg.arg: value for arg, value in zip(positional, values, strict=False)}
+        if bound.keys() & keywords.keys():
+            self.limitations.append("Local call arguments could not be bound")
+            return None
+        bound.update({key: value for key, value in keywords.items() if key is not None})
+        defaults = dict(
+            zip(
+                [arg.arg for arg in positional[len(positional) - len(function.args.defaults) :]],
+                function.args.defaults,
+                strict=True,
+            )
+        )
+        defaults.update(
+            {
+                arg.arg: default
+                for arg, default in zip(
+                    function.args.kwonlyargs, function.args.kw_defaults, strict=True
+                )
+                if default is not None
+            }
+        )
+        if any(arg.arg not in bound and arg.arg not in defaults for arg in arguments):
+            self.limitations.append("Local call arguments could not be bound")
+            return None
+        self.budget.remaining -= 1
+        child = SQLDataflow(self.file, self.policy)
+        child.catalog = self.catalog
+        child.module_env = self.module_env
+        child.budget = self.budget
+        child.defaults = self.defaults
+        child.stack = (*self.stack, name)
+        child.locals = local_bindings(function)
+        child.aliases = dict(self.catalog.aliases)
+        local = {**{key: () for key in self.catalog.bindings}, **self.module_env}
+        local.update({key: () for key in child.locals})
+        # Defaults are expressions in module scope, never in the caller's locals.
+        for arg in arguments:
+            value = bound.get(arg.arg)
+            if value is None:
+                captured = self.defaults.get(name, {})
+                if arg.arg in captured:
+                    value = captured[arg.arg]
+                elif isinstance(defaults[arg.arg], ast.Constant):
+                    value = ()
+                else:
+                    self.limitations.append("Local call default not yet modeled at definition time")
+                    return None
+            local[arg.arg] = (
+                (*value, self.step(node, "call", name), child.step(arg, "parameter", arg.arg))
+                if value
+                else ()
+            )
+        for name_ in child.locals:
+            child.aliases.pop(name_, None)
+        argument_flows = [local[arg.arg] for arg in arguments]
+        child.block(function.body, local, name)
+        self.flows.update({key: flow for key, flow in child.flows.items() if key not in self.flows})
+        self.limitations.extend(child.limitations)
+        result = join(*child.returns)
+        if child.limitations:
+            # Incomplete summaries cannot establish that tainted input was cleared.
+            result = join(result, *argument_flows)
+        return (*result, self.step(node, "call-result", name)) if result else ()
 
     def expression(self, node: ast.AST | None, env: Environment, qualname: str) -> Flow:
         if node is None:
@@ -179,6 +286,9 @@ class SQLDataflow:
                 return ()
             if name in {"int", "float", "builtins.int", "builtins.float"} and not shadowed:
                 return ()
+            summary = self.local_call(node, values, keywords)
+            if summary is not None:
+                return summary
             return join(receiver, *values, *keywords.values())
         source = self.source(node)
         if source:
@@ -233,6 +343,9 @@ class SQLDataflow:
             elif isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 local = dict(env)
                 saved_aliases = dict(self.aliases)
+                saved_locals = self.locals
+                saved_returns = self.returns
+                self.returns = []
                 args = [*stmt.args.posonlyargs, *stmt.args.args, *stmt.args.kwonlyargs]
                 for arg in args:
                     local[arg.arg] = ()
@@ -246,10 +359,15 @@ class SQLDataflow:
                     *positional[len(positional) - len(stmt.args.defaults) :],
                     *stmt.args.kwonlyargs,
                 ]
+                captured_defaults: dict[str, Flow] = {}
                 for arg, default in zip(default_args, defaults, strict=True):
                     flow = self.expression(default, env, qualname)
+                    if default is not None:
+                        captured_defaults[arg.arg] = flow
                     if flow:
                         local[arg.arg] = flow
+                if not qualname:
+                    self.defaults[stmt.name] = captured_defaults
                 for arg in args:
                     if isinstance(arg.annotation, ast.Subscript):
                         flow = self.expression(arg.annotation, env, qualname)
@@ -264,14 +382,20 @@ class SQLDataflow:
                 self.aliases.pop(stmt.name, None)
                 local[stmt.name] = ()
                 child_name = f"{qualname}.{stmt.name}" if qualname else stmt.name
+                self.locals = local_bindings(stmt)
                 self.block(stmt.body, local, child_name)
+                self.locals = saved_locals
+                self.returns = saved_returns
                 self.aliases = saved_aliases
                 self.aliases.pop(stmt.name, None)
                 env[stmt.name] = ()
             elif isinstance(stmt, ast.ClassDef):
+                saved_locals = self.locals
+                self.locals = self.locals | (set(self.catalog.functions) if self.catalog else set())
                 saved_aliases = dict(self.aliases)
                 child_name = f"{qualname}.{stmt.name}" if qualname else stmt.name
                 self.block(stmt.body, dict(env), child_name)
+                self.locals = saved_locals
                 self.aliases = saved_aliases
                 self.aliases.pop(stmt.name, None)
                 env[stmt.name] = ()
@@ -318,7 +442,12 @@ class SQLDataflow:
                     self.block(handler.body, branch, qualname)
                     env.update(self.merge(env, branch))
                 self.block(stmt.finalbody, env, qualname)
-            elif isinstance(stmt, (ast.Return, ast.Raise)):
+            elif isinstance(stmt, ast.Return):
+                flow = self.expression(stmt.value, env, qualname)
+                if flow:
+                    self.returns.append((*flow, self.step(stmt, "return", qualname)))
+                break
+            elif isinstance(stmt, ast.Raise):
                 for child in ast.iter_child_nodes(stmt):
                     self.expression(child, env, qualname)
                 break

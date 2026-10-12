@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Follow Python SQL taint through bounded same-module helpers, with argument and
+  return traces, definition-time defaults, explicit incomplete-call coverage,
+  and a separate labeled helper corpus.
+
 - Add versioned `.plex/security.yml` source, SQL sanitizer and SQL sink catalogs,
   with strict preflight validation, `--policy` override and report digests.
 

@@ -15,10 +15,14 @@ from plex.providers import AnalysisTask, XBoundaryProvider, run_providers
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--iterations", type=int, default=5)
+    parser.add_argument(
+        "--corpus", choices=["intraprocedural", "same-module"], default="intraprocedural"
+    )
     args = parser.parse_args()
     if args.iterations < 1:
         parser.error("--iterations must be positive")
-    corpus = Path(__file__).resolve().parents[1] / "tests/fixtures/security/sql_injection.json"
+    filename = "same_module_sql.json" if args.corpus == "same-module" else "sql_injection.json"
+    corpus = Path(__file__).resolve().parents[1] / "tests/fixtures/security" / filename
     cases = json.loads(corpus.read_text())
     elapsed = []
     with tempfile.TemporaryDirectory(prefix="plex-security-corpus-") as directory:

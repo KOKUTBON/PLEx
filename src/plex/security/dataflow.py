@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import re
 from dataclasses import dataclass
 
 from .functions import CallBudget, FunctionCatalog, local_bindings
@@ -41,6 +42,64 @@ def dotted(node: ast.AST) -> str:
 def join(*flows: Flow) -> Flow:
     # Keep a representative path; this is not an exhaustive set of feasible paths.
     return next((flow for flow in flows if flow), ())
+
+
+def is_sensitive_name(name: str) -> bool:
+    if not name:
+        return False
+    s1 = re.sub(r"([A-Z]+)", r"_\1", name).lower().strip("_")
+    if any(
+        s1.startswith(p)
+        for p in ("is_", "has_", "check_", "validate_", "verify_", "can_", "should_")
+    ):
+        return False
+    if any(
+        s1.endswith(s)
+        for s in (
+            "_valid",
+            "_checked",
+            "_verified",
+            "_exists",
+            "_count",
+            "_len",
+            "_length",
+            "_size",
+            "_path",
+            "_file",
+            "_url",
+        )
+    ):
+        return False
+    parts = set(re.split(r"[_.-]+", s1))
+    exact_sensitive = {
+        "password",
+        "passwd",
+        "secret",
+        "token",
+        "credential",
+        "credentials",
+        "ssn",
+        "cvv",
+        "privkey",
+        "auth",
+        "authorization",
+        "bearer",
+    }
+    if parts & exact_sensitive:
+        return True
+    if "api" in parts and "key" in parts:
+        return True
+    if "private" in parts and "key" in parts:
+        return True
+    if "access" in parts and "key" in parts:
+        return True
+    if "secret" in parts and "key" in parts:
+        return True
+    if "credit" in parts and "card" in parts:
+        return True
+    if "card" in parts and "number" in parts:
+        return True
+    return False
 
 
 class SQLDataflow:
@@ -93,41 +152,62 @@ class SQLDataflow:
         name = self.name(target)
         if self.policy.matches(name, self.policy.sources):
             return name
-        if isinstance(node, ast.Call) and name in {"input", "builtins.input"}:
-            return name
-        if name.startswith("flask.request"):
-            name = name.removeprefix("flask.")
-        roots = ("request", "self.request")
-        fields = (
-            "args",
-            "form",
-            "values",
-            "cookies",
-            "json",
-            "query_params",
-            "GET",
-            "POST",
-            "data",
-            "body",
-            "headers",
-            "get_json",
-        )
-        if any(
-            name == f"{root}.{field}" or name.startswith(f"{root}.{field}.")
-            for root in roots
-            for field in fields
-        ):
-            return name
-        if isinstance(node, ast.Call) and name in {
-            "fastapi.Query",
-            "fastapi.Body",
-            "fastapi.Path",
-            "fastapi.Header",
-            "fastapi.Form",
-            "fastapi.Cookie",
-        }:
-            return name
+        if self.kind != "data_leak":
+            if isinstance(node, ast.Call) and name in {"input", "builtins.input"}:
+                return name
+            if name.startswith("flask.request"):
+                name = name.removeprefix("flask.")
+            roots = ("request", "self.request")
+            fields = (
+                "args",
+                "form",
+                "values",
+                "cookies",
+                "json",
+                "query_params",
+                "GET",
+                "POST",
+                "data",
+                "body",
+                "headers",
+                "get_json",
+            )
+            if any(
+                name == f"{root}.{field}" or name.startswith(f"{root}.{field}.")
+                for root in roots
+                for field in fields
+            ):
+                return name
+            if isinstance(node, ast.Call) and name in {
+                "fastapi.Query",
+                "fastapi.Body",
+                "fastapi.Path",
+                "fastapi.Header",
+                "fastapi.Form",
+                "fastapi.Cookie",
+            }:
+                return name
+        if self.kind == "data_leak":
+            if isinstance(node, ast.Attribute) and is_sensitive_name(node.attr):
+                return f"{self.name(node.value)}.{node.attr}"
+            if isinstance(node, ast.Subscript):
+                if isinstance(node.slice, ast.Constant) and isinstance(node.slice.value, str):
+                    if is_sensitive_name(node.slice.value):
+                        return f"{self.name(node.value)}[{node.slice.value}]"
+            if isinstance(node, ast.Call):
+                call_name = self.name(node.func)
+                if call_name in {"os.getenv", "os.environ.get"}:
+                    if (
+                        node.args
+                        and isinstance(node.args[0], ast.Constant)
+                        and isinstance(node.args[0].value, str)
+                    ):
+                        if is_sensitive_name(node.args[0].value):
+                            return f"{call_name}({node.args[0].value})"
+                elif call_name in {"getpass.getpass", "getpass"}:
+                    return call_name
         return ""
+
 
     def local_call(
         self, node: ast.Call, values: list[Flow], keywords: dict[str | None, Flow]
@@ -233,6 +313,10 @@ class SQLDataflow:
                 if target is not self and not (
                     literal(default)
                     or child.source(default)
+                    or (
+                        isinstance(default, ast.Call)
+                        and dotted(default.func) in {"input", "builtins.input"}
+                    )
                     or (
                         isinstance(default, ast.Name)
                         and self.project is not None
@@ -535,6 +619,108 @@ class SQLDataflow:
             return target
         return ()
 
+    def data_leak_flow(
+        self,
+        node: ast.Call,
+        name: str,
+        receiver: Flow,
+        values: list[Flow],
+        keywords: dict[str | None, Flow],
+    ) -> Flow:
+        logging_methods = {
+            "debug",
+            "info",
+            "warning",
+            "warn",
+            "error",
+            "critical",
+            "fatal",
+            "exception",
+            "log",
+        }
+        stdout_methods = {"write", "writelines"}
+
+        is_sink = False
+
+        if name in {"print", "builtins.print"}:
+            is_sink = True
+        elif name.startswith("logging.") and name.split(".")[-1] in logging_methods:
+            is_sink = True
+        elif (
+            name.startswith("sys.stdout.") or name.startswith("sys.stderr.")
+        ) and name.split(".")[-1] in stdout_methods:
+            is_sink = True
+        elif isinstance(node.func, ast.Attribute):
+            attr = node.func.attr
+            if attr in logging_methods:
+                func_base = dotted(node.func.value).lower()
+                if (
+                    any(
+                        tok in func_base
+                        for tok in ("logger", "log", "logging", "_log", "app.logger")
+                    )
+                    or func_base in {"self", "cls"}
+                ):
+                    is_sink = True
+            elif attr in stdout_methods:
+                func_base = dotted(node.func.value)
+                if func_base in {"sys.stdout", "sys.stderr", "stdout", "stderr"}:
+                    is_sink = True
+
+        if is_sink:
+            return join(*values, *keywords.values())
+        return ()
+
+    def is_data_leak_sanitizer(self, name: str, node: ast.Call) -> bool:
+        fn_name = name.split(".")[-1].lower()
+        if fn_name in {
+            "mask",
+            "redact",
+            "obfuscate",
+            "anonymize",
+            "censor",
+            "hashpw",
+            "hexdigest",
+            "digest",
+            "sha256",
+            "sha512",
+            "sha1",
+            "md5",
+            "len",
+            "bool",
+        }:
+            return True
+        if any(
+            san in fn_name
+            for san in ("mask_", "redact_", "sanitize_", "clean_", "hash_")
+        ):
+            return True
+        if name.startswith("hashlib.") or name.startswith("hmac."):
+            return True
+        return False
+
+    def is_tainted_sensitive_assign(
+        self, target_name: str, value_node: ast.AST | None, env: Environment
+    ) -> bool:
+        if not is_sensitive_name(target_name):
+            return False
+        if value_node is None:
+            return False
+        if isinstance(value_node, ast.Call):
+            call_name = self.name(value_node.func)
+            if self.is_data_leak_sanitizer(call_name, value_node):
+                return False
+            return True
+        if isinstance(value_node, ast.Name):
+            if value_node.id in env and not env[value_node.id]:
+                return False
+        if isinstance(value_node, ast.Constant):
+            val = value_node.value
+            if val is None or isinstance(val, (bool, int, float)) or val == "":
+                return False
+            return True
+        return True
+
     def expression(self, node: ast.AST | None, env: Environment, qualname: str) -> Flow:
         if node is None:
             return ()
@@ -655,6 +841,16 @@ class SQLDataflow:
                         (self.file, qualname, node.lineno, node.col_offset),
                         SQLFlow(node, qualname, (*ssrf_f, self.step(node, "sink", sink_name))),
                     )
+            if self.kind == "data_leak":
+                leak_f = self.data_leak_flow(node, name, receiver, values, keywords)
+                if leak_f:
+                    sink_name = name or (
+                        node.func.attr if isinstance(node.func, ast.Attribute) else "log_sink"
+                    )
+                    self.flows.setdefault(
+                        (self.file, qualname, node.lineno, node.col_offset),
+                        SQLFlow(node, qualname, (*leak_f, self.step(node, "sink", sink_name))),
+                    )
             source = self.source(node)
             if shadowed and name in {"input", "builtins.input"}:
                 source = ""
@@ -689,11 +885,18 @@ class SQLDataflow:
                 "sanitize_url",
             }:
                 return ()
+            if self.kind == "data_leak" and self.is_data_leak_sanitizer(name, node):
+                return ()
             if name in {"int", "float", "builtins.int", "builtins.float"} and not shadowed:
                 return ()
             summary = self.local_call(node, values, keywords)
             if summary is not None:
                 return summary
+            if (
+                isinstance(node.func, ast.Attribute)
+                and node.func.attr in {"execute", "executemany", "executescript", "raw"}
+            ) or name.endswith(".raw"):
+                return ()
             return join(receiver, *values, *keywords.values())
         if self.kind == "path" and isinstance(node, ast.Attribute) and node.attr == "name":
             return ()
@@ -765,7 +968,10 @@ class SQLDataflow:
                 self.returns = []
                 args = [*stmt.args.posonlyargs, *stmt.args.args, *stmt.args.kwonlyargs]
                 for arg in args:
-                    local[arg.arg] = ()
+                    if self.kind == "data_leak" and is_sensitive_name(arg.arg):
+                        local[arg.arg] = (self.step(arg, "source", arg.arg),)
+                    else:
+                        local[arg.arg] = ()
                 if stmt.args.vararg:
                     local[stmt.args.vararg.arg] = ()
                 if stmt.args.kwarg:
@@ -822,6 +1028,13 @@ class SQLDataflow:
                 for target in targets:
                     if isinstance(stmt, ast.AugAssign):
                         flow = join(self.expression(target, env, qualname), flow)
+                    if (
+                        self.kind == "data_leak"
+                        and not flow
+                        and isinstance(target, ast.Name)
+                        and self.is_tainted_sensitive_assign(target.id, stmt.value, env)
+                    ):
+                        flow = (self.step(target, "source", target.id),)
                     self.assign(target, flow, env)
             elif isinstance(stmt, ast.If):
                 self.expression(stmt.test, env, qualname)

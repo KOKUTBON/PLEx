@@ -18,8 +18,10 @@ from plex.sandbox import Sandbox
 from plex.security.command_injection import COMMAND_LIMITATIONS, CommandInjectionRule
 from plex.security.dataflow import SQLDataflow
 from plex.security.eval_injection import EVAL_LIMITATIONS, CodeEvalInjectionRule
+from plex.security.insecure_cookie import COOKIE_LIMITATIONS, InsecureCookieRule
 from plex.security.path_traversal import PATH_LIMITATIONS, PathTraversalRule
 from plex.security.policy import PolicyError, load_policy
+from plex.security.sensitive_data_leak import SENSITIVE_DATA_LIMITATIONS, SensitiveDataLeakRule
 from plex.security.sql_injection import SCOPE_LIMITATIONS, SQLInjectionRule
 from plex.security.ssrf import SsrfRule
 from plex.security.unsafe_deserialization import UnsafeDeserializationRule
@@ -147,6 +149,8 @@ class XBoundaryProvider:
                 PathTraversalRule(),
                 UnsafeDeserializationRule(),
                 SsrfRule(),
+                SensitiveDataLeakRule(),
+                InsecureCookieRule(),
             )
             for item in rule.apply(context)
         ]
@@ -188,6 +192,8 @@ class XBoundaryProvider:
             *COMMAND_LIMITATIONS,
             *EVAL_LIMITATIONS,
             *PATH_LIMITATIONS,
+            *SENSITIVE_DATA_LIMITATIONS,
+            *COOKIE_LIMITATIONS,
             f"Security policy catalog: {policy.digest}",
         ]
         if context.suppressed_findings:

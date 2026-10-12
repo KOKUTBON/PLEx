@@ -25,7 +25,8 @@
       "fixture_sha256": "894dc4f86f3a1229b0145c6283c8fbb99618106fe9deb2341f58cd602059109e",
       "added_import_header": "",
       "expected": {
-        "xbnd.sql-injection": 1
+        "xbnd.sql-injection": 1,
+        "xbnd.sensitive-data-leak": 2
       },
       "label": "vulnerable command/SQL flow"
     },

@@ -47,7 +47,7 @@ DECLARED_SURFACES: list[SurfaceCoverage] = [
             "dep.vulnerable-version",
             "dep.reachable-vulnerability",
         ),
-        verification_level="Pure-Python manifest parsing (requirements.txt, poetry.lock, Pipfile.lock) and AST call-graph reachability",
+        verification_level="Pure-Python manifest parsing (requirements.txt, poetry.lock, Pipfile.lock), AST call-graph reachability, and CycloneDX/SPDX SBOM generation",
         prerequisites=("Checked-in manifest or lockfile",),
         limitations=("Offline feed covers core Python package CVEs; live remote indexing optional",),
     ),

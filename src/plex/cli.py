@@ -55,6 +55,7 @@ from plex.report.models import (
 from plex.report.severity import severity_rank
 from plex.rules.registry import RuleRegistry
 from plex.security.commands import add_security_commands
+from plex.supply_chain.commands import add_supply_chain_commands
 from plex.util.logging import setup_logging
 from plex.validate.commands import add_validate_commands
 
@@ -821,6 +822,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_validate_commands(sub)
     add_remediate_commands(sub)
     add_coverage_commands(sub)
+    add_supply_chain_commands(sub)
 
     a = sub.add_parser("analyze", help="Analyze a repository")
     _add_analyze_args(a)

@@ -17,6 +17,7 @@ from plex.repair.docker_user import DockerUserFixer
 from plex.repair.insecure_cookie import InsecureCookieFixer
 from plex.repair.models import PatchCandidate, RepairRecord
 from plex.repair.path_boundary import PathBoundaryFixer
+from plex.repair.plaintext_secret import PlaintextSecretFixer
 from plex.repair.runner import RepairVerificationRunner, apply_unified_diff
 from plex.repair.sensitive_log_redact import SensitiveLogRedactFixer
 from plex.repair.sql_parameterize import SQLParameterizeFixer
@@ -65,6 +66,7 @@ class RemediationCoordinator:
             SensitiveLogRedactFixer(),
             TenantBoundaryFixer(),
             TLSVerifyFixer(),
+            PlaintextSecretFixer(),
             DockerUserFixer(),
             DockerTagPinFixer(),
         ]

@@ -17,6 +17,7 @@ from .models import (
     VerificationStatus,
 )
 from .path_boundary import PathBoundaryFixer
+from .plaintext_secret import PlaintextSecretFixer
 from .runner import RepairVerificationRunner, apply_unified_diff
 from .sensitive_log_redact import SensitiveLogRedactFixer
 from .sql_parameterize import SQLParameterizeFixer
@@ -30,6 +31,7 @@ __all__ = [
     "InsecureCookieFixer",
     "PatchCandidate",
     "PathBoundaryFixer",
+    "PlaintextSecretFixer",
     "RemediationCoordinator",
     "RemediationPlan",
     "RepairRecord",

@@ -29,6 +29,7 @@ from plex.config.loader import load_config
 from plex.config.templates import CONFIG_PRESETS
 from plex.config.validate import validate_config_paths
 from plex.coverage.commands import add_coverage_commands
+from plex.dashboard.terminal import cmd_dashboard
 from plex.fix import FileFixResult, FixEngine
 from plex.inspect.commands import add_inspect_commands
 from plex.providers.base import AnalysisProvider, AnalysisTask
@@ -823,6 +824,16 @@ def build_parser() -> argparse.ArgumentParser:
     add_remediate_commands(sub)
     add_coverage_commands(sub)
     add_supply_chain_commands(sub)
+
+    dash = sub.add_parser(
+        "dashboard",
+        aliases=["dash"],
+        help="Interactive terminal dashboard and posture status",
+    )
+    dash.add_argument("path", nargs="?", default=".", help="Repository root path (default: .)")
+    dash.add_argument("--no-color", action="store_true", help="Disable ANSI color output")
+    dash.add_argument("--json", action="store_true", help="Output dashboard posture metrics as JSON")
+    dash.set_defaults(func=cmd_dashboard)
 
     a = sub.add_parser("analyze", help="Analyze a repository")
     _add_analyze_args(a)

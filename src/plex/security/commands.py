@@ -18,6 +18,8 @@ from .command_injection import CommandInjectionRule
 from .eval_injection import CodeEvalInjectionRule
 from .path_traversal import PathTraversalRule
 from .sql_injection import SQLInjectionRule
+from .ssrf import SsrfRule
+from .unsafe_deserialization import UnsafeDeserializationRule
 
 
 def cmd_security_verify(args: argparse.Namespace) -> int:
@@ -54,6 +56,8 @@ def cmd_security_rules(args: argparse.Namespace) -> int:
         CommandInjectionRule(),
         CodeEvalInjectionRule(),
         PathTraversalRule(),
+        UnsafeDeserializationRule(),
+        SsrfRule(),
     )
     details = [
         {

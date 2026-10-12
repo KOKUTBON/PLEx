@@ -17,6 +17,8 @@ DECLARED_SURFACES: list[SurfaceCoverage] = [
             "xbnd.command-injection",
             "xbnd.path-traversal",
             "xbnd.code-eval-taint",
+            "xbnd.unsafe-deserialization",
+            "xbnd.ssrf",
         ),
         verification_level="AST dataflow, tainted source-to-sink tracking, call-graph analysis",
         prerequisites=("Python 3.10+ AST",),

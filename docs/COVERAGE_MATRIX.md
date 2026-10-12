@@ -33,7 +33,7 @@ flowchart TD
 
 | Surface | Status | Responsible Engines | Key Rules & Detection Families | Verification Mechanism |
 | :--- | :--- | :--- | :--- | :--- |
-| **Python Source** | **Supported** | `plex.performance`, `xboundary` | `plex.db-in-loop`, `plex.quadratic-loop`, `plex.unbuffered-io`, `xbnd.sql-injection`, `xbnd.command-injection`, `xbnd.path-traversal`, `xbnd.code-eval-taint` | Static AST dataflow tracking, inter-procedural call graph traversal, and taint source-to-sink propagation. |
+| **Python Source** | **Supported** | `plex.performance`, `xboundary` | `plex.db-in-loop`, `plex.quadratic-loop`, `plex.unbuffered-io`, `xbnd.sql-injection`, `xbnd.command-injection`, `xbnd.path-traversal`, `xbnd.code-eval-taint`, `xbnd.unsafe-deserialization`, `xbnd.ssrf` | Static AST dataflow tracking, inter-procedural call graph traversal, and taint source-to-sink propagation. |
 | **JS/TS and Other Languages** | **Experimental** | `xboundary` | `xbnd.generic-source` | Syntactic tokenization and manifest inventory. Full AST taint and automated repair scheduled for 2.x roadmap. |
 | **Dependencies & Supply Chain** | **Supported** | `supply_chain` | `dep.unpinned-version`, `dep.insecure-index`, `dep.vulnerable-version`, `dep.reachable-vulnerability` | Pure-Python manifest parsing (`requirements.txt`, `poetry.lock`, `Pipfile.lock`), offline CVE advisory correlation, and AST call-graph reachability analysis. |
 | **Configuration & IaC** | **Supported** | `supply_chain`, `config` | `cfg.docker-root-user`, `cfg.docker-latest-tag`, `cfg.docker-sudo-nopasswd`, `cfg.plaintext-secret`, `cfg.insecure-tls` | Pure-Python Dockerfile parser, `.env` secret entropy/assignment analyzer, and TLS configuration verification. |

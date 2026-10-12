@@ -418,6 +418,123 @@ class SQLDataflow:
             return target
         return ()
 
+    def deserialization_flow(
+        self,
+        node: ast.Call,
+        name: str,
+        values: list[Flow],
+        keywords: dict[str | None, Flow],
+    ) -> Flow:
+        deserialization_sinks = {
+            "pickle.loads",
+            "pickle.load",
+            "_pickle.loads",
+            "_pickle.load",
+            "marshal.loads",
+            "marshal.load",
+            "shelve.open",
+            "jsonpickle.decode",
+            "dill.loads",
+            "dill.load",
+            "yaml.unsafe_load",
+            "yaml.load",
+        }
+        attr_name = node.func.attr if isinstance(node.func, ast.Attribute) else ""
+        is_sink = name in deserialization_sinks or (
+            attr_name in {"loads", "load"}
+            and any(
+                name.startswith(mod)
+                for mod in ("pickle.", "_pickle.", "marshal.", "dill.", "yaml.", "shelve.")
+            )
+        )
+        if is_sink:
+            if name == "yaml.load" or (attr_name == "load" and "yaml" in name):
+                loader_kw = next((kw for kw in node.keywords if kw.arg == "Loader"), None)
+                if loader_kw:
+                    loader_name = dotted(loader_kw.value)
+                    if loader_name in {
+                        "yaml.SafeLoader",
+                        "SafeLoader",
+                        "yaml.CSafeLoader",
+                        "CSafeLoader",
+                    }:
+                        return ()
+            target = (
+                values[0]
+                if values
+                else join(
+                    keywords.get("data", ()),
+                    keywords.get("payload", ()),
+                    keywords.get("stream", ()),
+                    keywords.get("s", ()),
+                    keywords.get("file", ()),
+                    keywords.get(None, ()),
+                )
+            )
+            return target
+        return ()
+
+    def ssrf_flow(
+        self,
+        node: ast.Call,
+        name: str,
+        receiver: Flow,
+        values: list[Flow],
+        keywords: dict[str | None, Flow],
+    ) -> Flow:
+        http_sinks = {
+            "urllib.request.urlopen",
+            "urlopen",
+            "urllib.request.urlretrieve",
+            "urlretrieve",
+            "requests.get",
+            "requests.post",
+            "requests.put",
+            "requests.delete",
+            "requests.head",
+            "requests.patch",
+            "requests.request",
+            "httpx.get",
+            "httpx.post",
+            "httpx.put",
+            "httpx.delete",
+            "httpx.head",
+            "httpx.patch",
+            "httpx.request",
+            "aiohttp.request",
+        }
+        is_http_attr = isinstance(node.func, ast.Attribute) and node.func.attr in {
+            "get",
+            "post",
+            "put",
+            "delete",
+            "head",
+            "patch",
+            "request",
+            "urlopen",
+        }
+        if name in http_sinks or is_http_attr:
+            is_request_method = (
+                name.endswith(".request")
+                or (isinstance(node.func, ast.Attribute) and node.func.attr == "request")
+            )
+            if is_request_method and len(values) >= 2:
+                target = values[1]
+            else:
+                target = (
+                    values[0]
+                    if values
+                    else join(
+                        keywords.get("url", ()),
+                        keywords.get("uri", ()),
+                        keywords.get("endpoint", ()),
+                        keywords.get("target", ()),
+                        keywords.get(None, ()),
+                    )
+                )
+            return target
+        return ()
+
     def expression(self, node: ast.AST | None, env: Environment, qualname: str) -> Flow:
         if node is None:
             return ()
@@ -516,6 +633,28 @@ class SQLDataflow:
                         (self.file, qualname, node.lineno, node.col_offset),
                         SQLFlow(node, qualname, (*path_f, self.step(node, "sink", sink_name))),
                     )
+            if self.kind == "deserialization" and not shadowed:
+                deser_f = self.deserialization_flow(node, name, values, keywords)
+                if deser_f:
+                    sink_name = name or (
+                        node.func.attr
+                        if isinstance(node.func, ast.Attribute)
+                        else "deserialization_sink"
+                    )
+                    self.flows.setdefault(
+                        (self.file, qualname, node.lineno, node.col_offset),
+                        SQLFlow(node, qualname, (*deser_f, self.step(node, "sink", sink_name))),
+                    )
+            if self.kind == "ssrf" and not shadowed:
+                ssrf_f = self.ssrf_flow(node, name, receiver, values, keywords)
+                if ssrf_f:
+                    sink_name = name or (
+                        node.func.attr if isinstance(node.func, ast.Attribute) else "ssrf_sink"
+                    )
+                    self.flows.setdefault(
+                        (self.file, qualname, node.lineno, node.col_offset),
+                        SQLFlow(node, qualname, (*ssrf_f, self.step(node, "sink", sink_name))),
+                    )
             source = self.source(node)
             if shadowed and name in {"input", "builtins.input"}:
                 source = ""
@@ -532,6 +671,22 @@ class SQLDataflow:
                 "ntpath.basename",
                 "secure_filename",
                 "werkzeug.utils.secure_filename",
+            }:
+                return ()
+            if self.kind == "deserialization" and name in {
+                "json.loads",
+                "json.load",
+                "yaml.safe_load",
+                "safe_load",
+                "ast.literal_eval",
+                "literal_eval",
+            }:
+                return ()
+            if self.kind == "ssrf" and name in {
+                "validate_url",
+                "is_safe_url",
+                "check_url_allowlist",
+                "sanitize_url",
             }:
                 return ()
             if name in {"int", "float", "builtins.int", "builtins.float"} and not shadowed:

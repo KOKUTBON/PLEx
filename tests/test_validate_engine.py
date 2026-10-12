@@ -16,7 +16,7 @@ from plex.validate.authz import (
 )
 from plex.validate.engine import ValidateEngine
 from plex.validate.http import HttpExchange, ScopedHttpClient, make_exchange, redact_headers
-from plex.validate.recipes.access import RoleMatrixRecipe
+from plex.validate.recipes.access import RoleMatrixRecipe, TenantIsolationRecipe
 from plex.validate.recipes.base import ValidationHypothesis
 from plex.validate.recipes.injection import (
     CommandInjectionRecipe,
@@ -416,3 +416,73 @@ def test_cli_validate_commands(
     )
     assert exit_no_authz == 1
     assert "Authorization file not found" in capsys.readouterr().out
+
+
+def test_tenant_isolation_recipe_reproduced() -> None:
+    recipe = TenantIsolationRecipe()
+    hyp = ValidationHypothesis(
+        id="hyp-tenant-1",
+        rule_id="xbnd.broken-tenant-isolation",
+        finding_id="f-bola-1",
+        target_url="http://127.0.0.1:5000/api/documents/100",
+        enclosing_route="/api/documents/100",
+        method="GET",
+    )
+
+    class BOLAClient(ScopedHttpClient):
+        def request(
+            self,
+            method: str,
+            url: str,
+            headers: dict[str, str] | None = None,
+            data: str | bytes | None = None,
+            timeout: float = 10.0,
+        ) -> HttpExchange:
+            return make_exchange(
+                method, url, headers or {}, "", 200, {}, '{"doc_id": 100, "content": "confidential"}', 5.0
+            )
+
+    client = BOLAClient(scope=NetworkScope(allowed_hosts={"127.0.0.1"}))
+    result = recipe.execute(hyp, client)
+    assert result.reproduced is True
+    assert result.status == "verified"
+    assert "Broken Object Level Authorization (BOLA) verified" in result.message
+    assert len(result.exchanges) == 2
+
+
+def test_tenant_isolation_recipe_refuted() -> None:
+    recipe = TenantIsolationRecipe()
+    hyp = ValidationHypothesis(
+        id="hyp-tenant-2",
+        rule_id="xbnd.broken-tenant-isolation",
+        finding_id="f-bola-2",
+        target_url="http://127.0.0.1:5000/api/documents/100",
+        enclosing_route="/api/documents/100",
+        method="GET",
+    )
+
+    class SecureClient(ScopedHttpClient):
+        def request(
+            self,
+            method: str,
+            url: str,
+            headers: dict[str, str] | None = None,
+            data: str | bytes | None = None,
+            timeout: float = 10.0,
+        ) -> HttpExchange:
+            if headers and headers.get("X-Tenant-ID") == "tenant-secondary":
+                return make_exchange(
+                    method, url, headers, "", 403, {}, '{"error": "Access denied for tenant"}', 5.0
+                )
+            return make_exchange(
+                method, url, headers or {}, "", 200, {}, '{"doc_id": 100, "content": "confidential"}', 5.0
+            )
+
+    client = SecureClient(scope=NetworkScope(allowed_hosts={"127.0.0.1"}))
+    result = recipe.execute(hyp, client)
+    assert result.reproduced is False
+    assert result.status == "refuted"
+    assert "Tenant boundary isolation verified intact" in result.message
+    assert len(result.counterevidence) > 0
+    assert "403" in result.counterevidence[0]
+

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .access import RoleMatrixRecipe
+from .access import RoleMatrixRecipe, TenantIsolationRecipe
 from .base import TestRecipe, TestResult, ValidationHypothesis
 from .injection import (
     CommandInjectionRecipe,
@@ -15,6 +15,7 @@ __all__ = [
     "PathTraversalRecipe",
     "RoleMatrixRecipe",
     "SQLInjectionRecipe",
+    "TenantIsolationRecipe",
     "TestRecipe",
     "TestResult",
     "ValidationHypothesis",

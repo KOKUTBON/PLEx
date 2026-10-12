@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add native active testing and dynamic vulnerability reproduction engine
+  (`plex.validate`) with hard technical network scope guardrails (`ScopedHttpClient`,
+  `NetworkScope`), authorization verification (`AUTHORIZATION.md`), static route discovery
+  (Flask, FastAPI, Django) linking source findings to endpoints, deterministic zero-LLM
+  reproduction recipes (SQLi, command injection, path traversal, role matrix), redacted
+  HTTP exchange evidence, and `plex validate` CLI subcommand.
+
 - Add REA binary and artifact inspection adapter (`plex.providers.rea`) with
   version-pinned CLI and stdio MCP transport bridges, tool catalog drift detection,
   disposable workspace isolation, residual unknowns mapping (`unk_*` to inconclusive findings),

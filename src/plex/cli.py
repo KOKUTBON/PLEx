@@ -53,6 +53,7 @@ from plex.report.severity import severity_rank
 from plex.rules.registry import RuleRegistry
 from plex.security.commands import add_security_commands
 from plex.util.logging import setup_logging
+from plex.validate.commands import add_validate_commands
 
 log = logging.getLogger(__name__)
 
@@ -779,6 +780,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_provider_commands(sub)
     add_security_commands(sub)
     add_inspect_commands(sub)
+    add_validate_commands(sub)
 
     a = sub.add_parser("analyze", help="Analyze a repository")
     _add_analyze_args(a)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from .broken_tenant_isolation import TENANT_LIMITATIONS, BrokenTenantIsolationRule
 from .command_injection import COMMAND_LIMITATIONS, CommandInjectionRule
 from .eval_injection import EVAL_LIMITATIONS, CodeEvalInjectionRule
 from .insecure_cookie import COOKIE_LIMITATIONS, InsecureCookieRule
@@ -13,6 +14,7 @@ from .unsafe_deserialization import DESERIALIZATION_LIMITATIONS, UnsafeDeseriali
 from .weak_crypto import WEAK_CRYPTO_LIMITATIONS, WeakCryptoRule
 
 __all__ = [
+    "BrokenTenantIsolationRule",
     "COMMAND_LIMITATIONS",
     "COOKIE_LIMITATIONS",
     "CodeEvalInjectionRule",
@@ -28,6 +30,7 @@ __all__ = [
     "SSRF_LIMITATIONS",
     "SensitiveDataLeakRule",
     "SsrfRule",
+    "TENANT_LIMITATIONS",
     "UnsafeDeserializationRule",
     "WEAK_CRYPTO_LIMITATIONS",
     "WeakCryptoRule",

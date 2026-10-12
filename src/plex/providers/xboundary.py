@@ -15,6 +15,7 @@ from plex.ir.registry import build_ir_modules
 from plex.report.unified import AnalysisFinding, EngineRun, Severity
 from plex.rules.base import RuleContext
 from plex.sandbox import Sandbox
+from plex.security.broken_tenant_isolation import BrokenTenantIsolationRule
 from plex.security.command_injection import COMMAND_LIMITATIONS, CommandInjectionRule
 from plex.security.dataflow import SQLDataflow
 from plex.security.eval_injection import EVAL_LIMITATIONS, CodeEvalInjectionRule
@@ -153,6 +154,7 @@ class XBoundaryProvider:
                 SensitiveDataLeakRule(),
                 InsecureCookieRule(),
                 WeakCryptoRule(),
+                BrokenTenantIsolationRule(),
             )
             for item in rule.apply(context)
         ]

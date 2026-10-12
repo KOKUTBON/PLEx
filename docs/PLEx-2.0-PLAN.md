@@ -256,7 +256,7 @@ A “better” release claim requires published evidence on the named dimensions
 | Native artifact intelligence (PLEx Inspect) | Implemented | Pure-Python 32/64-bit ELF parser, hardening checks, `plex inspect` ([ADR 0007](adr/0007-native-artifact-inspection.md)) |
 | Native active application testing (PLEx Validate) | Implemented | `ScopedHttpClient`, route discovery, HTTP reproduction recipes, `plex validate` ([ADR 0006](adr/0006-native-active-validation.md)) |
 | Closed-loop remediation & multi-engine verification (PLEx Repair) | Implemented | `SQLParameterizeFixer`, `CommandArrayFixer`, `PathBoundaryFixer`, 5-gate `RepairVerificationRunner`, `plex remediate` ([ADR 0008](adr/0008-integrated-intelligence-and-repair.md)) |
-| Supply chain & IaC security | Implemented | Manifest parsers, offline CVE correlation, Dockerfile & TLS rules (`cfg.*`, `dep.*`) |
+| Supply chain & IaC security | Implemented | Manifest parsers, offline CVE correlation, AST call-graph reachability, Dockerfile & TLS rules (`cfg.*`, `dep.*`) |
 | Declared platform coverage matrix & comparative accuracy benchmarks | Implemented | `CoverageInventory` ([COVERAGE_MATRIX.md](COVERAGE_MATRIX.md)), `plex coverage`, `plex benchmark --comparative` ([ADR 0009](adr/0009-coverage-and-comparative-validation.md)) |
 | Cohesive release architecture & migration guide | Implemented | Cohesive integration suite, `MIGRATION_2.0.md`, [ADR 0010](adr/0010-plex-2-0-cohesive-release.md) |
 
@@ -276,7 +276,7 @@ All six pillars natively implemented with zero mandatory external dependencies.
 | **P7 — Coverage and comparative validation** | Dependency/configuration checks, declared coverage matrix, held-out corpora and pinned baseline comparisons | **Completed** (`CoverageInventory`, `SupplyChainScanner`, `plex benchmark --comparative`) |
 | **P8 — PLEx 2.0 release** | Cohesive CLI/API/dashboard/editor/CI, migration docs, reproducible packages and supported native pillars | **Completed** (Cohesive test suite, `MIGRATION_2.0.md`, [ADR 0010](adr/0010-plex-2-0-cohesive-release.md)) |
 
-All milestones P0–P8 successfully verified with 100% test pass rate across 903 tests.
+All milestones P0–P8 successfully verified with 100% test pass rate across 909 tests.
 
 No next milestone is “wrap REA” or “wrap Strix.” Any interoperability work is separately justified after the native path is useful.
 

@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import hashlib
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 from plex.graph.models import GraphNode, ProjectGraph
-from plex.repair.models import PatchCandidate, RepairRecord
 from plex.report.unified import AnalysisFinding
-from plex.validate.routes import RouteEndpoint
+
+if TYPE_CHECKING:
+    from plex.repair.models import PatchCandidate, RepairRecord
+    from plex.validate.routes import RouteEndpoint
 
 
 def _node_id(kind: str, val: str) -> str:
@@ -62,6 +65,71 @@ class GraphCorrelator:
             producer="plex.validate.routes",
         )
         return rnode
+
+    def add_dependency(
+        self,
+        dep: Any,
+        manifest_file: str,
+    ) -> GraphNode:
+        dep_name = getattr(dep, "name", str(dep))
+        resolved_version = getattr(dep, "resolved_version", None)
+        specifier = getattr(dep, "specifier", "")
+        is_pinned = getattr(dep, "is_pinned", False)
+        lineno = getattr(dep, "lineno", 1)
+
+        val = f"{dep_name}:{resolved_version or specifier}:{manifest_file}"
+        nid = _node_id("dependency", val)
+        if nid in self.graph.nodes:
+            return self.graph.nodes[nid]
+
+        dnode = self.graph.add_node(
+            kind="dependency",
+            label=f"{dep_name} {resolved_version or specifier}",
+            properties={
+                "name": dep_name,
+                "version": resolved_version,
+                "specifier": specifier,
+                "is_pinned": is_pinned,
+                "manifest_file": manifest_file,
+                "lineno": lineno,
+            },
+            node_id=nid,
+        )
+
+        mnode = self.add_file(manifest_file)
+        self.graph.add_edge(
+            source=mnode.id,
+            target=dnode.id,
+            kind="depends_on",
+            producer="plex.supply_chain",
+        )
+        return dnode
+
+    def correlate_dependency_reachability(
+        self,
+        dep_node: GraphNode,
+        caller_file: str,
+        caller_lineno: int,
+        caller_symbol: str,
+        finding_node: GraphNode | None = None,
+    ) -> None:
+        cnode = self.add_file(caller_file)
+        self.graph.add_edge(
+            source=cnode.id,
+            target=dep_node.id,
+            kind="reaches",
+            producer="plex.supply_chain.reachability",
+            confidence=1.0,
+            metadata={"caller_symbol": caller_symbol, "lineno": caller_lineno},
+        )
+        if finding_node and finding_node.id in self.graph.nodes:
+            self.graph.add_edge(
+                source=dep_node.id,
+                target=finding_node.id,
+                kind="detects",
+                producer="plex.supply_chain.reachability",
+                confidence=1.0,
+            )
 
     def add_finding(
         self,

@@ -250,7 +250,7 @@ A “better” release claim requires published evidence on the named dimensions
 | Unified schema v8, v7 compatibility, finding/evidence/engine records | Implemented | [ADR 0001](adr/0001-unified-finding-schema.md), Schema v8 |
 | Provider SPI, performance wrapper, discovery/preflight/doctor | Implemented | Shared orchestrator & `plex providers doctor` |
 | SQL taint with policy v1 and bounded project helpers | Implemented | xBOUNDARY AST dataflow engine |
-| Shell-command rule, code-eval taint, path traversal | Implemented | `xbnd.command-injection`, `xbnd.path-traversal`, `xbnd.code-eval-taint` |
+| Shell-command rule, code-eval taint, path traversal, deserialization, SSRF | Implemented | `xbnd.command-injection`, `xbnd.path-traversal`, `xbnd.code-eval-taint`, `xbnd.unsafe-deserialization`, `xbnd.ssrf` |
 | JSON/SARIF unified multi-engine reporting & severity gates | Implemented | `plex analyze --checks all --json --sarif` |
 | Hardened isolation & sandboxes | Implemented | `InProcessSandbox`, `SubprocessSandbox`, env allowlist, `disposable_workspace` ([ADR 0002](adr/0002-engine-isolation-model.md)) |
 | Native artifact intelligence (PLEx Inspect) | Implemented | Pure-Python 32/64-bit ELF parser, hardening checks, `plex inspect` ([ADR 0007](adr/0007-native-artifact-inspection.md)) |
@@ -276,7 +276,7 @@ All six pillars natively implemented with zero mandatory external dependencies.
 | **P7 — Coverage and comparative validation** | Dependency/configuration checks, declared coverage matrix, held-out corpora and pinned baseline comparisons | **Completed** (`CoverageInventory`, `SupplyChainScanner`, `plex benchmark --comparative`) |
 | **P8 — PLEx 2.0 release** | Cohesive CLI/API/dashboard/editor/CI, migration docs, reproducible packages and supported native pillars | **Completed** (Cohesive test suite, `MIGRATION_2.0.md`, [ADR 0010](adr/0010-plex-2-0-cohesive-release.md)) |
 
-All milestones P0–P8 successfully verified with 100% test pass rate across 909 tests.
+All milestones P0–P8 successfully verified with 100% test pass rate across 925 tests.
 
 No next milestone is “wrap REA” or “wrap Strix.” Any interoperability work is separately justified after the native path is useful.
 

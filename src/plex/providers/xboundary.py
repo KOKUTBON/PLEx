@@ -21,6 +21,8 @@ from plex.security.eval_injection import EVAL_LIMITATIONS, CodeEvalInjectionRule
 from plex.security.path_traversal import PATH_LIMITATIONS, PathTraversalRule
 from plex.security.policy import PolicyError, load_policy
 from plex.security.sql_injection import SCOPE_LIMITATIONS, SQLInjectionRule
+from plex.security.ssrf import SsrfRule
+from plex.security.unsafe_deserialization import UnsafeDeserializationRule
 
 from .base import AnalysisTask, EngineCapability, FindingSink, PreflightResult, ProviderEnv
 
@@ -143,6 +145,8 @@ class XBoundaryProvider:
                 CommandInjectionRule(),
                 CodeEvalInjectionRule(),
                 PathTraversalRule(),
+                UnsafeDeserializationRule(),
+                SsrfRule(),
             )
             for item in rule.apply(context)
         ]

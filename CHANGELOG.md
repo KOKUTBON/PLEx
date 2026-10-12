@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add xBOUNDARY Wave 2 native source security rules for unsafe object deserialization (`xbnd.unsafe-deserialization`,
+  CWE-502) and Server-Side Request Forgery (`xbnd.ssrf`, CWE-918). Unsafe deserialization models `pickle`, `yaml.load`,
+  `marshal`, `dill`, and `shelve` sinks with safe alternative recognizers (`json.loads`, `yaml.safe_load`, `SafeLoader`).
+  SSRF models outgoing HTTP dispatch via `urllib`, `requests`, `httpx`, and `aiohttp` with URL validation sanitizers.
+  Both rules integrate with inter-procedural AST taint flow, `xboundary` analysis provider, and CLI severity gates.
+
 - Add supply chain AST call-graph reachability analysis (`ReachabilityAnalyzer`, `dep.reachable-vulnerability`)
   and `ProjectGraph` dependency correlation in `plex.supply_chain` and `plex.graph`. Differentiates between
   vulnerable dependencies that are actively reachable in source code, imported but uninvoked, or completely

@@ -16,7 +16,9 @@ from plex.report.severity import severity_rank
 
 from .command_injection import CommandInjectionRule
 from .eval_injection import CodeEvalInjectionRule
+from .insecure_cookie import InsecureCookieRule
 from .path_traversal import PathTraversalRule
+from .sensitive_data_leak import SensitiveDataLeakRule
 from .sql_injection import SQLInjectionRule
 from .ssrf import SsrfRule
 from .unsafe_deserialization import UnsafeDeserializationRule
@@ -58,6 +60,8 @@ def cmd_security_rules(args: argparse.Namespace) -> int:
         PathTraversalRule(),
         UnsafeDeserializationRule(),
         SsrfRule(),
+        SensitiveDataLeakRule(),
+        InsecureCookieRule(),
     )
     details = [
         {

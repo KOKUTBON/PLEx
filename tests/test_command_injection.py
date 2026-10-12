@@ -152,6 +152,8 @@ def test_rules_inventory_and_command_severity_gate(tmp_path, capsys):
         "xbnd.path-traversal",
         "xbnd.unsafe-deserialization",
         "xbnd.ssrf",
+        "xbnd.sensitive-data-leak",
+        "xbnd.insecure-cookie",
     }
     (tmp_path / "app.py").write_text("import os\nos.system(input())")
     assert main(["security", "verify", str(tmp_path), "--fail-on-severity", "high"]) == 1

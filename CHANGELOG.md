@@ -1,5 +1,15 @@
 # Changelog
 
+- Add xBOUNDARY Wave 3 Boundary & Privacy native security rules for sensitive data exposure in logs
+  (`xbnd.sensitive-data-leak`, CWE-532, OWASP A09:2025) and insecure cookie configuration (`xbnd.insecure-cookie`,
+  CWE-614, CWE-1004, OWASP A05:2025). `SensitiveDataLeakRule` models credentials, tokens, secrets, API keys,
+  and private keys flowing into unencrypted logging sinks (`logging.*`, `logger.*`, `print`, `sys.stdout.write`)
+  without masking/redaction, supporting hashing and masking sanitizers (`mask`, `redact`, `hashlib.sha256`, `len`, `bool`).
+  `InsecureCookieRule` inspects `set_cookie` and `set_signed_cookie` call sites to flag missing `HttpOnly` or `Secure`
+  flags and insecure `SameSite=None` attributes, escalating to high severity on authentication and session cookies.
+  Both rules integrate with inter-procedural AST taint flow, `xboundary` analysis provider, CLI severity gates,
+  and `# plex: ignore[...]` inline suppression.
+
 - Add pure-Python 64-bit and universal FAT Mach-O binary parser (`parse_macho`, `src/plex/inspect/macho.py`)
   in `plex.inspect` with zero external dependencies (`otool`, `jtool`, or `llvm-objdump`). Structural parser
   extracts Mach-O headers, load commands (`LC_SEGMENT_64`, `LC_LOAD_DYLIB`, `LC_RPATH`, `LC_CODE_SIGNATURE`,

@@ -1,5 +1,14 @@
 # Changelog
 
+- Add pure-Python 64-bit and universal FAT Mach-O binary parser (`parse_macho`, `src/plex/inspect/macho.py`)
+  in `plex.inspect` with zero external dependencies (`otool`, `jtool`, or `llvm-objdump`). Structural parser
+  extracts Mach-O headers, load commands (`LC_SEGMENT_64`, `LC_LOAD_DYLIB`, `LC_RPATH`, `LC_CODE_SIGNATURE`,
+  `LC_ENCRYPTION_INFO_64`, `LC_MAIN`, `LC_SYMTAB`), sections, strings, and symbols. Evaluates native compiler
+  hardening mitigations (PIE via `MH_PIE`, NX stack enforcement via `MH_ALLOW_STACK_EXECUTION` negation,
+  RELRO via `__DATA_CONST` segment and two-level namespaces, stack canary protector symbols via `__stack_chk_fail`,
+  fortify source detection via `*_chk`), banned C APIs, deprecated cryptographic primitives, relative RPATHs,
+  and embedded credentials. Directly wires into `InspectEngine.inspect` and `plex inspect` CLI.
+
 - Add automated IaC & configuration security fixers `DockerUserFixer` (`cfg.docker-root-user`) and
   `DockerTagPinFixer` (`cfg.docker-latest-tag`) in `plex.repair`. `DockerUserFixer` automatically injects
   unprivileged `USER nonroot` instructions immediately preceding container `ENTRYPOINT` or `CMD` directives

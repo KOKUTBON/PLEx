@@ -91,10 +91,10 @@ DECLARED_SURFACES: list[SurfaceCoverage] = [
             "bin.unknown.stripped-symbols",
             "bin.unknown.no-sections",
         ),
-        verification_level="Pure-Python 32-bit and 64-bit ELF structural parser, section and symbol tables, compiler hardening mitigations",
-        prerequisites=("Valid ELF binary artifact",),
+        verification_level="Pure-Python 32-bit and 64-bit ELF and Mach-O structural parser, load commands, section and symbol tables, compiler hardening mitigations",
+        prerequisites=("Valid ELF or Mach-O binary artifact",),
         limitations=(
-            "PE and Mach-O format intake detected via magic bytes; detailed disassembly planned for 2.x",
+            "PE format intake detected via magic bytes; advanced interactive disassembly planned for 2.x",
         ),
     ),
     SurfaceCoverage(

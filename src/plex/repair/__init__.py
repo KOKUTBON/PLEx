@@ -10,12 +10,17 @@ from .models import (
     VerificationRecord,
     VerificationStatus,
 )
+from .runner import RepairVerificationRunner, apply_unified_diff
+from .sql_parameterize import SQLParameterizeFixer
 
 __all__ = [
     "PatchCandidate",
     "RepairRecord",
     "RepairStatus",
+    "RepairVerificationRunner",
+    "SQLParameterizeFixer",
     "VerificationCheck",
     "VerificationRecord",
     "VerificationStatus",
+    "apply_unified_diff",
 ]

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add Python SQL parameterization repair fixer (`SQLParameterizeFixer`) and
+  isolated `RepairVerificationRunner`, generating deterministic `PatchCandidate`s
+  and executing multi-stage syntax, security re-scan, and regression verification
+  in ephemeral disposable workspaces.
+
 - Add hardened subprocess execution sandbox and disposable workspace isolation,
   with runtime environment allowlisting and secret scrubbing, addressing potential
   CI credential leaks in dynamic verification and patch execution workers.

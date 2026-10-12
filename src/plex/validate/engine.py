@@ -23,6 +23,7 @@ from plex.report.unified import (
 from .authz import AuthorizationError, AuthorizationRecord, validate_authorization
 from .http import ScopedHttpClient
 from .recipes import (
+    CodeInjectionRecipe,
     CommandInjectionRecipe,
     PathTraversalRecipe,
     RoleMatrixRecipe,
@@ -45,6 +46,7 @@ RECIPES: dict[str, TestRecipe] = {
     "authz.access-control": RoleMatrixRecipe(),
     "xbnd.broken-tenant-isolation": TenantIsolationRecipe(),
     "xbnd.ssrf": SSRFRecipe(),
+    "xbnd.code-eval-taint": CodeInjectionRecipe(),
 }
 
 
@@ -159,13 +161,18 @@ class ValidateEngine:
 
         # If no static findings were provided or matched, generate baseline hypotheses for target
         if not hypotheses:
-            for rule_id in ("xbnd.sql-injection", "xbnd.command-injection", "xbnd.path-traversal"):
+            for rule_id in (
+                "xbnd.sql-injection",
+                "xbnd.command-injection",
+                "xbnd.path-traversal",
+                "xbnd.code-eval-taint",
+            ):
                 hypotheses.append(
                     ValidationHypothesis(
                         id=f"hyp_direct_{rule_id.split('.')[-1]}",
                         rule_id=rule_id,
                         target_url=self.target_url,
-                        parameter="q",
+                        parameter="expr" if rule_id == "xbnd.code-eval-taint" else "q",
                     )
                 )
 

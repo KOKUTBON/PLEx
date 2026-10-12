@@ -1,5 +1,17 @@
 # Changelog
 
+- Add automated code evaluation fixer in `plex.repair` (`CodeEvalFixer`, `fix.code-eval`, `xbnd.code-eval-taint`, CWE-94 / CWE-95 / OWASP A05:2025):
+  Automatically migrates unsafe dynamic code evaluation sinks (`eval()`, `builtins.eval()`) to safe `ast.literal_eval()` while
+  injecting `import ast` when required, eliminating arbitrary code execution risks. Constructs versioned `PatchCandidate` contracts.
+
+- Add automated dependency version pinning fixer in `plex.repair` (`DependencyPinFixer`, `fix.dependency-pin`, `dep.unpinned-version`, CWE-1104):
+  Pins unpinned packages and loose version constraints in requirements manifests (`requirements.txt`) to concrete, deterministic
+  production versions (`==<version>`) preserving comments, options, and environment markers to guarantee reproducible builds.
+
+- Add native active dynamic code evaluation injection testing in `plex.validate` (`CodeInjectionRecipe`, `val.code-injection`, `xbnd.code-eval-taint`, CWE-94 / CWE-95 / OWASP A05:2025):
+  Executes deterministic arithmetic evaluation (`7391*7` $\to$ `51737`), string concatenation canaries, and evaluation syntax error probing
+  against correlated endpoint parameters to actively verify or refute RCE / code injection vulnerabilities with proof-of-exploit exchanges.
+
 - Add automated weak cryptography and hash upgrade fixer in `plex.repair` (`WeakCryptoFixer`, `fix.weak-crypto`, CWE-327 / CWE-328 / OWASP A02:2025):
   Automatically upgrades broken and deprecated cryptographic hash algorithms (`hashlib.md5()`, `hashlib.sha1()`, `hashlib.new("md5")`,
   `hashes.MD5()`) to `hashlib.sha256()`, exempting non-security checksums marked with `usedforsecurity=False`.

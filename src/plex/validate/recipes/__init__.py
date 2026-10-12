@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from .access import RoleMatrixRecipe, TenantIsolationRecipe
 from .base import TestRecipe, TestResult, ValidationHypothesis
+from .code_eval import CodeInjectionRecipe
 from .injection import (
     CommandInjectionRecipe,
     PathTraversalRecipe,
@@ -12,6 +13,7 @@ from .injection import (
 from .ssrf import SSRFRecipe
 
 __all__ = [
+    "CodeInjectionRecipe",
     "CommandInjectionRecipe",
     "PathTraversalRecipe",
     "RoleMatrixRecipe",

@@ -11,7 +11,9 @@ from typing import Any
 from plex.graph.correlate import GraphCorrelator
 from plex.graph.models import ProjectGraph
 from plex.providers import AnalysisTask, SupplyChainProvider, XBoundaryProvider, run_providers
+from plex.repair.code_eval import CodeEvalFixer
 from plex.repair.command_array import CommandArrayFixer
+from plex.repair.dependency_pin import DependencyPinFixer
 from plex.repair.docker_sudo import DockerSudoFixer
 from plex.repair.docker_tag_pin import DockerTagPinFixer
 from plex.repair.docker_user import DockerUserFixer
@@ -75,10 +77,12 @@ class RemediationCoordinator:
             SafeDeserializationFixer(),
             SSRFUrlValidateFixer(),
             WeakCryptoFixer(),
+            CodeEvalFixer(),
             DockerUserFixer(),
             DockerTagPinFixer(),
             DockerSudoFixer(),
             InsecureIndexFixer(),
+            DependencyPinFixer(),
         ]
 
     def plan_and_verify(

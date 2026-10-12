@@ -20,6 +20,7 @@ from .path_boundary import PathBoundaryFixer
 from .runner import RepairVerificationRunner, apply_unified_diff
 from .sensitive_log_redact import SensitiveLogRedactFixer
 from .sql_parameterize import SQLParameterizeFixer
+from .tenant_boundary import TenantBoundaryFixer
 
 __all__ = [
     "CommandArrayFixer",
@@ -35,6 +36,7 @@ __all__ = [
     "RepairVerificationRunner",
     "SQLParameterizeFixer",
     "SensitiveLogRedactFixer",
+    "TenantBoundaryFixer",
     "VerificationCheck",
     "VerificationRecord",
     "VerificationStatus",

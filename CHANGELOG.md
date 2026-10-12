@@ -1,5 +1,12 @@
 # Changelog
 
+- Add automated tenant boundary isolation fixer in `plex.repair`:
+  `TenantBoundaryFixer` (`fix.broken-tenant-isolation`, `xbnd.broken-tenant-isolation`, CWE-639 / CWE-284 / CWE-862, OWASP A01:2025, API1:2023 BOLA).
+  `TenantBoundaryFixer` automatically remediates Broken Object Level Authorization vulnerabilities by identifying un-scoped database queries
+  in route handlers (`filter_by`, `filter`, `where`, `get_object_or_404`, and `get`) and injecting tenant context scoping
+  (`tenant_id=current_user.tenant_id`, `g.tenant_id`, or `request.user.tenant_id`). Generates deterministic `PatchCandidate` contracts with
+  unified diffs, rollback diffs, and verification preconditions, directly integrated into `RemediationCoordinator`.
+
 - Add xBOUNDARY Wave 4 Broken Object Level Authorization & Tenant Boundary rule
   (`xbnd.broken-tenant-isolation`, CWE-639 / CWE-284 / CWE-862, OWASP A01:2025 Broken Access Control, API1:2023 BOLA).
   `BrokenTenantIsolationRule` inspects route handler and API endpoint ASTs (Flask, FastAPI, Django) for multi-tenant database

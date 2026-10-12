@@ -20,6 +20,7 @@ from plex.repair.path_boundary import PathBoundaryFixer
 from plex.repair.runner import RepairVerificationRunner, apply_unified_diff
 from plex.repair.sensitive_log_redact import SensitiveLogRedactFixer
 from plex.repair.sql_parameterize import SQLParameterizeFixer
+from plex.repair.tenant_boundary import TenantBoundaryFixer
 from plex.report.unified import AnalysisFinding
 from plex.validate.authz import parse_authorization, validate_authorization
 from plex.validate.engine import ValidateEngine
@@ -61,6 +62,7 @@ class RemediationCoordinator:
             PathBoundaryFixer(),
             InsecureCookieFixer(),
             SensitiveLogRedactFixer(),
+            TenantBoundaryFixer(),
             DockerUserFixer(),
             DockerTagPinFixer(),
         ]

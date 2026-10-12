@@ -115,6 +115,7 @@ DECLARED_SURFACES: list[SurfaceCoverage] = [
             "fix.path-boundary",
             "fix.insecure-cookie",
             "fix.sensitive-log-redact",
+            "fix.broken-tenant-isolation",
             "fix.docker-user",
             "fix.docker-tag-pin",
         ),

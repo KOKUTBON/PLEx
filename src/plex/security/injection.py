@@ -27,6 +27,7 @@ SCOPE_LIMITATIONS = [
 class DataflowInjectionRule(Rule):
     kind = "sql"
     cwe = "CWE-89"
+    owasp: list[str] = ["A05:2025"]
     message = ""
     remediation = ""
     limitations: tuple[str, ...] = ()
@@ -97,7 +98,7 @@ class DataflowInjectionRule(Rule):
                 suggestions=[self.remediation],
                 category="security",
                 cwe=[self.cwe],
-                owasp=["A05:2025"],
+                owasp=list(self.owasp),
                 evidence=[
                     EvidenceRef(
                         "xboundary",

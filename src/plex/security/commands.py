@@ -15,6 +15,8 @@ from plex.report.format_sarif import write_sarif
 from plex.report.severity import severity_rank
 
 from .command_injection import CommandInjectionRule
+from .eval_injection import CodeEvalInjectionRule
+from .path_traversal import PathTraversalRule
 from .sql_injection import SQLInjectionRule
 
 
@@ -47,7 +49,12 @@ def cmd_security_verify(args: argparse.Namespace) -> int:
 
 
 def cmd_security_rules(args: argparse.Namespace) -> int:
-    rules = (SQLInjectionRule(), CommandInjectionRule())
+    rules = (
+        SQLInjectionRule(),
+        CommandInjectionRule(),
+        CodeEvalInjectionRule(),
+        PathTraversalRule(),
+    )
     details = [
         {
             "id": rule.id,

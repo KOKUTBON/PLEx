@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add experimental `xbnd.code-eval-taint` (CWE-94) and `xbnd.path-traversal` (CWE-22)
+  rules to xBOUNDARY with taint tracking, literal/basename sanitization, and
+  `plex security rules list` registration.
+
 - Add Python SQL parameterization repair fixer (`SQLParameterizeFixer`) and
   isolated `RepairVerificationRunner`, generating deterministic `PatchCandidate`s
   and executing multi-stage syntax, security re-scan, and regression verification

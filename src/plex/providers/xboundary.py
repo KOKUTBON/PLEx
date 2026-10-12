@@ -17,6 +17,8 @@ from plex.rules.base import RuleContext
 from plex.sandbox import Sandbox
 from plex.security.command_injection import COMMAND_LIMITATIONS, CommandInjectionRule
 from plex.security.dataflow import SQLDataflow
+from plex.security.eval_injection import EVAL_LIMITATIONS, CodeEvalInjectionRule
+from plex.security.path_traversal import PATH_LIMITATIONS, PathTraversalRule
 from plex.security.policy import PolicyError, load_policy
 from plex.security.sql_injection import SCOPE_LIMITATIONS, SQLInjectionRule
 
@@ -136,7 +138,12 @@ class XBoundaryProvider:
                 limitations.append(f"Python syntax could not be parsed: {file}")
         items = [
             item
-            for rule in (SQLInjectionRule(), CommandInjectionRule())
+            for rule in (
+                SQLInjectionRule(),
+                CommandInjectionRule(),
+                CodeEvalInjectionRule(),
+                PathTraversalRule(),
+            )
             for item in rule.apply(context)
         ]
         for item in items:
@@ -175,6 +182,8 @@ class XBoundaryProvider:
         scope_limits = [
             *SCOPE_LIMITATIONS,
             *COMMAND_LIMITATIONS,
+            *EVAL_LIMITATIONS,
+            *PATH_LIMITATIONS,
             f"Security policy catalog: {policy.digest}",
         ]
         if context.suppressed_findings:

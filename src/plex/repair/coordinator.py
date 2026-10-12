@@ -10,8 +10,10 @@ from typing import Any
 
 from plex.graph.correlate import GraphCorrelator
 from plex.graph.models import ProjectGraph
-from plex.providers import AnalysisTask, XBoundaryProvider, run_providers
+from plex.providers import AnalysisTask, SupplyChainProvider, XBoundaryProvider, run_providers
 from plex.repair.command_array import CommandArrayFixer
+from plex.repair.docker_tag_pin import DockerTagPinFixer
+from plex.repair.docker_user import DockerUserFixer
 from plex.repair.models import PatchCandidate, RepairRecord
 from plex.repair.path_boundary import PathBoundaryFixer
 from plex.repair.runner import RepairVerificationRunner, apply_unified_diff
@@ -55,6 +57,8 @@ class RemediationCoordinator:
             SQLParameterizeFixer(),
             CommandArrayFixer(),
             PathBoundaryFixer(),
+            DockerUserFixer(),
+            DockerTagPinFixer(),
         ]
 
     def plan_and_verify(
@@ -70,9 +74,9 @@ class RemediationCoordinator:
         resolved_root = repo_root.resolve()
         correlator = GraphCorrelator(resolved_root)
 
-        # 1. Static security analysis (xBOUNDARY)
+        # 1. Static security and configuration analysis (xBOUNDARY + SupplyChain)
         task = AnalysisTask(repo_root=resolved_root)
-        outcome = run_providers(task, [XBoundaryProvider()])
+        outcome = run_providers(task, [XBoundaryProvider(), SupplyChainProvider()])
         static_findings = outcome.findings
 
         # 2. Discover routes from AST

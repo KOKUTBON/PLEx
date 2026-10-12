@@ -1,6 +1,12 @@
 # Changelog
 
-## Unreleased
+- Add automated IaC & configuration security fixers `DockerUserFixer` (`cfg.docker-root-user`) and
+  `DockerTagPinFixer` (`cfg.docker-latest-tag`) in `plex.repair`. `DockerUserFixer` automatically injects
+  unprivileged `USER nonroot` instructions immediately preceding container `ENTRYPOINT` or `CMD` directives
+  to mitigate root execution vulnerabilities. `DockerTagPinFixer` deterministically pins floating `:latest`
+  and unversioned base images to explicit, immutable release tags across multi-stage Dockerfiles. Both fixers
+  produce versioned `PatchCandidate` contracts, execute syntax and security rescan checks via
+  `RepairVerificationRunner`, and integrate with `RemediationCoordinator.plan_and_verify`.
 
 - Add xBOUNDARY Wave 2 native source security rules for unsafe object deserialization (`xbnd.unsafe-deserialization`,
   CWE-502) and Server-Side Request Forgery (`xbnd.ssrf`, CWE-918). Unsafe deserialization models `pickle`, `yaml.load`,

@@ -106,6 +106,8 @@ DECLARED_SURFACES: list[SurfaceCoverage] = [
             "fix.sql-parameterize",
             "fix.command-array",
             "fix.path-boundary",
+            "fix.docker-user",
+            "fix.docker-tag-pin",
         ),
         verification_level="Disposable workspace sandbox, multi-engine verification runner (syntax, security rescan, active exploit blocked, performance check, functional tests)",
         prerequisites=("Disposable workspace support", "Source code with deterministic fixer"),

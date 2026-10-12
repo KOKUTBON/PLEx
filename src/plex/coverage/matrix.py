@@ -118,6 +118,7 @@ DECLARED_SURFACES: list[SurfaceCoverage] = [
             "fix.sensitive-log-redact",
             "fix.broken-tenant-isolation",
             "fix.insecure-tls",
+            "fix.plaintext-secret",
             "fix.docker-user",
             "fix.docker-tag-pin",
         ),

@@ -1,5 +1,15 @@
 # Changelog
 
+- Add pure-Python interactive terminal dashboard in `plex.dashboard` (`plex dashboard`, `plex dash`):
+  Renders live repository security, performance, and supply chain posture, declared surface coverage inventory,
+  findings breakdown, verified fixers readiness, and active validation status using clean ANSI borders and box-drawing layout.
+  Supports `--no-color` for clean headless logging and `--json` for machine-readable posture aggregation.
+
+- Add automated plaintext secret masking and migration fixer in `plex.repair` (`PlaintextSecretFixer`, `fix.plaintext-secret`, CWE-798, CWE-312):
+  Automatically masks committed plaintext secrets in repository `.env` and configuration files (replacing raw credentials with placeholder definitions)
+  and migrates hardcoded Python secret literals to `os.getenv()` calls while ensuring `import os` is present.
+  Constructs versioned `PatchCandidate` contracts integrated into `RemediationCoordinator`.
+
 - Add native active tenant boundary isolation testing in `plex.validate` (`TenantIsolationRecipe`, `val.tenant-isolation`, CWE-639 / OWASP API1:2023 BOLA):
   Executes deterministic cross-tenant probing against correlated route endpoints using scoped multi-tenant identities (`X-Tenant-ID`, `Authorization`).
   Actively confirms or refutes BOLA hypotheses, upgrading findings to `verified` with content-addressed `http_exchange` evidence proof.

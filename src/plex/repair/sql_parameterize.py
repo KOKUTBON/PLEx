@@ -118,7 +118,7 @@ class SQLParameterizeFixer(BaseFixer):
             elif isinstance(node.func, ast.Name):
                 func_name = node.func.id
 
-            if func_name not in {"execute", "executemany", "raw", "run"}:
+            if func_name not in {"execute", "executemany", "raw"}:
                 continue
 
             if not node.args:

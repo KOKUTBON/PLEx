@@ -64,3 +64,22 @@ plex remediate path/to/repo --apply
 ```
 
 Note: If any verification check fails, `--apply` refuses to modify the repository and leaves the working tree untouched.
+
+---
+
+## Supported Native Automated Fixers
+
+PLEx includes deterministic AST-based repair fixers that produce exact, syntax-checked patch candidates without probabilistic LLM hallucination:
+
+1. **`SQLParameterizeFixer` (`xbnd.sql-injection` / CWE-89)**:
+   - Detects dynamic SQL string formatting (f-strings, `.format()`, `%` formatting, concatenations) passed to DB-API execution methods (`execute`, `executemany`, `raw`).
+   - Converts strings into parameterized query structures with parameter tuples or dictionaries.
+
+2. **`CommandArrayFixer` (`xbnd.command-injection` / CWE-78)**:
+   - Identifies dynamic command strings invoked via `subprocess.run`, `Popen`, `call`, `check_call`, and `check_output`.
+   - Parses tokens and variables into safe argument lists (using constant tokens and variable references), disabling or removing `shell=True`.
+
+3. **`PathBoundaryFixer` (`xbnd.path-traversal` / CWE-22)**:
+   - Detects untrusted user-controlled paths flowing into file opening and filesystem APIs (`open`, `Path`, `send_file`, `rmtree`, `copy`, `remove`, `unlink`).
+   - Inserts boundary sanitization via `os.path.basename(...)`, automatically ensuring `import os` is present and preventing redundant wrapping.
+

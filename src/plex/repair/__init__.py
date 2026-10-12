@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from .command_array import CommandArrayFixer
 from .commands import add_remediate_commands, cmd_remediate
 from .coordinator import RemediationCoordinator, RemediationPlan
 from .models import (
@@ -12,11 +13,14 @@ from .models import (
     VerificationRecord,
     VerificationStatus,
 )
+from .path_boundary import PathBoundaryFixer
 from .runner import RepairVerificationRunner, apply_unified_diff
 from .sql_parameterize import SQLParameterizeFixer
 
 __all__ = [
+    "CommandArrayFixer",
     "PatchCandidate",
+    "PathBoundaryFixer",
     "RemediationCoordinator",
     "RemediationPlan",
     "RepairRecord",

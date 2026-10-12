@@ -39,7 +39,7 @@ flowchart TD
 | **Configuration & IaC** | **Supported** | `supply_chain`, `config` | `cfg.docker-root-user`, `cfg.docker-latest-tag`, `cfg.docker-sudo-nopasswd`, `cfg.plaintext-secret`, `cfg.insecure-tls` | Pure-Python Dockerfile parser, `.env` secret entropy/assignment analyzer, and TLS configuration verification. |
 | **Running Web & API Services** | **Supported** | `plex.validate` | `val.sql-injection`, `val.command-injection`, `val.path-traversal`, `val.access-control` | Deterministic active testing recipes via `ScopedHttpClient`. Strictly bounded by authorization manifests and IP/CIDR scope. |
 | **Compiled Artifacts** | **Supported** | `plex.inspect` | `bin.weak-hardening`, `bin.banned-api`, `bin.deprecated-crypto`, `bin.insecure-rpath`, `bin.hardcoded-secret`, `bin.unknown.stripped-symbols`, `bin.unknown.no-sections` | Pure-Python 32-bit and 64-bit ELF structural parser, section headers, dynamic string tables, and mitigation checks (NX, PIE, RELRO, stack canaries). |
-| **Remediation & Repairs** | **Supported** | `plex.repair` | `fix.performance`, `fix.sql-parameterize` | Deterministic patch synthesis in disposable workspace sandboxes with 5-gate multi-engine verification. |
+| **Remediation & Repairs** | **Supported** | `plex.repair` | `fix.performance`, `fix.sql-parameterize`, `fix.command-array`, `fix.path-boundary` | Deterministic patch synthesis in disposable workspace sandboxes with 5-gate multi-engine verification. |
 
 ---
 

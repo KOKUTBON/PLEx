@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add native verified security fixers `CommandArrayFixer` (CWE-78) and `PathBoundaryFixer` (CWE-22)
+  in `plex.repair`. `CommandArrayFixer` deterministically transforms shell command strings and f-strings
+  passed to `subprocess` into safe tokenized argument lists without shell interpretation (`shell=False`).
+  `PathBoundaryFixer` wraps untrusted path arguments with `os.path.basename()` sanitization for file
+  opening and manipulation APIs (`open`, `Path`, `send_file`, `rmtree`, `copy`, etc.), automatically
+  managing `import os` imports and avoiding redundant sanitization. Both fixers integrate with
+  `RemediationCoordinator`, produce versioned `PatchCandidate` diffs, and pass strict 5-stage verification.
+
 - PLEx 2.0 native platform release readiness: cohesive multi-engine orchestration across
   Performance, xBOUNDARY (static taint), PLEx Inspect (ELF binary intelligence), PLEx Validate
   (active reproduction), Supply Chain & IaC, and PLEx Repair (closed-loop remediation).

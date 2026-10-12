@@ -11,7 +11,9 @@ from typing import Any
 from plex.graph.correlate import GraphCorrelator
 from plex.graph.models import ProjectGraph
 from plex.providers import AnalysisTask, XBoundaryProvider, run_providers
+from plex.repair.command_array import CommandArrayFixer
 from plex.repair.models import PatchCandidate, RepairRecord
+from plex.repair.path_boundary import PathBoundaryFixer
 from plex.repair.runner import RepairVerificationRunner, apply_unified_diff
 from plex.repair.sql_parameterize import SQLParameterizeFixer
 from plex.report.unified import AnalysisFinding
@@ -49,7 +51,11 @@ class RemediationCoordinator:
         fixers: list[Any] | None = None,
     ) -> None:
         self.verifier = verifier or RepairVerificationRunner()
-        self.fixers = fixers or [SQLParameterizeFixer()]
+        self.fixers = fixers or [
+            SQLParameterizeFixer(),
+            CommandArrayFixer(),
+            PathBoundaryFixer(),
+        ]
 
     def plan_and_verify(
         self,
@@ -108,6 +114,8 @@ class RemediationCoordinator:
                 continue
             src = fpath.read_text(encoding="utf-8")
             for fixer in self.fixers:
+                if getattr(fixer, "rule_id", None) and fixer.rule_id != finding.rule_id:
+                    continue
                 candidate = fixer.propose_patch(
                     source=src,
                     target_file=finding.file,

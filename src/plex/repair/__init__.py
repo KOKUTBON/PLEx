@@ -5,9 +5,11 @@ from __future__ import annotations
 from .command_array import CommandArrayFixer
 from .commands import add_remediate_commands, cmd_remediate
 from .coordinator import RemediationCoordinator, RemediationPlan
+from .docker_sudo import DockerSudoFixer
 from .docker_tag_pin import DockerTagPinFixer
 from .docker_user import DockerUserFixer
 from .insecure_cookie import InsecureCookieFixer
+from .insecure_index import InsecureIndexFixer
 from .models import (
     PatchCandidate,
     RepairRecord,
@@ -25,12 +27,15 @@ from .sql_parameterize import SQLParameterizeFixer
 from .ssrf_validate import SSRFUrlValidateFixer
 from .tenant_boundary import TenantBoundaryFixer
 from .tls_verify import TLSVerifyFixer
+from .weak_crypto import WeakCryptoFixer
 
 __all__ = [
     "CommandArrayFixer",
+    "DockerSudoFixer",
     "DockerTagPinFixer",
     "DockerUserFixer",
     "InsecureCookieFixer",
+    "InsecureIndexFixer",
     "PatchCandidate",
     "PathBoundaryFixer",
     "PlaintextSecretFixer",
@@ -48,6 +53,7 @@ __all__ = [
     "VerificationCheck",
     "VerificationRecord",
     "VerificationStatus",
+    "WeakCryptoFixer",
     "add_remediate_commands",
     "apply_unified_diff",
     "cmd_remediate",

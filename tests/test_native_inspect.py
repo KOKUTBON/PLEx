@@ -434,15 +434,15 @@ def test_stripped_binary_unknowns(tmp_path: Path):
     assert unknowns[0].severity == "info"
 
 
-def test_non_elf_artifact_reports_partial(tmp_path: Path):
-    pe_file = tmp_path / "app.exe"
-    pe_file.write_bytes(b"MZ\x90\x00" + b"\x00" * 100)
+def test_unsupported_artifact_reports_partial(tmp_path: Path):
+    archive_file = tmp_path / "app.zip"
+    archive_file.write_bytes(b"PK\x03\x04" + b"\x00" * 100)
 
     engine = InspectEngine()
-    report = engine.inspect(pe_file)
+    report = engine.inspect(archive_file)
 
     assert report.scan_status == "partial"
-    assert any("ELF is primary format" in lim for lim in report.engines[0].limitations)
+    assert any("not yet supported natively" in lim for lim in report.engines[0].limitations)
 
 
 def test_cli_inspect_native_json(tmp_path: Path, capsys):

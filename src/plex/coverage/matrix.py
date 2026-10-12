@@ -112,6 +112,8 @@ DECLARED_SURFACES: list[SurfaceCoverage] = [
             "fix.sql-parameterize",
             "fix.command-array",
             "fix.path-boundary",
+            "fix.insecure-cookie",
+            "fix.sensitive-log-redact",
             "fix.docker-user",
             "fix.docker-tag-pin",
         ),

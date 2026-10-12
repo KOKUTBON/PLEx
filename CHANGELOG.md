@@ -1,5 +1,15 @@
 # Changelog
 
+- Add automated privacy & boundary security fixers in `plex.repair`:
+  `InsecureCookieFixer` (`fix.insecure-cookie`, `xbnd.insecure-cookie`, CWE-614 / CWE-1004 / OWASP A05:2025) and
+  `SensitiveLogRedactFixer` (`fix.sensitive-log-redact`, `xbnd.sensitive-data-leak`, CWE-532 / CWE-359 / OWASP A09:2025).
+  `InsecureCookieFixer` inspects `set_cookie` / `set_signed_cookie` calls and deterministically hardens them with
+  `httponly=True`, `secure=True`, and `samesite='lax'` flags. `SensitiveLogRedactFixer` identifies credential and secret
+  data flows into logging and console sinks (`logging`, `logger`, `print`, `sys.stdout.write`), automatically wrapping
+  sensitive variables and formatted expressions in a type-safe `redact_secret()` masking helper. Both fixers generate
+  versioned `PatchCandidate` contracts with unified diffs, rollback diffs, and verification preconditions, seamlessly
+  integrated into `RemediationCoordinator` and verified by `RepairVerificationRunner`.
+
 - Add pure-Python package archive structural inspector (`parse_archive`, `src/plex/inspect/archive.py`)
   supporting ZIP, Java JAR/WAR, Android APK, and Python Wheel (`.whl`) package formats with zero external dependencies.
   Automatically classifies archive subtypes; parses package manifests (`.dist-info/METADATA`, `META-INF/MANIFEST.MF`,

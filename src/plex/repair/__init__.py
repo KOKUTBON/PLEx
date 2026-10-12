@@ -7,6 +7,7 @@ from .commands import add_remediate_commands, cmd_remediate
 from .coordinator import RemediationCoordinator, RemediationPlan
 from .docker_tag_pin import DockerTagPinFixer
 from .docker_user import DockerUserFixer
+from .insecure_cookie import InsecureCookieFixer
 from .models import (
     PatchCandidate,
     RepairRecord,
@@ -17,12 +18,14 @@ from .models import (
 )
 from .path_boundary import PathBoundaryFixer
 from .runner import RepairVerificationRunner, apply_unified_diff
+from .sensitive_log_redact import SensitiveLogRedactFixer
 from .sql_parameterize import SQLParameterizeFixer
 
 __all__ = [
     "CommandArrayFixer",
     "DockerTagPinFixer",
     "DockerUserFixer",
+    "InsecureCookieFixer",
     "PatchCandidate",
     "PathBoundaryFixer",
     "RemediationCoordinator",
@@ -31,6 +34,7 @@ __all__ = [
     "RepairStatus",
     "RepairVerificationRunner",
     "SQLParameterizeFixer",
+    "SensitiveLogRedactFixer",
     "VerificationCheck",
     "VerificationRecord",
     "VerificationStatus",

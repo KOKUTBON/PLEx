@@ -101,6 +101,8 @@ DECLARED_SURFACES: list[SurfaceCoverage] = [
         supported_rules=(
             "fix.performance",
             "fix.sql-parameterize",
+            "fix.command-array",
+            "fix.path-boundary",
         ),
         verification_level="Disposable workspace sandbox, multi-engine verification runner (syntax, security rescan, active exploit blocked, performance check, functional tests)",
         prerequisites=("Disposable workspace support", "Source code with deterministic fixer"),

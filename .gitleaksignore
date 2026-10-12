@@ -1,0 +1,8 @@
+# Public dummy password seeds from the pinned PyGoat training-app excerpt.
+# https://github.com/adeyosemanputra/pygoat/blob/19d17cc8874861142b330636d068bbde54e86b85/introduction/views.py#L870-L872
+# CI scans all branches; the identical excerpt exists in two implementation commits.
+# Limit exceptions to these exact historical commit/file/rule/line fingerprints.
+5656d9ba6083e7270142a90568c4312b659ff37e:tests/fixtures/security/pygoat/injection_sql_lab.py.txt:generic-api-key:17
+5656d9ba6083e7270142a90568c4312b659ff37e:tests/fixtures/security/pygoat/injection_sql_lab.py.txt:generic-api-key:19
+9299b4aedeb6406b06f9a835a8d9feea921ad7a9:tests/fixtures/security/pygoat/injection_sql_lab.py.txt:generic-api-key:17
+9299b4aedeb6406b06f9a835a8d9feea921ad7a9:tests/fixtures/security/pygoat/injection_sql_lab.py.txt:generic-api-key:19

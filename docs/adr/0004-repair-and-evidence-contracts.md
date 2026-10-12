@@ -1,4 +1,4 @@
-# 0003 Target, evidence, project graph, and repair lifecycle contracts
+# 0004 Target, evidence, project graph, and repair lifecycle contracts
 
 - Status: proposed
 - Date: 2026-10-12

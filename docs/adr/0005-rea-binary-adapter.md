@@ -1,4 +1,4 @@
-# 0004 REA binary and artifact inspection adapter
+# 0005 REA binary and artifact inspection adapter
 
 - Status: proposed
 - Date: 2026-10-12

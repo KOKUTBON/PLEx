@@ -34,6 +34,13 @@
             "type": "string",
             "pattern": "^[A-Za-z_][A-Za-z0-9_]*(?:\\.(?:[A-Za-z_][A-Za-z0-9_]*|\\*))*(?![\\s\\S])"
           }
+        },
+        "command": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*(?:\\.(?:[A-Za-z_][A-Za-z0-9_]*|\\*))*(?![\\s\\S])"
+          }
         }
       }
     },
@@ -42,6 +49,13 @@
       "additionalProperties": false,
       "properties": {
         "sql": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*(?:\\.(?:[A-Za-z_][A-Za-z0-9_]*|\\*))*(?![\\s\\S])"
+          }
+        },
+        "command": {
           "type": "array",
           "items": {
             "type": "string",

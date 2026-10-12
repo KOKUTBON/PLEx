@@ -40,16 +40,23 @@ class SecurityPolicy:
     sources: tuple[str, ...] = ()
     sanitizers: tuple[str, ...] = ()
     sinks: tuple[str, ...] = ()
+    command_sanitizers: tuple[str, ...] = ()
+    command_sinks: tuple[str, ...] = ()
 
     @property
     def digest(self) -> str:
+        data: dict[str, object] = {
+            "version": 1,
+            "sources": self.sources,
+            "sanitizers": self.sanitizers,
+            "sinks": self.sinks,
+        }
+        if self.command_sanitizers:
+            data["command_sanitizers"] = self.command_sanitizers
+        if self.command_sinks:
+            data["command_sinks"] = self.command_sinks
         payload = json.dumps(
-            {
-                "version": 1,
-                "sources": self.sources,
-                "sanitizers": self.sanitizers,
-                "sinks": self.sinks,
-            },
+            data,
             sort_keys=True,
             separators=(",", ":"),
         )
@@ -81,25 +88,50 @@ def load_policy(root: Path, explicit: object = None) -> SecurityPolicy:
         )
     if type(data.get("version")) is not int or data["version"] != 1:
         raise PolicyError("Security policy version must be integer 1")
-    catalogs: dict[str, tuple[str, ...]] = {}
+    catalogs: dict[str, tuple[str, ...]] = {
+        "sources": (),
+        "sanitizers": (),
+        "sinks": (),
+        "command_sanitizers": (),
+        "command_sinks": (),
+    }
     for section in ("sources", "sanitizers", "sinks"):
         groups = data.get(section, {})
-        if not isinstance(groups, dict) or (section != "sources" and groups.keys() - {"sql"}):
+        if not isinstance(groups, dict) or (
+            section != "sources" and groups.keys() - {"sql", "command"}
+        ):
             raise PolicyError(
-                f"Security policy {section} must be a catalog mapping (SQL only for sinks/sanitizers)"
+                f"Security policy {section} must be a catalog mapping (SQL or command only for sinks/sanitizers)"
             )
-        patterns: set[str] = set()
-        for group, values in groups.items():
-            if not isinstance(group, str) or not re.fullmatch(r"[A-Za-z_]\w*", group, re.ASCII):
-                raise PolicyError("Security policy catalog names must be identifiers")
-            if not isinstance(values, list) or any(
-                not isinstance(value, str) or not _PATTERN.fullmatch(value) for value in values
-            ):
-                raise PolicyError(
-                    f"Security policy {section} entries must be lists of dotted names or wildcard segments"
-                )
-            patterns.update(values)
-        if len(patterns) > 256:
-            raise PolicyError("Security policy exceeds 256 patterns per section")
-        catalogs[section] = tuple(sorted(patterns))
+        if section == "sources":
+            patterns: set[str] = set()
+            for group, values in groups.items():
+                if not isinstance(group, str) or not re.fullmatch(r"[A-Za-z_]\w*", group, re.ASCII):
+                    raise PolicyError("Security policy catalog names must be identifiers")
+                if not isinstance(values, list) or any(
+                    not isinstance(value, str) or not _PATTERN.fullmatch(value) for value in values
+                ):
+                    raise PolicyError(
+                        f"Security policy {section} entries must be lists of dotted names or wildcard segments"
+                    )
+                patterns.update(values)
+            if len(patterns) > 256:
+                raise PolicyError("Security policy exceeds 256 patterns per section")
+            catalogs["sources"] = tuple(sorted(patterns))
+        else:
+            for category in ("sql", "command"):
+                values = groups.get(category, [])
+                if not isinstance(values, list) or any(
+                    not isinstance(value, str) or not _PATTERN.fullmatch(value) for value in values
+                ):
+                    raise PolicyError(
+                        f"Security policy {section} entries must be lists of dotted names or wildcard segments"
+                    )
+                if len(values) > 256:
+                    raise PolicyError("Security policy exceeds 256 patterns per section")
+                if category == "sql":
+                    key = "sanitizers" if section == "sanitizers" else "sinks"
+                else:
+                    key = "command_sanitizers" if section == "sanitizers" else "command_sinks"
+                catalogs[key] = tuple(sorted(set(values)))
     return SecurityPolicy(**catalogs)

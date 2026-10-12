@@ -44,8 +44,11 @@ def join(*flows: Flow) -> Flow:
 
 
 class SQLDataflow:
-    def __init__(self, file: str, policy: SecurityPolicy | None = None) -> None:
+    def __init__(
+        self, file: str, policy: SecurityPolicy | None = None, *, kind: str = "sql"
+    ) -> None:
         self.file = file
+        self.kind = kind
         self.policy = policy or SecurityPolicy()
         self.flows: dict[tuple[str, str, int, int], SQLFlow] = {}
         self.limitations: list[str] = []
@@ -209,7 +212,7 @@ class SQLDataflow:
             self.limitations.append("Local call arguments could not be bound")
             return None
         self.budget.remaining -= 1
-        child = SQLDataflow(target.file, self.policy)
+        child = SQLDataflow(target.file, self.policy, kind=self.kind)
         child.catalog = target.catalog
         child.module_env = target.module_env
         child.project = self.project
@@ -263,6 +266,79 @@ class SQLDataflow:
             result = join(result, *argument_flows)
         return (*result, self.step(node, "call-result", name)) if result else ()
 
+    def command_flow(
+        self, node: ast.Call, name: str, values: list[Flow], keywords: dict[str | None, Flow]
+    ) -> Flow:
+        command = (
+            values[0]
+            if values
+            else join(
+                keywords.get("args", ()),
+                keywords.get("cmd", ()),
+                keywords.get("command", ()),
+                keywords.get(None, ()),
+            )
+        )
+        if name in {
+            "os.system",
+            "posix.system",
+            "os.popen",
+            "subprocess.getoutput",
+            "subprocess.getstatusoutput",
+        } or self.policy.matches(name, self.policy.command_sinks):
+            return command
+        if name not in {
+            "subprocess.run",
+            "subprocess.Popen",
+            "subprocess.call",
+            "subprocess.check_call",
+            "subprocess.check_output",
+        }:
+            return ()
+        shell = next((kw.value for kw in node.keywords if kw.arg == "shell"), None)
+        if shell is None and name != "subprocess.run" and len(node.args) > 8:
+            shell = node.args[8]
+        if shell is not None:
+            if isinstance(shell, ast.Constant):
+                if bool(shell.value):
+                    return command
+            else:
+                self.limitations.append("Dynamic subprocess shell flag is not resolved")
+                return command
+        if None in keywords:
+            self.limitations.append("Subprocess keyword unpacking may enable shell execution")
+            return command
+        argument = (
+            node.args[0]
+            if node.args
+            else next((kw.value for kw in node.keywords if kw.arg == "args"), None)
+        )
+        if isinstance(argument, (ast.List, ast.Tuple)) and len(argument.elts) >= 3:
+            executable, option = argument.elts[:2]
+            if (
+                isinstance(executable, ast.Constant)
+                and isinstance(executable.value, str)
+                and isinstance(option, ast.Constant)
+            ):
+                program = executable.value.replace("\\", "/").rsplit("/", 1)[-1].lower()
+                if program in {
+                    "sh",
+                    "bash",
+                    "dash",
+                    "zsh",
+                    "ksh",
+                    "cmd",
+                    "cmd.exe",
+                    "powershell",
+                    "pwsh",
+                } and option.value in {"-c", "/c", "-Command", "-command"}:
+                    if len(argument.elts) != 3:
+                        self.limitations.append(
+                            "Additional shell interpreter arguments are not resolved"
+                        )
+                    return command
+        return ()
+
     def expression(self, node: ast.AST | None, env: Environment, qualname: str) -> Flow:
         if node is None:
             return ()
@@ -305,14 +381,19 @@ class SQLDataflow:
                 else ()
             )
             name = self.name(node.func)
-            if self.policy.matches(name, self.policy.sinks) or (
-                isinstance(node.func, ast.Attribute)
-                and node.func.attr
-                in {
-                    "execute",
-                    "executemany",
-                    "executescript",
-                }
+            if self.kind == "sql" and (
+                self.policy.matches(name, self.policy.sinks)
+                or (
+                    isinstance(node.func, ast.Attribute)
+                    and node.func.attr
+                    in {
+                        "execute",
+                        "executemany",
+                        "executescript",
+                    }
+                )
+                or name.endswith(".objects.raw")
+                or name == "django.db.models.expressions.RawSQL"
             ):
                 query = (
                     values[0]
@@ -320,7 +401,7 @@ class SQLDataflow:
                     else join(
                         *(
                             keywords.get(key, ())
-                            for key in ("query", "sql", "statement", "operation")
+                            for key in ("query", "sql", "statement", "operation", "raw_query")
                         )
                     )
                 )
@@ -330,14 +411,23 @@ class SQLDataflow:
                         (self.file, qualname, node.lineno, node.col_offset),
                         SQLFlow(node, qualname, steps),
                     )
-            source = self.source(node)
             head = dotted(node.func).split(".")[0]
             shadowed = head in env and head not in self.aliases
+            if self.kind == "command" and not shadowed:
+                command = self.command_flow(node, name, values, keywords)
+                if command:
+                    self.flows.setdefault(
+                        (self.file, qualname, node.lineno, node.col_offset),
+                        SQLFlow(node, qualname, (*command, self.step(node, "sink", name))),
+                    )
+            source = self.source(node)
             if shadowed and name in {"input", "builtins.input"}:
                 source = ""
             if source:
                 return (self.step(node, "source", source),)
-            if self.policy.matches(name, self.policy.sanitizers):
+            if self.kind == "sql" and self.policy.matches(name, self.policy.sanitizers):
+                return ()
+            if self.kind == "command" and self.policy.matches(name, self.policy.command_sanitizers):
                 return ()
             if name in {"int", "float", "builtins.int", "builtins.float"} and not shadowed:
                 return ()

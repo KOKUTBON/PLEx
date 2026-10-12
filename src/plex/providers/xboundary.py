@@ -14,6 +14,7 @@ from plex.ir.registry import build_ir_modules
 from plex.report.unified import AnalysisFinding, EngineRun, Severity
 from plex.rules.base import RuleContext
 from plex.sandbox import Sandbox
+from plex.security.command_injection import COMMAND_LIMITATIONS, CommandInjectionRule
 from plex.security.dataflow import SQLDataflow
 from plex.security.policy import PolicyError, load_policy
 from plex.security.sql_injection import SCOPE_LIMITATIONS, SQLInjectionRule
@@ -123,7 +124,11 @@ class XBoundaryProvider:
         for file in sources:
             if context.ast_for_path(file) is None:
                 limitations.append(f"Python syntax could not be parsed: {file}")
-        items = list(SQLInjectionRule().apply(context))
+        items = [
+            item
+            for rule in (SQLInjectionRule(), CommandInjectionRule())
+            for item in rule.apply(context)
+        ]
         for item in items:
             sink.emit(
                 AnalysisFinding(
@@ -157,7 +162,11 @@ class XBoundaryProvider:
             if isinstance(data, SQLDataflow):
                 limitations.extend(f"{file}: {reason}" for reason in data.limitations)
         # Scope limitations describe the model, while operational gaps mark partial coverage.
-        scope_limits = [*SCOPE_LIMITATIONS, f"Security policy catalog: {policy.digest}"]
+        scope_limits = [
+            *SCOPE_LIMITATIONS,
+            *COMMAND_LIMITATIONS,
+            f"Security policy catalog: {policy.digest}",
+        ]
         if context.suppressed_findings:
             scope_limits.append(f"Rule suppressions applied: {len(context.suppressed_findings)}")
         return EngineRun(

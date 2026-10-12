@@ -568,7 +568,10 @@ def cmd_report(args: argparse.Namespace) -> int:
         try:
             report.to_dict_v7()
         except ValueError as exc:
-            log.error("This formatter supports performance-only reports; use --format json or sarif: %s", exc)
+            log.error(
+                "This formatter supports performance-only reports; use --format json or sarif: %s",
+                exc,
+            )
             return 1
 
     if fmt == "html":

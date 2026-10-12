@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add hardened subprocess execution sandbox and disposable workspace isolation,
+  with runtime environment allowlisting and secret scrubbing, addressing potential
+  CI credential leaks in dynamic verification and patch execution workers.
+
 - Introduce versioned target descriptors, content-addressed evidence store,
   project graph v1, and patch candidate / repair verification contracts with
   JSON schemas, lifecycle state transitions, and audit trails.

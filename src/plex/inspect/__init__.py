@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from .archive import parse_archive
 from .commands import add_inspect_commands, cmd_inspect
 from .elf import parse_elf
 from .engine import InspectEngine
@@ -33,6 +34,7 @@ __all__ = [
     "cmd_inspect",
     "evaluate_artifact_rules",
     "intake_artifact",
+    "parse_archive",
     "parse_elf",
     "parse_macho",
     "parse_pe",

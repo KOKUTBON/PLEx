@@ -1,5 +1,14 @@
 # Changelog
 
+- Add pure-Python package archive structural inspector (`parse_archive`, `src/plex/inspect/archive.py`)
+  supporting ZIP, Java JAR/WAR, Android APK, and Python Wheel (`.whl`) package formats with zero external dependencies.
+  Automatically classifies archive subtypes; parses package manifests (`.dist-info/METADATA`, `META-INF/MANIFEST.MF`,
+  `AndroidManifest.xml`); detects Zip Slip directory traversal vulnerabilities (`bin.archive.zip-slip`, CWE-22);
+  identifies bundled private keys and keystores (`bin.archive.sensitive-file`, CWE-798, CWE-540); detects dangerous Android
+  permissions (`bin.archive.dangerous-permission`, CWE-276); and performs recursive native binary intake across embedded
+  shared libraries (`.so`, `.dylib`, `.dll`) evaluating compiler hardening mitigations, banned APIs, and deprecated crypto.
+  Directly wired into `InspectEngine.inspect()` and `plex inspect <archive>`.
+
 - Add xBOUNDARY Wave 4 Cryptographic Security native rule (`xbnd.weak-crypto`, CWE-327 / CWE-328, OWASP A02:2025).
   `WeakCryptoRule` statically inspects AST call sites across `hashlib`, `cryptography`, and PyCryptodome to detect:
   broken and deprecated hashing algorithms (MD5, MD4, SHA-1) with automatic exemption for non-security checksums

@@ -258,4 +258,78 @@ def evaluate_artifact_rules(
                     )
                 )
 
+    # Rule 6: Archive Path Traversal / Zip Slip (CWE-22)
+    zip_slip_entries: list[str] = descriptor.metadata.get("zip_slip_entries", [])
+    for entry in zip_slip_entries:
+        fid = _finding_id("bin.archive.zip-slip", path, entry)
+        findings.append(
+            AnalysisFinding(
+                id=f"bin.{fid}",
+                engine="inspect",
+                category="binary",
+                rule_id="bin.archive.zip-slip",
+                severity="critical",
+                title=f"Archive contains path traversal (Zip Slip) filename: '{entry}'",
+                status="verified",
+                confidence="observed",
+                file=path,
+                cwe=["CWE-22"],
+                message=(
+                    f"Archive entry '{entry}' contains directory traversal components ('..'), "
+                    "enabling arbitrary file overwrites during extraction."
+                ),
+                remediation=[
+                    "Sanitize archive entry paths prior to extraction; reject entries containing '..' or leading slashes."
+                ],
+                evidence=[evidence_ref],
+                engine_meta={"entry": entry},
+            )
+        )
+
+    # Rule 7: Bundled sensitive key or credential store file (CWE-798 / CWE-540)
+    sensitive_files: list[str] = descriptor.metadata.get("sensitive_files", [])
+    for sfile in sensitive_files:
+        fid = _finding_id("bin.archive.sensitive-file", path, sfile)
+        findings.append(
+            AnalysisFinding(
+                id=f"bin.{fid}",
+                engine="inspect",
+                category="binary",
+                rule_id="bin.archive.sensitive-file",
+                severity="high",
+                title=f"Archive packages sensitive key or credential file: '{sfile}'",
+                status="verified",
+                confidence="observed",
+                file=path,
+                cwe=["CWE-798", "CWE-540"],
+                message=f"Archive bundles private key or credential store file '{sfile}', risking secret leakage.",
+                remediation=["Exclude private keys, certificates, and environment files from package distributions."],
+                evidence=[evidence_ref],
+                engine_meta={"sensitive_file": sfile},
+            )
+        )
+
+    # Rule 8: Dangerous Android permission requested (CWE-276)
+    dangerous_perms: list[str] = descriptor.metadata.get("dangerous_permissions", [])
+    for perm in dangerous_perms:
+        fid = _finding_id("bin.archive.dangerous-permission", path, perm)
+        findings.append(
+            AnalysisFinding(
+                id=f"bin.{fid}",
+                engine="inspect",
+                category="binary",
+                rule_id="bin.archive.dangerous-permission",
+                severity="medium",
+                title=f"Android package requests dangerous permission: '{perm}'",
+                status="verified",
+                confidence="observed",
+                file=path,
+                cwe=["CWE-276"],
+                message=f"Application requests sensitive Android permission: android.permission.{perm}",
+                remediation=["Verify that this high-privilege permission is strictly necessary and declare runtime user approval."],
+                evidence=[evidence_ref],
+                engine_meta={"permission": perm},
+            )
+        )
+
     return findings

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add experimental `xbnd.command-injection` with bounded local/project flows,
+  native shell sinks, explicit interpreter checks, evidence and suppressions.
+  Dynamic subprocess options report incomplete coverage; SQL policy sanitizers
+  do not clear command taint.
+- Model Django `.objects.raw()` and imported `RawSQL` statement text. Add a
+  24-case command corpus and three pinned, licensed PyGoat training-app excerpts
+  with provenance hashes and reproducible benchmark commands.
+
 - Resolve selected-project Python helper imports across modules/packages, retain
   cross-file evidence and callee locations, and report unsupported/ambiguous
   imports or initialization as incomplete coverage. Add a 12-project corpus.

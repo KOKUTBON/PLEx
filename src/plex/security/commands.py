@@ -14,6 +14,7 @@ from plex.report.format_json import write_json
 from plex.report.format_sarif import write_sarif
 from plex.report.severity import severity_rank
 
+from .command_injection import CommandInjectionRule
 from .sql_injection import SQLInjectionRule
 
 
@@ -46,19 +47,22 @@ def cmd_security_verify(args: argparse.Namespace) -> int:
 
 
 def cmd_security_rules(args: argparse.Namespace) -> int:
-    rule = SQLInjectionRule()
-    details = {
-        "id": rule.id,
-        "name": rule.name,
-        "category": "security",
-        "stability": rule.stability,
-        "severity": rule.default_severity,
-        "tags": rule.tags,
-    }
+    rules = (SQLInjectionRule(), CommandInjectionRule())
+    details = [
+        {
+            "id": rule.id,
+            "name": rule.name,
+            "category": "security",
+            "stability": rule.stability,
+            "severity": rule.default_severity,
+            "tags": rule.tags,
+        }
+        for rule in rules
+    ]
     print(
-        json.dumps([details], indent=2)
+        json.dumps(details, indent=2)
         if args.json
-        else f"{rule.id}: {rule.name} ({rule.stability})"
+        else "\n".join(f"{rule.id}: {rule.name} ({rule.stability})" for rule in rules)
     )
     return 0
 
@@ -67,7 +71,7 @@ def add_security_commands(sub: Any) -> None:
     parser = sub.add_parser("security", help="Experimental static source security checks")
     commands = parser.add_subparsers(dest="security_cmd", required=True)
     verify = commands.add_parser(
-        "verify", help="Trace untrusted input into Python SQL statements (static only)"
+        "verify", help="Trace untrusted input into Python SQL and shell commands (static only)"
     )
     verify.add_argument("path", nargs="?", default=".")
     verify.add_argument("--json", "--out-json", dest="json_path")

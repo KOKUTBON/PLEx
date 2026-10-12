@@ -492,18 +492,20 @@ Sequencing rationale: reporting must exist before any engine can emit into it; x
 2. **Implemented:** `report/unified.py` + schema bump + `to_dict_v7()` + compat snapshot test.
 3. **Implemented:** `PerformanceProvider` behind the SPI; orchestrator with a single engine.
 4. **Implemented:** `plex providers list|preflight|doctor` and explicit provider registration.
-5. **Implemented (experimental Python spike):** xBOUNDARY: one end-to-end rule (`xbnd.sql-injection`) with a real data-flow `EvidenceRef` and SARIF `codeFlows`, plus a 20-case corpus.
+5. **Implemented (experimental Python spike):** xBOUNDARY: two end-to-end rules (`xbnd.sql-injection`, `xbnd.command-injection`) with a real data-flow `EvidenceRef` and SARIF `codeFlows`, plus a 20-case corpus.
 
 That sequence lands a shippable, strictly-additive first increment (platform scaffolding + one real security rule) without touching the performance engine's behavior.
 
 
-### Sprint 0 implementation status (2026-10-11)
+### Sprint 0 implementation status (2026-10-12)
 
 Steps 1–5 are implemented on the foundation PR. The xBOUNDARY spike is bounded
-Python analysis with one SQL rule, embedded data-flow evidence, SARIF codeFlows,
+Python analysis with SQL and shell-command rules, embedded data-flow evidence, SARIF codeFlows,
 bounded same-module and selected-project imported helper expansion, two labeled
-20-case corpora and a 12-case multi-module corpus. It is not the full security engine
+20-case corpora, a 12-case multi-module corpus, a 24-case command corpus and
+three pinned MIT-licensed PyGoat training-app excerpts. It is not the full security engine
 in §6. Versioned, additive source/SQL sanitizer/SQL sink policy catalogs are
 implemented with strict validation, CLI override and report provenance. See
-[scope and validation](SECURITY_ANALYSIS.md). Next: broader real-world corpus
-validation and another security rule; shared CLI formats/gates remain unfinished.
+[scope and validation](SECURITY_ANALYSIS.md). Next: shared multi-engine CLI
+formats/gates; broader production-corpus validation and the remaining rules are
+still unfinished.

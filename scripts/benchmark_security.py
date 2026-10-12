@@ -1,4 +1,4 @@
-"""Measure the experimental SQL spike on its small labeled synthetic corpus."""
+"""Measure experimental injection rules on labeled synthetic or training-app fixtures."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ def main() -> int:
     parser.add_argument("--iterations", type=int, default=5)
     parser.add_argument(
         "--corpus",
-        choices=["intraprocedural", "same-module", "cross-module"],
+        choices=["intraprocedural", "same-module", "cross-module", "command", "pygoat"],
         default="intraprocedural",
     )
     args = parser.parse_args()
@@ -27,9 +27,23 @@ def main() -> int:
         "intraprocedural": "sql_injection.json",
         "same-module": "same_module_sql.json",
         "cross-module": "cross_module_sql.json",
+        "command": "command_injection.json",
+        "pygoat": "pygoat/manifest.json",
     }[args.corpus]
     corpus = Path(__file__).resolve().parents[1] / "tests/fixtures/security" / filename
-    cases = json.loads(corpus.read_text())
+    data = json.loads(corpus.read_text())
+    cases = (
+        [
+            {
+                "name": Path(case["file"]).stem.removesuffix(".py"),
+                "source": (corpus.parent / case["file"]).read_text(),
+                "expected": case["expected"],
+            }
+            for case in data["cases"]
+        ]
+        if args.corpus == "pygoat"
+        else data
+    )
     elapsed = []
     with tempfile.TemporaryDirectory(prefix="plex-security-corpus-") as directory:
         root = Path(directory)

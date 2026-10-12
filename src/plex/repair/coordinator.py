@@ -12,9 +12,11 @@ from plex.graph.correlate import GraphCorrelator
 from plex.graph.models import ProjectGraph
 from plex.providers import AnalysisTask, SupplyChainProvider, XBoundaryProvider, run_providers
 from plex.repair.command_array import CommandArrayFixer
+from plex.repair.docker_sudo import DockerSudoFixer
 from plex.repair.docker_tag_pin import DockerTagPinFixer
 from plex.repair.docker_user import DockerUserFixer
 from plex.repair.insecure_cookie import InsecureCookieFixer
+from plex.repair.insecure_index import InsecureIndexFixer
 from plex.repair.models import PatchCandidate, RepairRecord
 from plex.repair.path_boundary import PathBoundaryFixer
 from plex.repair.plaintext_secret import PlaintextSecretFixer
@@ -25,6 +27,7 @@ from plex.repair.sql_parameterize import SQLParameterizeFixer
 from plex.repair.ssrf_validate import SSRFUrlValidateFixer
 from plex.repair.tenant_boundary import TenantBoundaryFixer
 from plex.repair.tls_verify import TLSVerifyFixer
+from plex.repair.weak_crypto import WeakCryptoFixer
 from plex.report.unified import AnalysisFinding
 from plex.validate.authz import parse_authorization, validate_authorization
 from plex.validate.engine import ValidateEngine
@@ -71,8 +74,11 @@ class RemediationCoordinator:
             PlaintextSecretFixer(),
             SafeDeserializationFixer(),
             SSRFUrlValidateFixer(),
+            WeakCryptoFixer(),
             DockerUserFixer(),
             DockerTagPinFixer(),
+            DockerSudoFixer(),
+            InsecureIndexFixer(),
         ]
 
     def plan_and_verify(

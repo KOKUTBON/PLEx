@@ -1,5 +1,15 @@
 # Changelog
 
+- Add automated weak cryptography and hash upgrade fixer in `plex.repair` (`WeakCryptoFixer`, `fix.weak-crypto`, CWE-327 / CWE-328 / OWASP A02:2025):
+  Automatically upgrades broken and deprecated cryptographic hash algorithms (`hashlib.md5()`, `hashlib.sha1()`, `hashlib.new("md5")`,
+  `hashes.MD5()`) to `hashlib.sha256()`, exempting non-security checksums marked with `usedforsecurity=False`.
+
+- Add automated Dockerfile passwordless sudo fixer in `plex.repair` (`DockerSudoFixer`, `fix.docker-sudo-nopasswd`, CWE-250):
+  Remediates container privilege escalation vulnerabilities by stripping `NOPASSWD:` directives from sudoers grants in Dockerfiles.
+
+- Add automated package index HTTPS upgrade fixer in `plex.repair` (`InsecureIndexFixer`, `fix.insecure-index`, CWE-319, CWE-494):
+  Upgrades insecure plaintext `http://` package index URLs (`--index-url`, `--extra-index-url`, `-i`) in dependency manifests to encrypted `https://`.
+
 - Add native active Server-Side Request Forgery testing in `plex.validate` (`SSRFRecipe`, `val.ssrf`, CWE-918, OWASP A10:2025):
   Executes deterministic probing against correlated route destination parameters using loopback (`127.0.0.1:8080`) and cloud metadata
   (`169.254.169.254`) targets to actively reproduce or refute SSRF vulnerabilities with verifiable proof.

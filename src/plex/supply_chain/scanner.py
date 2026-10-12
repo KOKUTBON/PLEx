@@ -12,6 +12,7 @@ from plex.report.unified import AnalysisFinding, EvidenceRef, Severity
 from .config_rules import evaluate_dockerfile, evaluate_env_file, evaluate_tls_code
 from .manifests import parse_pipfile_lock, parse_poetry_lock, parse_requirements_txt
 from .models import AdvisoryRecord, DependencyRecord
+from .reachability import ReachabilityAnalyzer
 
 VALID_SEVERITIES: set[str] = {"critical", "high", "medium", "low", "info"}
 
@@ -31,6 +32,14 @@ BUILTIN_ADVISORIES: list[AdvisoryRecord] = [
         fixed_version="1.26.18",
         severity="high",
         description="urllib3 does not strip Authorization header on cross-origin redirects.",
+        vulnerable_symbols=(
+            "urllib3.PoolManager",
+            "urllib3.HTTPConnectionPool",
+            "PoolManager",
+            "HTTPConnectionPool",
+            "urlopen",
+            "request",
+        ),
     ),
     AdvisoryRecord(
         cve_id="CVE-2023-32681",
@@ -39,6 +48,22 @@ BUILTIN_ADVISORIES: list[AdvisoryRecord] = [
         fixed_version="2.31.0",
         severity="medium",
         description="Requests leaks Authorization header to HTTPS destination on HTTP redirect.",
+        vulnerable_symbols=(
+            "requests.get",
+            "requests.post",
+            "requests.put",
+            "requests.delete",
+            "requests.request",
+            "requests.Session",
+            "Session.get",
+            "Session.post",
+            "Session.request",
+            "get",
+            "post",
+            "put",
+            "delete",
+            "request",
+        ),
     ),
     AdvisoryRecord(
         cve_id="CVE-2022-24302",
@@ -47,6 +72,11 @@ BUILTIN_ADVISORIES: list[AdvisoryRecord] = [
         fixed_version="2.10.1",
         severity="high",
         description="Paramiko race condition during key generation file writing.",
+        vulnerable_symbols=(
+            "paramiko.RSAKey.write_private_key_file",
+            "RSAKey.write_private_key_file",
+            "write_private_key_file",
+        ),
     ),
     AdvisoryRecord(
         cve_id="CVE-2021-33503",
@@ -55,6 +85,12 @@ BUILTIN_ADVISORIES: list[AdvisoryRecord] = [
         fixed_version="1.26.5",
         severity="high",
         description="urllib3 Catastrophic backtracking in URL authority parser.",
+        vulnerable_symbols=(
+            "urllib3.util.parse_url",
+            "urllib3.util.url.parse_url",
+            "parse_url",
+            "split_first",
+        ),
     ),
 ]
 
@@ -87,9 +123,10 @@ class SupplyChainScanner:
     def __init__(self, advisories: list[AdvisoryRecord] | None = None) -> None:
         self.advisories = advisories or BUILTIN_ADVISORIES
 
-    def scan(self, repo_root: Path) -> list[AnalysisFinding]:
+    def scan(self, repo_root: Path, graph_correlator: Any | None = None) -> list[AnalysisFinding]:
         root = repo_root.resolve()
         findings: list[AnalysisFinding] = []
+        analyzer = ReachabilityAnalyzer(root)
 
         # Traverse directory
         for dirpath, dirnames, filenames in os.walk(root):
@@ -103,7 +140,7 @@ class SupplyChainScanner:
                 if fname.startswith("requirements") and fname.endswith(".txt"):
                     try:
                         content = fpath.read_text(encoding="utf-8")
-                        findings.extend(self._scan_requirements(content, rel_path))
+                        findings.extend(self._scan_requirements(content, rel_path, analyzer, graph_correlator))
                     except Exception:
                         continue
 
@@ -111,7 +148,7 @@ class SupplyChainScanner:
                 elif fname == "poetry.lock":
                     try:
                         content = fpath.read_text(encoding="utf-8")
-                        findings.extend(self._scan_poetry(content, rel_path))
+                        findings.extend(self._scan_poetry(content, rel_path, analyzer, graph_correlator))
                     except Exception:
                         continue
 
@@ -119,7 +156,7 @@ class SupplyChainScanner:
                 elif fname == "Pipfile.lock":
                     try:
                         content = fpath.read_text(encoding="utf-8")
-                        findings.extend(self._scan_pipfile(content, rel_path))
+                        findings.extend(self._scan_pipfile(content, rel_path, analyzer, graph_correlator))
                     except Exception:
                         continue
 
@@ -155,7 +192,13 @@ class SupplyChainScanner:
 
         return findings
 
-    def _scan_requirements(self, content: str, file_path: str) -> list[AnalysisFinding]:
+    def _scan_requirements(
+        self,
+        content: str,
+        file_path: str,
+        analyzer: ReachabilityAnalyzer | None = None,
+        graph_correlator: Any | None = None,
+    ) -> list[AnalysisFinding]:
         findings: list[AnalysisFinding] = []
         deps, indexes = parse_requirements_txt(content, file_path)
 
@@ -206,57 +249,151 @@ class SupplyChainScanner:
                     )
                 )
 
-            # Check advisory
+            # Check advisory with reachability
             if dep.resolved_version:
-                adv_finds = self._match_advisories(dep)
+                adv_finds = self._match_advisories(dep, analyzer, graph_correlator)
                 findings.extend(adv_finds)
 
         return findings
 
-    def _scan_poetry(self, content: str, file_path: str) -> list[AnalysisFinding]:
+    def _scan_poetry(
+        self,
+        content: str,
+        file_path: str,
+        analyzer: ReachabilityAnalyzer | None = None,
+        graph_correlator: Any | None = None,
+    ) -> list[AnalysisFinding]:
         findings: list[AnalysisFinding] = []
         deps = parse_poetry_lock(content, file_path)
         for dep in deps:
             if dep.resolved_version:
-                findings.extend(self._match_advisories(dep))
+                findings.extend(self._match_advisories(dep, analyzer, graph_correlator))
         return findings
 
-    def _scan_pipfile(self, content: str, file_path: str) -> list[AnalysisFinding]:
+    def _scan_pipfile(
+        self,
+        content: str,
+        file_path: str,
+        analyzer: ReachabilityAnalyzer | None = None,
+        graph_correlator: Any | None = None,
+    ) -> list[AnalysisFinding]:
         findings: list[AnalysisFinding] = []
         deps = parse_pipfile_lock(content, file_path)
         for dep in deps:
             if dep.resolved_version:
-                findings.extend(self._match_advisories(dep))
+                findings.extend(self._match_advisories(dep, analyzer, graph_correlator))
         return findings
 
-    def _match_advisories(self, dep: DependencyRecord) -> list[AnalysisFinding]:
+    def _match_advisories(
+        self,
+        dep: DependencyRecord,
+        analyzer: ReachabilityAnalyzer | None = None,
+        graph_correlator: Any | None = None,
+    ) -> list[AnalysisFinding]:
         findings: list[AnalysisFinding] = []
         if not dep.resolved_version:
             return findings
 
         for adv in self.advisories:
             if dep.name == adv.package.lower() and _is_affected(dep.resolved_version, adv.affected_specifier):
+                reach_res = analyzer.analyze_reachability(dep, adv) if analyzer else None
+                reach_status = reach_res.status if reach_res else "unreachable"
+
                 fid = hashlib.sha256(f"dep.vulnerable:{dep.file}:{dep.lineno}:{adv.cve_id}".encode()).hexdigest()[:16]
                 severity = _normalize_severity(adv.severity, default="high")
-                findings.append(
-                    AnalysisFinding(
-                        id=f"dep.{fid}",
+
+                meta: dict[str, Any] = {
+                    "cve": adv.cve_id,
+                    "fixed_version": adv.fixed_version,
+                    "reachability": reach_status,
+                }
+                if reach_res and reach_res.call_sites:
+                    meta["call_sites"] = [
+                        {
+                            "file": cs.file,
+                            "lineno": cs.lineno,
+                            "caller": cs.caller_symbol,
+                            "called": cs.called_symbol,
+                            "snippet": cs.source_line,
+                        }
+                        for cs in reach_res.call_sites
+                    ]
+
+                title_suffix = ""
+                if reach_status == "reachable":
+                    cs_count = len(reach_res.call_sites) if reach_res else 0
+                    title_suffix = f" [REACHABLE: {cs_count} call site(s)]"
+                elif reach_status == "imported_uninvoked":
+                    title_suffix = " [IMPORTED_UNINVOKED]"
+                elif reach_status == "unreachable":
+                    title_suffix = " [UNREACHABLE]"
+
+                vulnerable_finding = AnalysisFinding(
+                    id=f"dep.{fid}",
+                    engine="supply_chain",
+                    category="security",
+                    rule_id="dep.vulnerable-version",
+                    severity=severity,
+                    title=f"Known vulnerability {adv.cve_id} in {dep.name} {dep.resolved_version}{title_suffix}",
+                    status="verified" if reach_status != "unreachable" else "inconclusive",
+                    confidence="observed",
+                    file=dep.file,
+                    lineno=dep.lineno,
+                    cwe=list(adv.cwe),
+                    message=f"{dep.name} {dep.resolved_version} is vulnerable to {adv.cve_id}: {adv.description} ({reach_res.reason if reach_res else 'Reachability unindexed'})",
+                    remediation=[f"Upgrade {dep.name} to >= {adv.fixed_version}."],
+                    evidence=[self._evidence_ref("vulnerability_advisory", f"{adv.cve_id}:{dep.resolved_version}")],
+                    engine_meta=meta,
+                )
+                findings.append(vulnerable_finding)
+
+                # If reachable, ALSO emit high-priority dep.reachable-vulnerability targeting the primary call site!
+                reachable_finding: AnalysisFinding | None = None
+                if reach_res and reach_res.status == "reachable" and reach_res.call_sites:
+                    primary_cs = reach_res.call_sites[0]
+                    rfid = hashlib.sha256(f"dep.reachable:{primary_cs.file}:{primary_cs.lineno}:{adv.cve_id}".encode()).hexdigest()[:16]
+                    reachable_finding = AnalysisFinding(
+                        id=f"dep.{rfid}",
                         engine="supply_chain",
                         category="security",
-                        rule_id="dep.vulnerable-version",
-                        severity=severity,
-                        title=f"Known vulnerability {adv.cve_id} in {dep.name} {dep.resolved_version}",
+                        rule_id="dep.reachable-vulnerability",
+                        severity="critical",
+                        title=f"Reachable supply chain vulnerability {adv.cve_id} in {dep.name} ({len(reach_res.call_sites)} active call site(s))",
                         status="verified",
                         confidence="observed",
-                        file=dep.file,
-                        lineno=dep.lineno,
+                        file=primary_cs.file,
+                        lineno=primary_cs.lineno,
                         cwe=list(adv.cwe),
-                        message=f"{dep.name} {dep.resolved_version} is vulnerable to {adv.cve_id}: {adv.description}",
-                        remediation=[f"Upgrade {dep.name} to >= {adv.fixed_version}."],
-                        evidence=[self._evidence_ref("vulnerability_advisory", f"{adv.cve_id}:{dep.resolved_version}")],
-                        engine_meta={"cve": adv.cve_id, "fixed_version": adv.fixed_version},
+                        message=(
+                            f"Project invokes vulnerable API '{primary_cs.called_symbol}' from {dep.name} "
+                            f"(affected by {adv.cve_id}: {adv.description})."
+                        ),
+                        remediation=[
+                            f"Upgrade {dep.name} to >= {adv.fixed_version} in {dep.file}.",
+                            f"Refactor or guard '{primary_cs.called_symbol}' in {primary_cs.file}:{primary_cs.lineno}.",
+                        ],
+                        evidence=[
+                            self._evidence_ref("call_site", f"{primary_cs.file}:{primary_cs.lineno}:{primary_cs.source_line}"),
+                            self._evidence_ref("manifest_dependency", f"{dep.file}:{dep.lineno}:{dep.name}"),
+                        ],
+                        engine_meta=meta,
                     )
-                )
+                    findings.append(reachable_finding)
+
+                if graph_correlator:
+                    dep_node = graph_correlator.add_dependency(dep, dep.file)
+                    vnode = graph_correlator.add_finding(vulnerable_finding, producer="supply_chain")
+                    target_finding_node = graph_correlator.add_finding(reachable_finding, producer="supply_chain") if reachable_finding else vnode
+
+                    if reach_res and reach_res.status == "reachable":
+                        for cs in reach_res.call_sites:
+                            graph_correlator.correlate_dependency_reachability(
+                                dep_node,
+                                caller_file=cs.file,
+                                caller_lineno=cs.lineno,
+                                caller_symbol=cs.caller_symbol,
+                                finding_node=target_finding_node,
+                            )
 
         return findings
 

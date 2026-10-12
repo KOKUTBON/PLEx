@@ -33,6 +33,35 @@ class AdvisoryRecord:
     severity: str
     description: str
     cwe: tuple[str, ...] = ("CWE-1395",)
+    vulnerable_symbols: tuple[str, ...] = ()
+
+
+ReachabilityStatus = Literal["reachable", "imported_uninvoked", "unreachable"]
+
+
+@dataclass(frozen=True)
+class CallSiteEvidence:
+    """A concrete call site in project code invoking a dependency API."""
+
+    package: str
+    file: str
+    lineno: int
+    col_offset: int
+    caller_symbol: str
+    called_symbol: str
+    source_line: str
+
+
+@dataclass(frozen=True)
+class DependencyReachability:
+    """Reachability evaluation for a declared dependency and security advisory."""
+
+    dependency: DependencyRecord
+    advisory: AdvisoryRecord
+    status: ReachabilityStatus
+    import_sites: tuple[tuple[str, int], ...]
+    call_sites: tuple[CallSiteEvidence, ...]
+    reason: str
 
 
 @dataclass(frozen=True)

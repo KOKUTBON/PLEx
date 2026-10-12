@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add supply chain AST call-graph reachability analysis (`ReachabilityAnalyzer`, `dep.reachable-vulnerability`)
+  and `ProjectGraph` dependency correlation in `plex.supply_chain` and `plex.graph`. Differentiates between
+  vulnerable dependencies that are actively reachable in source code, imported but uninvoked, or completely
+  unreachable, drastically reducing false-alarm fatigue. Actively invoked vulnerabilities emit critical-severity
+  `dep.reachable-vulnerability` findings pointing directly to the calling source location with line-level
+  call site evidence and relational graph provenance (`depends_on`, `reaches`, `detects`).
+
 - Add native verified security fixers `CommandArrayFixer` (CWE-78) and `PathBoundaryFixer` (CWE-22)
   in `plex.repair`. `CommandArrayFixer` deterministically transforms shell command strings and f-strings
   passed to `subprocess` into safe tokenized argument lists without shell interpretation (`shell=False`).

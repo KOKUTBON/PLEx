@@ -15,28 +15,34 @@ from plex.report.format_sarif import write_sarif
 from plex.report.severity import severity_rank
 from plex.sandbox import ContainerSandbox, SubprocessSandbox
 
+from .engine import InspectEngine
+
 
 def cmd_inspect(args: argparse.Namespace) -> int:
-    """Execute artifact inspection with REA and PLEx binary security rules."""
+    """Execute artifact inspection with native ELF analysis or optional REA."""
     target_path = Path(args.path).resolve()
     if not target_path.exists():
         print(f"Error: Target path does not exist: {args.path}")
         return 1
 
-    # Prefer container sandbox if available, else subprocess sandbox
-    container = ContainerSandbox()
-    ready, _ = container.preflight()
-    sandbox = container if ready else SubprocessSandbox(default_timeout=args.timeout)
+    if args.engine in ("native", "inspect"):
+        engine = InspectEngine()
+        report = engine.inspect(target_path)
+    else:
+        # Prefer container sandbox if available, else subprocess sandbox
+        container = ContainerSandbox()
+        ready, _ = container.preflight()
+        sandbox = container if ready else SubprocessSandbox(default_timeout=args.timeout)
 
-    task_options = {
-        "engine": args.engine,
-        "allow_dynamic": args.allow_dynamic,
-        "timeout": args.timeout,
-    }
-    task = AnalysisTask(target_path, target_kind="artifact", options=task_options)
-    provider = ReaProvider()
-    outcome = run_providers(task, [provider], sandbox=sandbox)
-    report = outcome.report()
+        task_options = {
+            "engine": args.engine,
+            "allow_dynamic": args.allow_dynamic,
+            "timeout": args.timeout,
+        }
+        task = AnalysisTask(target_path, target_kind="artifact", options=task_options)
+        provider = ReaProvider()
+        outcome = run_providers(task, [provider], sandbox=sandbox)
+        report = outcome.report()
 
     # Format output
     if args.format == "json":
@@ -68,8 +74,9 @@ def cmd_inspect(args: argparse.Namespace) -> int:
             print(
                 f"{finding.file}: {finding.severity.upper()}{status_tag} {finding.rule_id}: {finding.title}"
             )
+        engine_label = "Native" if args.engine in ("native", "inspect") else "REA"
         print(
-            f"REA inspection: {len(report.findings_unified)} item(s) recorded; scan {report.scan_status}"
+            f"{engine_label} inspection: {len(report.findings_unified)} item(s) recorded; scan {report.scan_status}"
         )
         for run in report.engines:
             for limitation in run.limitations:
@@ -86,13 +93,15 @@ def cmd_inspect(args: argparse.Namespace) -> int:
 
 def add_inspect_commands(sub: Any) -> None:
     """Register 'plex inspect' parser."""
-    p = sub.add_parser("inspect", help="Inspect binary artifacts and evidence using REA")
+    p = sub.add_parser(
+        "inspect", help="Inspect binary artifacts and evidence using native analysis or REA"
+    )
     p.add_argument("path", help="Path to binary artifact or directory")
     p.add_argument(
         "--engine",
-        default="rea",
-        choices=["rea"],
-        help="Inspection engine (default: rea)",
+        default="native",
+        choices=["native", "rea"],
+        help="Inspection engine: 'native' for pure-Python ELF analysis, 'rea' for REA provider (default: native)",
     )
     p.add_argument(
         "--allow-dynamic",

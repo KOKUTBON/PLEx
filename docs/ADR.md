@@ -45,9 +45,11 @@ Create an ADR when a change:
 
 - [0001 Unified finding schema and legacy compatibility](adr/0001-unified-finding-schema.md) — proposed.
 - [0002 Engine isolation and execution boundaries](adr/0002-engine-isolation-model.md) — proposed.
+- [0003 Native platform ownership](adr/0003-native-platform-ownership.md) — proposed.
+- [0004 Repair and evidence contracts](adr/0004-repair-and-evidence-contracts.md) — proposed.
+- [0005 REA binary adapter](adr/0005-rea-binary-adapter.md) — proposed.
+- [0006 Native active application testing (PLEx Validate)](adr/0006-native-active-validation.md) — proposed.
+- [0007 Native artifact intelligence (PLEx Inspect)](adr/0007-native-artifact-inspection.md) — proposed.
 
-These records start [PLEx 2.0 sprint 0](PLEx-2.0-PLAN.md#17-first-concrete-steps-sprint-0).
-They describe proposed contracts. The initial [v8 schema and v7 compatibility
-increment](REPORT_SCHEMA.md) and [performance provider](PROVIDERS.md) are
-implemented; provider discovery, stronger workers and SARIF aggregation remain
-follow-up work.
+These records document key architectural decisions for [PLEx 2.0](PLEx-2.0-PLAN.md).
+

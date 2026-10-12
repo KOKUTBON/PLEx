@@ -330,7 +330,7 @@ def test_cli_inspect_text_and_json(
     monkeypatch.setattr(ReaProvider, "__init__", mock_init)
 
     # 1. Text format
-    exit_code = main(["inspect", str(sample)])
+    exit_code = main(["inspect", str(sample), "--engine", "rea"])
     assert exit_code == 0
     text_out = capsys.readouterr().out
     assert "REA inspection:" in text_out
@@ -338,14 +338,18 @@ def test_cli_inspect_text_and_json(
 
     # 2. JSON format
     json_path = tmp_path / "inspect.json"
-    exit_json = main(["inspect", str(sample), "--format", "json", "-o", str(json_path)])
+    exit_json = main(
+        ["inspect", str(sample), "--engine", "rea", "--format", "json", "-o", str(json_path)]
+    )
     assert exit_json == 0
     data = json.loads(json_path.read_text())
     assert data["schema_version"] == 8
     assert len(data["findings_unified"]) > 0
 
     # 3. Gating with --fail-on-severity critical
-    exit_gate = main(["inspect", str(sample), "--fail-on-severity", "critical"])
+    exit_gate = main(
+        ["inspect", str(sample), "--engine", "rea", "--fail-on-severity", "critical"]
+    )
     assert exit_gate == 1
     capsys.readouterr()
 

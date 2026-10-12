@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add native artifact intelligence and binary inspection engine (`plex.inspect`)
+  with pure-Python format detection, 32-bit and 64-bit ELF structural parsing
+  (segments, sections, symbol tables, dynamic tags), compiler and linker hardening
+  evaluation (NX/DEP, PIE, RELRO, stack canaries, fortify source), native binary security
+  rules (weak hardening, banned APIs, deprecated crypto, insecure RPATH/RUNPATH, hardcoded
+  secrets), residual unknowns preservation (`bin.unknown.*`), and `plex inspect` CLI integration.
+
 - Add native active testing and dynamic vulnerability reproduction engine
   (`plex.validate`) with hard technical network scope guardrails (`ScopedHttpClient`,
   `NetworkScope`), authorization verification (`AUTHORIZATION.md`), static route discovery

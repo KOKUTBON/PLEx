@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from .code_eval import CodeEvalFixer
 from .command_array import CommandArrayFixer
 from .commands import add_remediate_commands, cmd_remediate
 from .coordinator import RemediationCoordinator, RemediationPlan
+from .dependency_pin import DependencyPinFixer
 from .docker_sudo import DockerSudoFixer
 from .docker_tag_pin import DockerTagPinFixer
 from .docker_user import DockerUserFixer
@@ -30,7 +32,9 @@ from .tls_verify import TLSVerifyFixer
 from .weak_crypto import WeakCryptoFixer
 
 __all__ = [
+    "CodeEvalFixer",
     "CommandArrayFixer",
+    "DependencyPinFixer",
     "DockerSudoFixer",
     "DockerTagPinFixer",
     "DockerUserFixer",

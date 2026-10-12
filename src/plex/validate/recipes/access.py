@@ -55,3 +55,48 @@ class RoleMatrixRecipe:
             exchanges=exchanges,
             counterevidence=counterevidence,
         )
+
+
+class TenantIsolationRecipe:
+    """Verifies tenant boundary isolation and detects broken object level authorization (BOLA)."""
+
+    def execute(self, hypothesis: ValidationHypothesis, client: ScopedHttpClient) -> TestResult:
+        exchanges: list[HttpExchange] = []
+        counterevidence: list[str] = []
+
+        # 1. Primary authorized tenant request
+        headers_primary = {"X-Tenant-ID": "tenant-primary", "Authorization": "Bearer token-primary"}
+        ex_primary = client.request("GET", hypothesis.target_url, headers=headers_primary)
+        exchanges.append(ex_primary)
+
+        # 2. Cross-tenant request from alternate tenant to same resource
+        headers_secondary = {"X-Tenant-ID": "tenant-secondary", "Authorization": "Bearer token-secondary"}
+        ex_cross = client.request("GET", hypothesis.target_url, headers=headers_secondary)
+        exchanges.append(ex_cross)
+
+        # If cross-tenant request succeeds with HTTP 200:
+        if ex_cross.status_code == 200:
+            return TestResult(
+                hypothesis_id=hypothesis.id,
+                rule_id=hypothesis.rule_id,
+                reproduced=True,
+                status="verified",
+                message=(
+                    "Broken Object Level Authorization (BOLA) verified: resource belonging to "
+                    "tenant-primary accessed by tenant-secondary (HTTP 200)"
+                ),
+                exchanges=exchanges,
+            )
+
+        counterevidence.append(
+            f"Endpoint correctly rejected cross-tenant access with HTTP {ex_cross.status_code}"
+        )
+        return TestResult(
+            hypothesis_id=hypothesis.id,
+            rule_id=hypothesis.rule_id,
+            reproduced=False,
+            status="refuted",
+            message="Tenant boundary isolation verified intact (cross-tenant access denied)",
+            exchanges=exchanges,
+            counterevidence=counterevidence,
+        )

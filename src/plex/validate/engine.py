@@ -27,6 +27,7 @@ from .recipes import (
     PathTraversalRecipe,
     RoleMatrixRecipe,
     SQLInjectionRecipe,
+    TenantIsolationRecipe,
     TestRecipe,
     TestResult,
     ValidationHypothesis,
@@ -41,6 +42,7 @@ RECIPES: dict[str, TestRecipe] = {
     "xbnd.command-injection": CommandInjectionRecipe(),
     "xbnd.path-traversal": PathTraversalRecipe(),
     "authz.access-control": RoleMatrixRecipe(),
+    "xbnd.broken-tenant-isolation": TenantIsolationRecipe(),
 }
 
 

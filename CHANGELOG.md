@@ -1,5 +1,13 @@
 # Changelog
 
+- Add native active tenant boundary isolation testing in `plex.validate` (`TenantIsolationRecipe`, `val.tenant-isolation`, CWE-639 / OWASP API1:2023 BOLA):
+  Executes deterministic cross-tenant probing against correlated route endpoints using scoped multi-tenant identities (`X-Tenant-ID`, `Authorization`).
+  Actively confirms or refutes BOLA hypotheses, upgrading findings to `verified` with content-addressed `http_exchange` evidence proof.
+
+- Add automated TLS certificate verification fixer in `plex.repair` (`TLSVerifyFixer`, `fix.insecure-tls`, CWE-295, OWASP A02:2025):
+  Automatically hardens insecure TLS configurations by replacing `verify=False` with `verify=True`, `check_hostname = False` with
+  `check_hostname = True`, and `ssl.CERT_NONE` with `ssl.CERT_REQUIRED`. Generates deterministic `PatchCandidate` contracts.
+
 - Add automated tenant boundary isolation fixer in `plex.repair`:
   `TenantBoundaryFixer` (`fix.broken-tenant-isolation`, `xbnd.broken-tenant-isolation`, CWE-639 / CWE-284 / CWE-862, OWASP A01:2025, API1:2023 BOLA).
   `TenantBoundaryFixer` automatically remediates Broken Object Level Authorization vulnerabilities by identifying un-scoped database queries

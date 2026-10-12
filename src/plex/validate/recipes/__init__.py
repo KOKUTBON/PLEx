@@ -5,6 +5,7 @@ from __future__ import annotations
 from .access import RoleMatrixRecipe, TenantIsolationRecipe
 from .base import TestRecipe, TestResult, ValidationHypothesis
 from .code_eval import CodeInjectionRecipe
+from .headers import SecurityHeadersRecipe
 from .injection import (
     CommandInjectionRecipe,
     PathTraversalRecipe,
@@ -20,6 +21,7 @@ __all__ = [
     "RoleMatrixRecipe",
     "SQLInjectionRecipe",
     "SSRFRecipe",
+    "SecurityHeadersRecipe",
     "SensitiveDataLeakRecipe",
     "TenantIsolationRecipe",
     "TestRecipe",

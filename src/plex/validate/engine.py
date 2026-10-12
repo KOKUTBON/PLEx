@@ -27,6 +27,7 @@ from .recipes import (
     CommandInjectionRecipe,
     PathTraversalRecipe,
     RoleMatrixRecipe,
+    SecurityHeadersRecipe,
     SensitiveDataLeakRecipe,
     SQLInjectionRecipe,
     SSRFRecipe,
@@ -49,6 +50,8 @@ RECIPES: dict[str, TestRecipe] = {
     "xbnd.ssrf": SSRFRecipe(),
     "xbnd.code-eval-taint": CodeInjectionRecipe(),
     "xbnd.sensitive-data-leak": SensitiveDataLeakRecipe(),
+    "val.security-headers": SecurityHeadersRecipe(),
+    "cfg.insecure-headers": SecurityHeadersRecipe(),
 }
 
 
@@ -169,6 +172,7 @@ class ValidateEngine:
                 "xbnd.path-traversal",
                 "xbnd.code-eval-taint",
                 "xbnd.sensitive-data-leak",
+                "val.security-headers",
             ):
                 hypotheses.append(
                     ValidationHypothesis(

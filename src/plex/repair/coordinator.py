@@ -25,6 +25,7 @@ from plex.repair.path_boundary import PathBoundaryFixer
 from plex.repair.plaintext_secret import PlaintextSecretFixer
 from plex.repair.runner import RepairVerificationRunner, apply_unified_diff
 from plex.repair.safe_deserialization import SafeDeserializationFixer
+from plex.repair.security_headers import SecurityHeadersFixer
 from plex.repair.sensitive_log_redact import SensitiveLogRedactFixer
 from plex.repair.sql_parameterize import SQLParameterizeFixer
 from plex.repair.ssrf_validate import SSRFUrlValidateFixer
@@ -85,6 +86,7 @@ class RemediationCoordinator:
             InsecureIndexFixer(),
             DependencyPinFixer(),
             DependencyUpgradeFixer(),
+            SecurityHeadersFixer(),
         ]
 
     def plan_and_verify(

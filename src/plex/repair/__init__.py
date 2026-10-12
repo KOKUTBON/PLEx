@@ -25,6 +25,7 @@ from .path_boundary import PathBoundaryFixer
 from .plaintext_secret import PlaintextSecretFixer
 from .runner import RepairVerificationRunner, apply_unified_diff
 from .safe_deserialization import SafeDeserializationFixer
+from .security_headers import SecurityHeadersFixer
 from .sensitive_log_redact import SensitiveLogRedactFixer
 from .sql_parameterize import SQLParameterizeFixer
 from .ssrf_validate import SSRFUrlValidateFixer
@@ -53,6 +54,7 @@ __all__ = [
     "SQLParameterizeFixer",
     "SSRFUrlValidateFixer",
     "SafeDeserializationFixer",
+    "SecurityHeadersFixer",
     "SensitiveLogRedactFixer",
     "TLSVerifyFixer",
     "TenantBoundaryFixer",

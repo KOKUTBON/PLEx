@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 from plex.analyze.static_ast import FunctionFinding
 from plex.ir.models import IRModule
+from plex.report.unified import Category, EvidenceRef
 
 if TYPE_CHECKING:
     from plex.rules.suppression import RuleSuppressionContext, RuleSuppressionDirective
@@ -27,6 +28,11 @@ class RuleFinding:
     body_hash: str
     suggestions: list[str] = field(default_factory=list)
     confidence: float = 0.6
+    category: Category = "performance"
+    cwe: list[str] = field(default_factory=list)
+    owasp: list[str] = field(default_factory=list)
+    evidence: list[EvidenceRef] = field(default_factory=list)
+    engine_meta: dict[str, object] = field(default_factory=dict)
 
 
 @dataclass
@@ -40,6 +46,8 @@ class RuleContext:
     suppressed_findings: list[tuple[RuleFinding, RuleSuppressionDirective]] = field(
         default_factory=list
     )
+    dataflow: dict[str, object] = field(default_factory=dict)
+    security_policy: dict[str, object] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         self._ast_cache: dict[str, ast.AST] = {}

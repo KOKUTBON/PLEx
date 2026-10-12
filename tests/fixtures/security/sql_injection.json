@@ -1,0 +1,102 @@
+[
+  {
+    "name": "input_percent",
+    "expected": 1,
+    "source": "value = input()\nquery = \"SELECT * FROM users WHERE name=\\'%s\\'\" % value\ncursor.execute(query)\n"
+  },
+  {
+    "name": "flask_fstring",
+    "expected": 1,
+    "source": "def view(request, cursor):\n    name = request.args[\"name\"]\n    query = f\"SELECT * FROM users WHERE name=\\'{name}\\'\"\n    cursor.execute(query)\n"
+  },
+  {
+    "name": "django_concat",
+    "expected": 1,
+    "source": "def view(request, cursor):\n    name = request.GET[\"name\"]\n    cursor.execute(\"SELECT * FROM users WHERE name=\" + name)\n"
+  },
+  {
+    "name": "request_format",
+    "expected": 1,
+    "source": "name = request.query_params.get(\"name\")\ncursor.execute(\"SELECT * FROM users WHERE name={}\".format(name))\n"
+  },
+  {
+    "name": "flask_import_alias",
+    "expected": 1,
+    "source": "from flask import request as req\nname = req.form[\"name\"]\ncursor.execute(f\"SELECT * FROM users WHERE name={name}\")\n"
+  },
+  {
+    "name": "fastapi_query",
+    "expected": 1,
+    "source": "from fastapi import Query\ndef view(name: str = Query(...)):\n    cursor.execute(f\"SELECT * FROM users WHERE name={name}\")\n"
+  },
+  {
+    "name": "interpolation_with_params",
+    "expected": 1,
+    "source": "value = input()\ncursor.execute(\"SELECT * FROM users WHERE name=\" + value + \" AND id=%s\", (1,))\n"
+  },
+  {
+    "name": "keyword_statement",
+    "expected": 1,
+    "source": "query = \"SELECT \" + input()\ncursor.execute(statement=query)\n"
+  },
+  {
+    "name": "branch_join",
+    "expected": 1,
+    "source": "value = \"safe\"\nif flag:\n    value = input()\nelse:\n    value = \"fixed\"\ncursor.execute(\"SELECT \" + value)\n"
+  },
+  {
+    "name": "loop_carried",
+    "expected": 1,
+    "source": "query = \"SELECT 1\"\nfor item in items:\n    cursor.execute(query)\n    query = \"SELECT \" + input()\n"
+  },
+  {
+    "name": "constant",
+    "expected": 0,
+    "source": "cursor.execute(\"SELECT 1\")\n"
+  },
+  {
+    "name": "positional_binding",
+    "expected": 0,
+    "source": "value = input()\ncursor.execute(\"SELECT * FROM users WHERE name=%s\", (value,))\n"
+  },
+  {
+    "name": "mapping_binding",
+    "expected": 0,
+    "source": "value = request.args[\"name\"]\ncursor.execute(\"SELECT * FROM users WHERE name=:name\", {\"name\": value})\n"
+  },
+  {
+    "name": "keyword_binding",
+    "expected": 0,
+    "source": "value = input()\ncursor.execute(query=\"SELECT * FROM users WHERE name=%s\", params=(value,))\n"
+  },
+  {
+    "name": "overwritten",
+    "expected": 0,
+    "source": "query = input()\nquery = \"SELECT 1\"\ncursor.execute(query)\n"
+  },
+  {
+    "name": "integer_conversion",
+    "expected": 0,
+    "source": "value = int(input())\ncursor.execute(f\"SELECT * FROM users WHERE id={value}\")\n"
+  },
+  {
+    "name": "float_conversion",
+    "expected": 0,
+    "source": "value = float(request.args[\"price\"])\ncursor.execute(f\"SELECT * FROM users WHERE price={value}\")\n"
+  },
+  {
+    "name": "unused_taint",
+    "expected": 0,
+    "source": "value = input()\nquery = \"SELECT 1\"\ncursor.execute(query)\n"
+  },
+  {
+    "name": "static_fstring",
+    "expected": 0,
+    "source": "table = \"users\"\ncursor.execute(f\"SELECT * FROM {table}\")\n"
+  },
+  {
+    "name": "function_scope",
+    "expected": 0,
+    "source": "def first():\n    query = input()\ndef second():\n    query = \"SELECT 1\"\n    cursor.execute(query)\n"
+  }
+]

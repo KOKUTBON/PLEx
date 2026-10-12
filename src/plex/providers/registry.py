@@ -13,6 +13,7 @@ from plex.report.unified import Category, Isolation
 
 from .base import AnalysisProvider, EngineCapability
 from .performance import PerformanceProvider
+from .rea import ReaProvider
 from .xboundary import XBoundaryProvider
 
 
@@ -45,6 +46,7 @@ class ProviderRegistry:
     def discover(cls) -> ProviderRegistry:
         registry = cls()
         registry.register("performance", PerformanceProvider, source="bundled")
+        registry.register("rea", ReaProvider, source="bundled")
         registry.register("xboundary", XBoundaryProvider, source="bundled")
         for ep in sorted(entry_points(group="plex.providers"), key=lambda ep: ep.name):
             # EntryPoint.load imports Python code, so defer it until explicit selection.

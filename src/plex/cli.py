@@ -29,6 +29,7 @@ from plex.config.loader import load_config
 from plex.config.templates import CONFIG_PRESETS
 from plex.config.validate import validate_config_paths
 from plex.fix import FileFixResult, FixEngine
+from plex.inspect.commands import add_inspect_commands
 from plex.providers.base import AnalysisProvider, AnalysisTask
 from plex.providers.commands import add_provider_commands
 from plex.providers.orchestrator import run_providers
@@ -777,6 +778,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = p.add_subparsers(dest="cmd", required=True)
     add_provider_commands(sub)
     add_security_commands(sub)
+    add_inspect_commands(sub)
 
     a = sub.add_parser("analyze", help="Analyze a repository")
     _add_analyze_args(a)

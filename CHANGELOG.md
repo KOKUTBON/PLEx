@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add REA binary and artifact inspection adapter (`plex.providers.rea`) with
+  version-pinned CLI and stdio MCP transport bridges, tool catalog drift detection,
+  disposable workspace isolation, residual unknowns mapping (`unk_*` to inconclusive findings),
+  built-in binary security rules, and `plex inspect` CLI subcommand.
+
 - Add experimental `xbnd.code-eval-taint` (CWE-94) and `xbnd.path-traversal` (CWE-22)
   rules to xBOUNDARY with taint tracking, literal/basename sanitization, and
   `plex security rules list` registration.

@@ -435,11 +435,11 @@ def test_stripped_binary_unknowns(tmp_path: Path):
 
 
 def test_unsupported_artifact_reports_partial(tmp_path: Path):
-    archive_file = tmp_path / "app.zip"
-    archive_file.write_bytes(b"PK\x03\x04" + b"\x00" * 100)
+    raw_file = tmp_path / "app.bin"
+    raw_file.write_bytes(b"\x00\x01\x02\x03" * 20)
 
     engine = InspectEngine()
-    report = engine.inspect(archive_file)
+    report = engine.inspect(raw_file)
 
     assert report.scan_status == "partial"
     assert any("not yet supported natively" in lim for lim in report.engines[0].limitations)

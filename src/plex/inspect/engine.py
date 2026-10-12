@@ -18,6 +18,7 @@ from plex.report.unified import (
     ScanStatus,
 )
 
+from .archive import parse_archive
 from .elf import parse_elf
 from .intake import ArtifactIntakeError, intake_artifact
 from .macho import parse_macho
@@ -51,9 +52,9 @@ class InspectEngine:
             )
             return self._build_report(resolved, [], [run_failed], "failed")
 
-        if fmt not in ("elf", "macho", "pe"):
+        if fmt not in ("elf", "macho", "pe", "archive"):
             limitation = (
-                f"Binary format '{fmt}' is not yet supported natively (ELF, Mach-O, and PE supported)"
+                f"Binary format '{fmt}' is not yet supported natively (ELF, Mach-O, PE, and archive supported)"
             )
             run_partial = EngineRun(
                 engine="inspect",
@@ -72,6 +73,8 @@ class InspectEngine:
                 descriptor = parse_macho(data, str(resolved), sha256)
             elif fmt == "pe":
                 descriptor = parse_pe(data, str(resolved), sha256)
+            elif fmt == "archive":
+                descriptor = parse_archive(data, str(resolved), sha256)
             else:
                 raise ValueError(f"Unhandled binary format: {fmt}")
         except Exception as exc:

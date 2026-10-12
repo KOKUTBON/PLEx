@@ -28,12 +28,14 @@ from plex.analyze.pipeline import (
 from plex.config.loader import load_config
 from plex.config.templates import CONFIG_PRESETS
 from plex.config.validate import validate_config_paths
+from plex.coverage.commands import add_coverage_commands
 from plex.fix import FileFixResult, FixEngine
 from plex.inspect.commands import add_inspect_commands
 from plex.providers.base import AnalysisProvider, AnalysisTask
 from plex.providers.commands import add_provider_commands
 from plex.providers.orchestrator import run_providers
 from plex.providers.performance import PerformanceProvider
+from plex.providers.supply_chain import SupplyChainProvider
 from plex.providers.xboundary import XBoundaryProvider
 from plex.repair.commands import add_remediate_commands
 from plex.report.annotations import to_github_annotations
@@ -65,11 +67,13 @@ def parse_checks(checks_arg: str | None) -> list[str]:
     tokens = [t.strip().lower() for t in checks_arg.split(",") if t.strip()]
     if not tokens:
         raise ValueError("No checks specified in --checks")
-    valid_checks = {"performance", "security", "xboundary"}
+    valid_checks = {"performance", "security", "xboundary", "supply_chain"}
     normalized: list[str] = []
     for t in tokens:
         if t not in valid_checks:
-            raise ValueError(f"Unknown check engine '{t}'. Supported checks: performance, security")
+            raise ValueError(
+                f"Unknown check engine '{t}'. Supported checks: performance, security, supply_chain"
+            )
         norm = "security" if t == "xboundary" else t
         if norm not in normalized:
             normalized.append(norm)
@@ -90,6 +94,8 @@ def cmd_analyze(args: argparse.Namespace) -> int:
         providers.append(perf_provider)
     if "security" in selected_checks:
         providers.append(XBoundaryProvider())
+    if "supply_chain" in selected_checks:
+        providers.append(SupplyChainProvider())
 
     perf_opts = analysis_options(args)
     sec_opts: dict[str, Any] = {
@@ -469,6 +475,37 @@ def cmd_fix(args: argparse.Namespace) -> int:
 
 
 def cmd_benchmark(args: argparse.Namespace) -> int:
+    if getattr(args, "comparative", None):
+        from plex.bench.comparative import BenchmarkManifest, run_comparative_benchmark
+
+        manifest_path = Path(args.comparative).resolve()
+        if not manifest_path.exists():
+            print(f"Error: Comparative benchmark manifest not found: {args.comparative}")
+            return 1
+        manifest_data = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest = BenchmarkManifest.from_dict(manifest_data)
+        corpus_dir = manifest_path.parent
+        metrics = run_comparative_benchmark(corpus_dir, manifest)
+
+        if getattr(args, "json", None):
+            out_json = Path(args.json)
+            out_json.parent.mkdir(parents=True, exist_ok=True)
+            out_json.write_text(json.dumps(metrics.to_dict(), indent=2), encoding="utf-8")
+        else:
+            print(f"Comparative Benchmark Report: {metrics.manifest_name}")
+            print(f"Target Rule: {metrics.target_rule} ({metrics.total_cases} cases)")
+            print(f"  Precision: {metrics.precision:.2%} (min: {manifest.min_precision:.2%})")
+            print(f"  Recall:    {metrics.recall:.2%} (min: {manifest.min_recall:.2%})")
+            print(f"  F1 Score:  {metrics.f1_score:.4f}")
+            print(f"  Repairs:   {metrics.repairs_verified}/{metrics.repairs_attempted} verified")
+            if metrics.threshold_failures:
+                print("Failures:")
+                for fail in metrics.threshold_failures:
+                    print(f"  - {fail}")
+            print(f"Status: {'PASS' if metrics.passed_thresholds else 'FAIL'}")
+
+        return 0 if metrics.passed_thresholds else 1
+
     if getattr(args, "rules", False) or getattr(args, "rule", None):
         from plex.bench.rule_bench import (
             format_rule_benchmark_table,
@@ -783,6 +820,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_inspect_commands(sub)
     add_validate_commands(sub)
     add_remediate_commands(sub)
+    add_coverage_commands(sub)
 
     a = sub.add_parser("analyze", help="Analyze a repository")
     _add_analyze_args(a)
@@ -915,6 +953,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="append",
         default=None,
         help="Specific rule ID(s) to benchmark (with --rules)",
+    )
+    bm.add_argument(
+        "--comparative",
+        default=None,
+        help="Path to comparative benchmark manifest JSON evaluating precision, recall, and repair fidelity",
     )
     bm.set_defaults(func=cmd_benchmark)
 

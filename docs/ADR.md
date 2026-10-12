@@ -51,6 +51,7 @@ Create an ADR when a change:
 - [0006 Native active application testing (PLEx Validate)](adr/0006-native-active-validation.md) — proposed.
 - [0007 Native artifact intelligence (PLEx Inspect)](adr/0007-native-artifact-inspection.md) — proposed.
 - [0008 Integrated intelligence and cross-engine repair verification](adr/0008-integrated-intelligence-and-repair.md) — proposed.
+- [0009 Declared coverage matrix, supply chain analysis, and comparative validation harness](adr/0009-coverage-and-comparative-validation.md) — accepted.
 
 These records document key architectural decisions for [PLEx 2.0](PLEx-2.0-PLAN.md).
 

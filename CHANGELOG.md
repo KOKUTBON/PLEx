@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add declared platform coverage matrix, native supply chain and configuration security,
+  and comparative validation harness (`plex.coverage`, `plex.supply_chain`, `plex.bench.comparative`,
+  `plex coverage`, `plex benchmark --comparative`). Provides declared capability inventory
+  across all seven software surfaces, pure-Python manifest parsing (`requirements.txt`, `poetry.lock`,
+  `Pipfile.lock`), offline CVE advisory correlation, Dockerfile and IaC security rules (`cfg.*`),
+  and confusion-matrix accuracy benchmarking asserting $\ge 95\%$ precision, $\ge 90\%$ recall,
+  and zero repair regressions.
+
 - Add integrated multi-engine intelligence and cross-engine repair verification
   (`plex.repair.coordinator`, `plex.graph.correlate`, `plex remediate`) linking static
   xBOUNDARY findings, AST-discovered web framework routes (Flask, FastAPI, Django), active

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Introduce versioned target descriptors, content-addressed evidence store,
+  project graph v1, and patch candidate / repair verification contracts with
+  JSON schemas, lifecycle state transitions, and audit trails.
+
 - Add explicit multi-engine static analysis to `plex analyze` via `--checks`, supporting
   `performance`, `security` (or both), with unified JSON v8 and SARIF reports,
   Markdown presentation, severity and category gating, incomplete-run nonzero exits,

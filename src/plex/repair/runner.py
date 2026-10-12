@@ -129,20 +129,69 @@ class RepairVerificationRunner:
 
             # 2. Syntax verification check
             t0 = time.monotonic()
-            compile_res = self.sandbox.execute(
-                cmd=[sys.executable, "-m", "py_compile", str(target_path)],
-                cwd=workspace,
-                timeout=10.0,
-            )
+            syntax_passed = True
+            syntax_cmd = ""
+            syntax_details: dict[str, Any] = {}
+            if candidate.target_file.endswith(".py"):
+                compile_res = self.sandbox.execute(
+                    cmd=[sys.executable, "-m", "py_compile", str(target_path)],
+                    cwd=workspace,
+                    timeout=10.0,
+                )
+                syntax_passed = compile_res.returncode == 0
+                syntax_cmd = f"{sys.executable} -m py_compile {candidate.target_file}"
+                if not syntax_passed:
+                    syntax_details = {"stderr": compile_res.stderr}
+            elif "dockerfile" in candidate.target_file.lower():
+                syntax_cmd = f"dockerfile_syntax_check {candidate.target_file}"
+                valid_instructions = {
+                    "FROM",
+                    "RUN",
+                    "CMD",
+                    "LABEL",
+                    "MAINTAINER",
+                    "EXPOSE",
+                    "ENV",
+                    "ADD",
+                    "COPY",
+                    "ENTRYPOINT",
+                    "VOLUME",
+                    "USER",
+                    "WORKDIR",
+                    "ARG",
+                    "ONBUILD",
+                    "STOPSIGNAL",
+                    "HEALTHCHECK",
+                    "SHELL",
+                }
+                has_from = False
+                for lno, line in enumerate(patched_content.splitlines(), start=1):
+                    sline = line.strip()
+                    if not sline or sline.startswith("#"):
+                        continue
+                    token = sline.split()[0].upper()
+                    if token == "FROM":
+                        has_from = True
+                    elif token not in valid_instructions:
+                        syntax_passed = False
+                        syntax_details = {
+                            "error": f"Unknown Dockerfile instruction '{token}' on line {lno}"
+                        }
+                        break
+                if syntax_passed and not has_from:
+                    syntax_passed = False
+                    syntax_details = {"error": "Dockerfile lacks required FROM instruction"}
+            else:
+                syntax_cmd = f"syntax_check {candidate.target_file}"
+
             syntax_duration = (time.monotonic() - t0) * 1000.0
-            syntax_passed = compile_res.returncode == 0
             checks.append(
                 VerificationCheck(
                     name="syntax_valid",
                     passed=syntax_passed,
                     duration_ms=syntax_duration,
-                    command=f"{sys.executable} -m py_compile {candidate.target_file}",
-                    details={"stderr": compile_res.stderr} if not syntax_passed else {},
+                    command=syntax_cmd,
+                    details=syntax_details,
                 )
             )
 
@@ -164,7 +213,16 @@ class RepairVerificationRunner:
             # 3. Security analyzer re-scan verification check
             t0 = time.monotonic()
             task = AnalysisTask(repo_root=workspace)
-            res = run_providers(task, [XBoundaryProvider()])
+            if (
+                candidate.engine == "supply_chain"
+                or candidate.rule_id.startswith("cfg.")
+                or candidate.rule_id.startswith("dep.")
+            ):
+                from plex.providers.supply_chain import SupplyChainProvider
+
+                res = run_providers(task, [SupplyChainProvider()])
+            else:
+                res = run_providers(task, [XBoundaryProvider()])
             analysis_duration = (time.monotonic() - t0) * 1000.0
 
             # Check if any finding for this rule and file still remains
@@ -172,7 +230,10 @@ class RepairVerificationRunner:
                 f
                 for f in res.findings
                 if f.rule_id == candidate.rule_id
-                and Path(f.file).as_posix() == target_rel.as_posix()
+                and (
+                    Path(f.file).as_posix() == target_rel.as_posix()
+                    or Path(f.file).name == target_rel.name
+                )
             ]
             vuln_cleared = len(remaining_findings) == 0
             checks.append(

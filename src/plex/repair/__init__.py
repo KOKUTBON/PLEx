@@ -5,6 +5,8 @@ from __future__ import annotations
 from .command_array import CommandArrayFixer
 from .commands import add_remediate_commands, cmd_remediate
 from .coordinator import RemediationCoordinator, RemediationPlan
+from .docker_tag_pin import DockerTagPinFixer
+from .docker_user import DockerUserFixer
 from .models import (
     PatchCandidate,
     RepairRecord,
@@ -19,6 +21,8 @@ from .sql_parameterize import SQLParameterizeFixer
 
 __all__ = [
     "CommandArrayFixer",
+    "DockerTagPinFixer",
+    "DockerUserFixer",
     "PatchCandidate",
     "PathBoundaryFixer",
     "RemediationCoordinator",

@@ -501,8 +501,9 @@ That sequence lands a shippable, strictly-additive first increment (platform sca
 
 Steps 1–5 are implemented on the foundation PR. The xBOUNDARY spike is bounded
 Python analysis with one SQL rule, embedded data-flow evidence, SARIF codeFlows,
-bounded same-module helper expansion and two labeled 20-case corpora. It is not the full security engine
+bounded same-module and selected-project imported helper expansion, two labeled
+20-case corpora and a 12-case multi-module corpus. It is not the full security engine
 in §6. Versioned, additive source/SQL sanitizer/SQL sink policy catalogs are
 implemented with strict validation, CLI override and report provenance. See
-[scope and validation](SECURITY_ANALYSIS.md). Next: cross-module call resolution
-and broader real-world corpus validation; shared CLI formats/gates remain unfinished.
+[scope and validation](SECURITY_ANALYSIS.md). Next: broader real-world corpus
+validation and another security rule; shared CLI formats/gates remain unfinished.

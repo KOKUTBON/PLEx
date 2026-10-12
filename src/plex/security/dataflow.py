@@ -6,6 +6,7 @@ import ast
 from dataclasses import dataclass
 
 from .functions import CallBudget, FunctionCatalog, local_bindings
+from .modules import ModuleCatalog, literal
 from .policy import SecurityPolicy
 
 
@@ -46,7 +47,7 @@ class SQLDataflow:
     def __init__(self, file: str, policy: SecurityPolicy | None = None) -> None:
         self.file = file
         self.policy = policy or SecurityPolicy()
-        self.flows: dict[tuple[str, int, int], SQLFlow] = {}
+        self.flows: dict[tuple[str, str, int, int], SQLFlow] = {}
         self.limitations: list[str] = []
         self.aliases: dict[str, str] = {}
         self.catalog: FunctionCatalog | None = None
@@ -56,9 +57,22 @@ class SQLDataflow:
         self.budget = CallBudget()
         self.returns: list[Flow] = []
         self.defaults: dict[str, dict[str, Flow]] = {}
+        self.project: ModuleCatalog | None = None
+        self.module_states: dict[str, SQLDataflow] = {}
+        self.allow_cross_module = True
 
     def analyze(self, tree: ast.AST) -> list[SQLFlow]:
         self.catalog = FunctionCatalog(tree)
+        if self.project:
+            for statement in getattr(tree, "body", []):
+                if isinstance(statement, ast.ImportFrom):
+                    for alias in statement.names:
+                        key = alias.asname or alias.name
+                        if key in self.catalog.aliases:
+                            module = self.project.imported(
+                                self.file, statement.module, statement.level
+                            )
+                            self.catalog.aliases[key] = f"{module}.{alias.name}"
         self.module_env = {}
         self.block(getattr(tree, "body", []), self.module_env, "")
         return list(self.flows.values())
@@ -116,18 +130,43 @@ class SQLDataflow:
         self, node: ast.Call, values: list[Flow], keywords: dict[str | None, Flow]
     ) -> Flow | None:
         """Summarize a direct call in its bound argument context; None means unknown."""
-        if not isinstance(node.func, ast.Name) or self.catalog is None:
+        if self.catalog is None:
             return None
-        name = node.func.id
-        function = self.catalog.functions.get(name)
-        if function is None or name in self.locals or name in self.aliases:
+        target = self
+        name = dotted(node.func)
+        head = name.split(".")[0]
+        if head in self.aliases:
+            if self.project is None or not self.allow_cross_module:
+                return None
+            canonical = self.name(node.func)
+            resolved = self.project.resolve(canonical)
+            if resolved is None:
+                if self.project.local_name(canonical) or canonical.startswith("<unresolved"):
+                    self.limitations.append(
+                        "Project import is ambiguous or its export is unsupported"
+                    )
+                return None
+            file, name = resolved
+            target = self.module_states.get(file, self)
+            if file not in self.module_states or not self.project.can_initialize(file):
+                self.limitations.append("Project module initialization cannot be summarized")
+                return None
+        elif not isinstance(node.func, ast.Name) or name in self.locals:
             return None
-        if not self.catalog.supported(function):
+        if target.catalog is None:
+            return None
+        function = target.catalog.functions.get(name)
+        if function is None:
+            if target is not self:
+                self.limitations.append("Project function export is not uniquely bound")
+            return None
+        identity = f"{target.file}:{name}"
+        if not target.catalog.supported(function):
             self.limitations.append(
                 f"Local call has unsupported signature or function kind: {name}"
             )
             return None
-        if name in self.stack or len(self.stack) >= self.budget.max_depth:
+        if identity in self.stack or len(self.stack) >= self.budget.max_depth:
             self.limitations.append("Local call recursion/depth limit reached")
             return None
         if self.budget.remaining <= 0:
@@ -170,21 +209,36 @@ class SQLDataflow:
             self.limitations.append("Local call arguments could not be bound")
             return None
         self.budget.remaining -= 1
-        child = SQLDataflow(self.file, self.policy)
-        child.catalog = self.catalog
-        child.module_env = self.module_env
+        child = SQLDataflow(target.file, self.policy)
+        child.catalog = target.catalog
+        child.module_env = target.module_env
+        child.project = self.project
+        child.module_states = self.module_states
+        child.allow_cross_module = self.allow_cross_module
         child.budget = self.budget
-        child.defaults = self.defaults
-        child.stack = (*self.stack, name)
+        child.defaults = target.defaults
+        child.stack = (*self.stack, identity)
         child.locals = local_bindings(function)
-        child.aliases = dict(self.catalog.aliases)
-        local = {**{key: () for key in self.catalog.bindings}, **self.module_env}
+        child.aliases = dict(target.catalog.aliases)
+        local = {**{key: () for key in target.catalog.bindings}, **target.module_env}
         local.update({key: () for key in child.locals})
         # Defaults are expressions in module scope, never in the caller's locals.
         for arg in arguments:
             value = bound.get(arg.arg)
             if value is None:
-                captured = self.defaults.get(name, {})
+                default = defaults[arg.arg]
+                if target is not self and not (
+                    literal(default)
+                    or child.source(default)
+                    or (
+                        isinstance(default, ast.Name)
+                        and self.project is not None
+                        and default.id in self.project.constants[target.file]
+                    )
+                ):
+                    self.limitations.append("Project helper default cannot be summarized")
+                    return None
+                captured = target.defaults.get(name, {})
                 if arg.arg in captured:
                     value = captured[arg.arg]
                 elif isinstance(defaults[arg.arg], ast.Constant):
@@ -273,7 +327,8 @@ class SQLDataflow:
                 if query:
                     steps = (*query, self.step(node, "sink", name))
                     self.flows.setdefault(
-                        (qualname, node.lineno, node.col_offset), SQLFlow(node, qualname, steps)
+                        (self.file, qualname, node.lineno, node.col_offset),
+                        SQLFlow(node, qualname, steps),
                     )
             source = self.source(node)
             head = dotted(node.func).split(".")[0]
@@ -326,8 +381,18 @@ class SQLDataflow:
         for stmt in statements:
             if isinstance(stmt, (ast.Import, ast.ImportFrom)):
                 for alias in stmt.names:
+                    if alias.name == "*":
+                        self.limitations.append("Wildcard imports are not resolved")
                     if isinstance(stmt, ast.ImportFrom):
-                        self.aliases[alias.asname or alias.name] = f"{stmt.module}.{alias.name}"
+                        if self.project and self.project.imported(
+                            self.file, stmt.module, stmt.level
+                        ).startswith("<unresolved"):
+                            self.limitations.append(
+                                "Relative import escapes the selected project package"
+                            )
+                        self.aliases[alias.asname or alias.name] = (
+                            f"{self.project.imported(self.file, stmt.module, stmt.level) if self.project else stmt.module}.{alias.name}"
+                        )
                     else:
                         self.aliases[alias.asname or alias.name.split(".")[0]] = (
                             alias.name if alias.asname else alias.name.split(".")[0]
@@ -409,11 +474,22 @@ class SQLDataflow:
             elif isinstance(stmt, ast.If):
                 self.expression(stmt.test, env, qualname)
                 left, right = dict(env), dict(env)
+                aliases = dict(self.aliases)
                 self.block(stmt.body, left, qualname)
+                left_aliases = dict(self.aliases)
+                self.aliases = aliases
                 self.block(stmt.orelse, right, qualname)
+                if left_aliases != self.aliases:
+                    self.limitations.append("Import alias differs across branches")
+                self.aliases = {
+                    key: value
+                    for key, value in left_aliases.items()
+                    if self.aliases.get(key) == value
+                }
                 env.update(self.merge(left, right))
             elif isinstance(stmt, (ast.For, ast.AsyncFor, ast.While)):
                 initial = dict(env)
+                initial_aliases = dict(self.aliases)
                 for _ in range(8):
                     before = {key: value[:1] for key, value in env.items()}
                     if isinstance(stmt, (ast.For, ast.AsyncFor)):
@@ -426,6 +502,13 @@ class SQLDataflow:
                         break
                 else:
                     self.limitations.append("Loop data-flow pass limit reached")
+                if initial_aliases != self.aliases:
+                    self.limitations.append("Import alias depends on loop execution")
+                self.aliases = {
+                    key: value
+                    for key, value in initial_aliases.items()
+                    if self.aliases.get(key) == value
+                }
                 self.block(stmt.orelse, env, qualname)
             elif isinstance(stmt, (ast.With, ast.AsyncWith)):
                 for item in stmt.items:
@@ -435,12 +518,27 @@ class SQLDataflow:
                 self.block(stmt.body, env, qualname)
             elif isinstance(stmt, ast.Try):
                 initial = dict(env)
+                initial_aliases = dict(self.aliases)
                 self.block(stmt.body, env, qualname)
                 self.block(stmt.orelse, env, qualname)
+                merged_aliases = dict(self.aliases)
                 for handler in stmt.handlers:
                     branch = self.merge(initial, env)
+                    self.aliases = {
+                        key: value
+                        for key, value in initial_aliases.items()
+                        if merged_aliases.get(key) == value
+                    }
                     self.block(handler.body, branch, qualname)
+                    if self.aliases != merged_aliases:
+                        self.limitations.append("Import alias differs across exception paths")
+                    merged_aliases = {
+                        key: value
+                        for key, value in merged_aliases.items()
+                        if self.aliases.get(key) == value
+                    }
                     env.update(self.merge(env, branch))
+                self.aliases = merged_aliases
                 self.block(stmt.finalbody, env, qualname)
             elif isinstance(stmt, ast.Return):
                 flow = self.expression(stmt.value, env, qualname)

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Resolve selected-project Python helper imports across modules/packages, retain
+  cross-file evidence and callee locations, and report unsupported/ambiguous
+  imports or initialization as incomplete coverage. Add a 12-project corpus.
+
 - Follow Python SQL taint through bounded same-module helpers, with argument and
   return traces, definition-time defaults, explicit incomplete-call coverage,
   and a separate labeled helper corpus.

@@ -1,0 +1,101 @@
+[
+  {
+    "name": "flask-route-query-builder",
+    "files": {
+      "app.py": "from query import build\ndef search(request):\n cursor.execute(build(request.args[\"term\"]))",
+      "query.py": "def build(term):\n return f\"SELECT * FROM products WHERE name='{term}'\""
+    },
+    "expected": 1
+  },
+  {
+    "name": "service-repository-bound-values",
+    "files": {
+      "app.py": "from repository import search\ndef view(request):\n search(request.args[\"term\"])",
+      "repository.py": "def search(term):\n cursor.execute(\"SELECT * FROM products WHERE name=%s\", (term,))"
+    },
+    "expected": 0
+  },
+  {
+    "name": "repository-statement-injection",
+    "files": {
+      "app.py": "from repository import search\ndef view(request):\n search(request.args[\"term\"])",
+      "repository.py": "def search(term):\n cursor.execute(f\"SELECT * FROM products WHERE name='{term}'\")"
+    },
+    "expected": 1
+  },
+  {
+    "name": "imported-request-source",
+    "files": {
+      "app.py": "from inputs import user_query\ncursor.execute(user_query())",
+      "inputs.py": "def user_query():\n return request.args[\"query\"]"
+    },
+    "expected": 1
+  },
+  {
+    "name": "relative-package-service",
+    "files": {
+      "pkg/__init__.py": "",
+      "pkg/view.py": "from .query import build\ncursor.execute(build(input()))",
+      "pkg/query.py": "def build(value):\n return value"
+    },
+    "expected": 1
+  },
+  {
+    "name": "aliased-module-helper",
+    "files": {
+      "app.py": "import query as q\ncursor.execute(q.build(input()))",
+      "query.py": "def build(value):\n return value"
+    },
+    "expected": 1
+  },
+  {
+    "name": "numeric-helper",
+    "files": {
+      "app.py": "from query import numeric\ncursor.execute(f\"SELECT {numeric(input())}\")",
+      "query.py": "def numeric(value):\n return int(value)"
+    },
+    "expected": 0
+  },
+  {
+    "name": "constant-statement-helper",
+    "files": {
+      "app.py": "from query import build\ncursor.execute(build(input()))",
+      "query.py": "def build(value):\n return \"SELECT 1\""
+    },
+    "expected": 0
+  },
+  {
+    "name": "chained-imported-helpers",
+    "files": {
+      "app.py": "from service import build\ncursor.execute(build(input()))",
+      "service.py": "from query import build as next_build\ndef build(value):\n return next_build(value)",
+      "query.py": "def build(value):\n return value"
+    },
+    "expected": 1
+  },
+  {
+    "name": "source-to-repository",
+    "files": {
+      "app.py": "from inputs import read\nfrom repository import run\nrun(read())",
+      "inputs.py": "def read():\n return input()",
+      "repository.py": "def run(value):\n cursor.execute(value)"
+    },
+    "expected": 1
+  },
+  {
+    "name": "clean-default",
+    "files": {
+      "app.py": "from query import build\ncursor.execute(build())",
+      "query.py": "def build(value=\"SELECT 1\"):\n return value"
+    },
+    "expected": 0
+  },
+  {
+    "name": "source-default",
+    "files": {
+      "app.py": "from query import build\ncursor.execute(build())",
+      "query.py": "def build(value=input()):\n return value"
+    },
+    "expected": 1
+  }
+]

@@ -113,7 +113,9 @@ Repeated calls to the same sink keep one representative trace. Existing
 suppression comments apply at the sink, including when it is in a helper.
 
 The analysis permits at most eight nested helper expansions and 256 expansions
-per source file, shared across entry points and loops. Recursion and exhausted
+per source-file analysis pass, shared across entry points, imported helpers and loops.
+A static preparation pass records module bindings/defaults before project calls
+are expanded; it has a separate bounded same-module budget. Recursion and exhausted
 budgets mark coverage partial. Decorated/async/generator functions, nested
 definitions, global/nonlocal writes, variadic signatures, argument unpacking
 and invalid argument binding cannot provide a complete summary. When called,
@@ -121,11 +123,45 @@ they mark coverage partial and preserve argument taint in the unknown return.
 Nonconstant defaults encountered before their definition is modeled also mark
 coverage partial. No target functions are imported or executed.
 
-This increment does not resolve cross-module calls, method dispatch, closures
-or function-value aliases. Unknown external calls continue to propagate their
+Method dispatch, closures and function-value aliases remain outside this model.
+Unknown external calls continue to propagate their
 arguments conservatively; their internal sinks and return sources are outside
 the model. Heap mutation and deferred global-state changes remain outside the
 model, so a clean modeled return is not a general sanitizer guarantee.
+
+## Selected-project import resolution
+
+Direct `import module`, `import module as alias`, and `from module import helper`
+calls can now reach helpers in other selected Python files. Package-relative
+imports, imports inside functions, package `__init__.py` functions and a `src/`
+layout are supported. Module names derive solely from repository-relative
+selected paths. When `src/__init__.py` is absent, `src/` is treated as a source
+root. Duplicate root/src names or module/package collisions cannot establish
+complete summaries.
+
+No Python loader, `sys.path`, installed dependency or unselected source is
+consulted. Namespace directories are indexed from selected paths; selected
+package initializers are checked alongside imported modules. This is a static
+project naming convention, not a reproduction of interpreter import precedence.
+Excluded helpers remain outside the model, like external dependencies.
+
+Imported helpers currently require module initialization consisting of imports,
+function definitions, docstrings/pass and literal assignments to simple names.
+Other top-level statements, nonliteral global assignments, ambiguous exports,
+re-exports, wildcard imports, branch/loop/exception-dependent aliases and
+invalid relative imports mark coverage partial
+when they affect the modeled analysis. Omitted imported defaults must be
+literals, modeled source expressions or names of literal module constants.
+Other defaults cannot establish a complete imported summary. Arbitrary
+import-time side effects, monkey-patching and deferred global changes remain
+outside the model.
+
+Arguments and returns retain their original file names through imported helper
+chains. Recursion keys include both file and function name, so distinct helpers
+with matching names do not count as recursion. Physical sink file, function and
+position determine deduplication; helper findings and suppressions use the
+callee's location. Findings with identical line numbers in different files
+remain separate. JSON and SARIF retain all file boundaries in their traces.
 
 ## Evidence and reports
 
@@ -178,8 +214,8 @@ results; they do not establish that the code is safe.
 
 This is a bounded, path-insensitive Python spike with one representative trace
 per sink. It does not resolve receiver types, follow heap/object aliases, model
-deferred global changes or prove path feasibility. Cross-module summaries and
-additional languages remain future work. Zero findings means no
+deferred global changes or prove path feasibility. Dynamic import/dispatch
+summaries and additional languages remain future work. Zero findings means no
 modeled flow was detected, not that the application is secure.
 
 ## Corpus and reproducible measurement
@@ -193,13 +229,16 @@ A separate [20-case local-helper corpus](../tests/fixtures/security/same_module_
 covers sources returned by helpers, argument-to-sink flows, chained returns,
 clean returns, default capture, keyword binding and shadowing. Additional tests
 cover recursion/depth/expansion limits, unsupported calls, trace round trips and
-callee sink identities. These fixtures are small examples, not a production
+callee sink identities. A [12-case cross-module corpus](../tests/fixtures/security/cross_module_sql.json)
+adds service/repository layouts, request sources, bound values and imported
+helper chains. These fixtures are synthetic examples, not a production
 precision/recall study.
 
 ```bash
-pytest tests/test_xboundary.py tests/test_security_policy.py tests/test_security_functions.py
+pytest tests/test_xboundary.py tests/test_security_policy.py tests/test_security_functions.py tests/test_security_modules.py
 python scripts/benchmark_security.py --iterations 5
 python scripts/benchmark_security.py --corpus same-module --iterations 5
+python scripts/benchmark_security.py --corpus cross-module --iterations 5
 ```
 
 A local Python 3.14 run on 2026-10-11 scanned the 20 fixtures in a median 5.961 ms
@@ -211,3 +250,9 @@ A local Python 3.14 run on 2026-10-12 measured a median 7.988 ms across five
 runs for the helper corpus (TP=11, TN=9, FP=0, FN=0). The original corpus
 remained TP=10, TN=10, FP=0, FN=0 with a median 6.420 ms. These are synthetic
 fixture measurements under the same exclusions described above.
+
+The cross-module corpus runs each of twelve fixture projects in its own source
+root. A local Python 3.14 run on 2026-10-12 measured a median 9.521 ms for all
+twelve scans across five runs (TP=8, TN=4, FP=0, FN=0). This includes per-project
+provider/report overhead and is not directly comparable to the single-root
+corpus timings above.

@@ -21,6 +21,7 @@ DECLARED_SURFACES: list[SurfaceCoverage] = [
             "xbnd.ssrf",
             "xbnd.sensitive-data-leak",
             "xbnd.insecure-cookie",
+            "xbnd.weak-crypto",
         ),
         verification_level="AST dataflow, tainted source-to-sink tracking, call-graph analysis",
         prerequisites=("Python 3.10+ AST",),

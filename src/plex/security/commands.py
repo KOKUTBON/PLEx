@@ -22,6 +22,7 @@ from .sensitive_data_leak import SensitiveDataLeakRule
 from .sql_injection import SQLInjectionRule
 from .ssrf import SsrfRule
 from .unsafe_deserialization import UnsafeDeserializationRule
+from .weak_crypto import WeakCryptoRule
 
 
 def cmd_security_verify(args: argparse.Namespace) -> int:
@@ -62,6 +63,7 @@ def cmd_security_rules(args: argparse.Namespace) -> int:
         SsrfRule(),
         SensitiveDataLeakRule(),
         InsecureCookieRule(),
+        WeakCryptoRule(),
     )
     details = [
         {

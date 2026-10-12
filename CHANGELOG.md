@@ -1,5 +1,14 @@
 # Changelog
 
+- Add automated HTTP security headers middleware fixer in `plex.repair` (`SecurityHeadersFixer`, `fix.security-headers`, `cfg.insecure-headers`, CWE-693 / OWASP A05:2025):
+  Automatically injects defensive HTTP security headers middleware into Flask (`@app.after_request`) and FastAPI (`@app.middleware("http")`)
+  applications, enforcing `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, and `Content-Security-Policy: default-src 'self'`.
+  Constructs versioned `PatchCandidate` contracts.
+
+- Add native active HTTP security headers testing in `plex.validate` (`SecurityHeadersRecipe`, `val.security-headers`, `cfg.insecure-headers`, CWE-693 / OWASP A05:2025):
+  Actively verifies running web endpoints for missing or misconfigured defensive HTTP response headers (`X-Content-Type-Options`,
+  `X-Frame-Options`, `Content-Security-Policy`), providing actionable missing header diagnostics and verified compliance proof.
+
 - Add automated vulnerable dependency upgrade fixer in `plex.repair` (`DependencyUpgradeFixer`, `fix.dependency-upgrade`, `dep.vulnerable-version`, CWE-1395):
   Automatically upgrades known vulnerable packages in requirements manifests (`requirements.txt`) to safe fixed versions
   recommended by security advisories (e.g. `requests==2.31.0`, `paramiko==2.10.1`, `urllib3==1.26.5`), preserving comments,

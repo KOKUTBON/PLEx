@@ -307,7 +307,10 @@ The [PyGoat manifest](../tests/fixtures/security/pygoat/manifest.json) pins thre
 function excerpts from the MIT-licensed, deliberately vulnerable
 [PyGoat training application](https://github.com/adeyosemanputra/pygoat/tree/19d17cc8874861142b330636d068bbde54e86b85).
 The fixtures retain upstream code with dedentation and minimal import headers;
-the manifest records source locations and SHA-256 hashes. The upstream
+the manifest records source locations and SHA-256 hashes. Two public dummy password seeds in the SQL excerpt trigger Gitleaks generic
+API-key detection; `.gitleaksignore` records only their exact historical
+commit/file/rule/line fingerprints. Other findings remain subject to scanning.
+The upstream
 [license](../tests/fixtures/security/pygoat/LICENSE.md) is retained. The two
 positive excerpts exercise a request-to-shell flow and Django raw SQL; the
 negative excerpt has no modeled shell invocation. That label does not assert

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 import statistics
 import subprocess
 import sys
@@ -13,6 +12,7 @@ from pathlib import Path
 from plex.analyze.static_ast import FunctionFinding
 from plex.git.diff import read_file_at_ref
 from plex.report.models import DynamicCheck, DynamicRegression
+from plex.sandbox import clean_env
 from plex.util.math import simple_curve_fit
 
 _HINT_RANK: dict[str, int] = {
@@ -227,7 +227,7 @@ def _run_probe(
             text=True,
             capture_output=True,
             timeout=timeout_seconds,
-            env={**os.environ, "PYTHONHASHSEED": "0"},
+            env=clean_env(),
             cwd=str(repo_root),
         )
     except subprocess.TimeoutExpired:

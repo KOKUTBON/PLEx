@@ -2,6 +2,69 @@
 
 ## Unreleased
 
+- PLEx 2.0 native platform release readiness: cohesive multi-engine orchestration across
+  Performance, xBOUNDARY (static taint), PLEx Inspect (ELF binary intelligence), PLEx Validate
+  (active reproduction), Supply Chain & IaC, and PLEx Repair (closed-loop remediation).
+  Unified CLI subcommands (`analyze`, `inspect`, `validate`, `remediate`, `coverage`, `benchmark`),
+  comprehensive cohesive test suite (`tests/test_cohesive_release_readiness.py`), Schema v8
+  JSON and SARIF 2.1.0 report generation, ADR 0010, and PLEx 2.0 Migration Guide (`docs/MIGRATION_2.0.md`).
+
+- Add declared platform coverage matrix, native supply chain and configuration security,
+  and comparative validation harness (`plex.coverage`, `plex.supply_chain`, `plex.bench.comparative`,
+  `plex coverage`, `plex benchmark --comparative`). Provides declared capability inventory
+  across all seven software surfaces, pure-Python manifest parsing (`requirements.txt`, `poetry.lock`,
+  `Pipfile.lock`), offline CVE advisory correlation, Dockerfile and IaC security rules (`cfg.*`),
+  and confusion-matrix accuracy benchmarking asserting $\ge 95\%$ precision, $\ge 90\%$ recall,
+  and zero repair regressions.
+
+- Add integrated multi-engine intelligence and cross-engine repair verification
+  (`plex.repair.coordinator`, `plex.graph.correlate`, `plex remediate`) linking static
+  xBOUNDARY findings, AST-discovered web framework routes (Flask, FastAPI, Django), active
+  validation reproduction, deterministic parameter-binding patch candidates, multi-engine
+  isolated verification (syntax, security re-scan, active exploit mitigation, PLEx Performance
+  regression checks, functional tests), and relational `ProjectGraph` provenance.
+
+- Add native artifact intelligence and binary inspection engine (`plex.inspect`)
+  with pure-Python format detection, 32-bit and 64-bit ELF structural parsing
+  (segments, sections, symbol tables, dynamic tags), compiler and linker hardening
+  evaluation (NX/DEP, PIE, RELRO, stack canaries, fortify source), native binary security
+  rules (weak hardening, banned APIs, deprecated crypto, insecure RPATH/RUNPATH, hardcoded
+  secrets), residual unknowns preservation (`bin.unknown.*`), and `plex inspect` CLI integration.
+
+- Add native active testing and dynamic vulnerability reproduction engine
+  (`plex.validate`) with hard technical network scope guardrails (`ScopedHttpClient`,
+  `NetworkScope`), authorization verification (`AUTHORIZATION.md`), static route discovery
+  (Flask, FastAPI, Django) linking source findings to endpoints, deterministic zero-LLM
+  reproduction recipes (SQLi, command injection, path traversal, role matrix), redacted
+  HTTP exchange evidence, and `plex validate` CLI subcommand.
+
+- Add REA binary and artifact inspection adapter (`plex.providers.rea`) with
+  version-pinned CLI and stdio MCP transport bridges, tool catalog drift detection,
+  disposable workspace isolation, residual unknowns mapping (`unk_*` to inconclusive findings),
+  built-in binary security rules, and `plex inspect` CLI subcommand.
+
+- Add experimental `xbnd.code-eval-taint` (CWE-94) and `xbnd.path-traversal` (CWE-22)
+  rules to xBOUNDARY with taint tracking, literal/basename sanitization, and
+  `plex security rules list` registration.
+
+- Add Python SQL parameterization repair fixer (`SQLParameterizeFixer`) and
+  isolated `RepairVerificationRunner`, generating deterministic `PatchCandidate`s
+  and executing multi-stage syntax, security re-scan, and regression verification
+  in ephemeral disposable workspaces.
+
+- Add hardened subprocess execution sandbox and disposable workspace isolation,
+  with runtime environment allowlisting and secret scrubbing, addressing potential
+  CI credential leaks in dynamic verification and patch execution workers.
+
+- Introduce versioned target descriptors, content-addressed evidence store,
+  project graph v1, and patch candidate / repair verification contracts with
+  JSON schemas, lifecycle state transitions, and audit trails.
+
+- Add explicit multi-engine static analysis to `plex analyze` via `--checks`, supporting
+  `performance`, `security` (or both), with unified JSON v8 and SARIF reports,
+  Markdown presentation, severity and category gating, incomplete-run nonzero exits,
+  and backwards-compatible performance defaults.
+
 - Add experimental `xbnd.command-injection` with bounded local/project flows,
   native shell sinks, explicit interpreter checks, evidence and suppressions.
   Dynamic subprocess options report incomplete coverage; SQL policy sanitizers

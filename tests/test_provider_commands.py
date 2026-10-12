@@ -26,6 +26,8 @@ def test_discovery_does_not_import_entry_points(monkeypatch, capsys):
     assert [record["id"] for record in inventory["providers"]] == [
         "external",
         "performance",
+        "rea",
+        "supply_chain",
         "xboundary",
     ]
     assert "version" not in inventory["providers"][0]

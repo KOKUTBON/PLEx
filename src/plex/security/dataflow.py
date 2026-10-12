@@ -339,6 +339,85 @@ class SQLDataflow:
                     return command
         return ()
 
+    def eval_flow(
+        self, node: ast.Call, name: str, values: list[Flow], keywords: dict[str | None, Flow]
+    ) -> Flow:
+        if name in {
+            "eval",
+            "builtins.eval",
+            "exec",
+            "builtins.exec",
+            "compile",
+            "builtins.compile",
+        }:
+            code = (
+                values[0]
+                if values
+                else join(
+                    keywords.get("source", ()),
+                    keywords.get("code", ()),
+                    keywords.get("expr", ()),
+                    keywords.get(None, ()),
+                )
+            )
+            return code
+        return ()
+
+    def path_flow(
+        self,
+        node: ast.Call,
+        name: str,
+        receiver: Flow,
+        values: list[Flow],
+        keywords: dict[str | None, Flow],
+    ) -> Flow:
+        path_sinks = {
+            "open",
+            "builtins.open",
+            "Path",
+            "pathlib.Path",
+            "os.open",
+            "os.remove",
+            "os.unlink",
+            "os.rmdir",
+            "os.listdir",
+            "os.walk",
+            "shutil.rmtree",
+            "shutil.copy",
+            "shutil.copyfile",
+            "shutil.move",
+            "send_file",
+            "flask.send_file",
+            "send_from_directory",
+            "flask.send_from_directory",
+        }
+        is_path_method = isinstance(node.func, ast.Attribute) and node.func.attr in {
+            "write_text",
+            "write_bytes",
+            "read_text",
+            "read_bytes",
+            "unlink",
+            "rmdir",
+            "mkdir",
+        }
+        if name in path_sinks or is_path_method:
+            target = (
+                values[0]
+                if values
+                else join(
+                    keywords.get("file", ()),
+                    keywords.get("filename", ()),
+                    keywords.get("path", ()),
+                    keywords.get("filepath", ()),
+                    keywords.get("src", ()),
+                    keywords.get(None, ()),
+                )
+            )
+            if not target and is_path_method:
+                target = receiver
+            return target
+        return ()
+
     def expression(self, node: ast.AST | None, env: Environment, qualname: str) -> Flow:
         if node is None:
             return ()
@@ -420,6 +499,23 @@ class SQLDataflow:
                         (self.file, qualname, node.lineno, node.col_offset),
                         SQLFlow(node, qualname, (*command, self.step(node, "sink", name))),
                     )
+            if self.kind == "eval" and not shadowed:
+                eval_f = self.eval_flow(node, name, values, keywords)
+                if eval_f:
+                    self.flows.setdefault(
+                        (self.file, qualname, node.lineno, node.col_offset),
+                        SQLFlow(node, qualname, (*eval_f, self.step(node, "sink", name))),
+                    )
+            if self.kind == "path" and not shadowed:
+                path_f = self.path_flow(node, name, receiver, values, keywords)
+                if path_f:
+                    sink_name = name or (
+                        node.func.attr if isinstance(node.func, ast.Attribute) else "path_sink"
+                    )
+                    self.flows.setdefault(
+                        (self.file, qualname, node.lineno, node.col_offset),
+                        SQLFlow(node, qualname, (*path_f, self.step(node, "sink", sink_name))),
+                    )
             source = self.source(node)
             if shadowed and name in {"input", "builtins.input"}:
                 source = ""
@@ -427,12 +523,25 @@ class SQLDataflow:
                 return (self.step(node, "source", source),)
             if self.kind == "sql" and self.policy.matches(name, self.policy.sanitizers):
                 return ()
+            if self.kind == "eval" and name in {"ast.literal_eval", "literal_eval"}:
+                return ()
+            if self.kind == "path" and name in {
+                "os.path.basename",
+                "basename",
+                "posixpath.basename",
+                "ntpath.basename",
+                "secure_filename",
+                "werkzeug.utils.secure_filename",
+            }:
+                return ()
             if name in {"int", "float", "builtins.int", "builtins.float"} and not shadowed:
                 return ()
             summary = self.local_call(node, values, keywords)
             if summary is not None:
                 return summary
             return join(receiver, *values, *keywords.values())
+        if self.kind == "path" and isinstance(node, ast.Attribute) and node.attr == "name":
+            return ()
         source = self.source(node)
         if source:
             return (self.step(node, "source", source),)

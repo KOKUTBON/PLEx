@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import fnmatch
 import os
+from collections.abc import Mapping
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 from plex import __version__
 from plex.analyze.static_ast import analyze_source
@@ -16,6 +17,8 @@ from plex.rules.base import RuleContext
 from plex.sandbox import Sandbox
 from plex.security.command_injection import COMMAND_LIMITATIONS, CommandInjectionRule
 from plex.security.dataflow import SQLDataflow
+from plex.security.eval_injection import EVAL_LIMITATIONS, CodeEvalInjectionRule
+from plex.security.path_traversal import PATH_LIMITATIONS, PathTraversalRule
 from plex.security.policy import PolicyError, load_policy
 from plex.security.sql_injection import SCOPE_LIMITATIONS, SQLInjectionRule
 
@@ -36,12 +39,20 @@ class XBoundaryProvider:
     capability = EngineCapability("xboundary", ("security",), default_enabled=False)
     version = __version__
 
+    @staticmethod
+    def _options(raw: Mapping[str, Any]) -> Mapping[str, Any]:
+        if "xboundary" in raw and isinstance(raw["xboundary"], Mapping):
+            return raw["xboundary"]
+        if "security" in raw and isinstance(raw["security"], Mapping):
+            return raw["security"]
+        return raw
+
     def preflight(self, env: ProviderEnv) -> PreflightResult:
         if env.task.target_kind != "source_tree" or not env.task.repo_root.is_dir():
             return PreflightResult(False, ("xBOUNDARY requires an existing source-tree directory",))
         if env.sandbox.isolation != "none" or not env.sandbox.supports("none"):
             return PreflightResult(False, ("xBOUNDARY worker backends are not implemented",))
-        options = env.task.options
+        options = self._options(env.task.options)
         if options.keys() - {"include", "exclude", "max_files", "policy"}:
             return PreflightResult(False, ("Unknown xBOUNDARY options",))
         for key in ("include", "exclude"):
@@ -71,11 +82,12 @@ class XBoundaryProvider:
             )
         limitations: list[str] = []
         root = task.repo_root.resolve()
-        policy = load_policy(root, task.options.get("policy"))
-        include = task.options.get("include") or ["**/*.py"]
-        exclude = [*PLExConfig().exclude, *task.options.get("exclude", [])]
+        options = self._options(task.options)
+        policy = load_policy(root, options.get("policy"))
+        include = options.get("include") or ["**/*.py"]
+        exclude = [*PLExConfig().exclude, *options.get("exclude", [])]
         sources: dict[str, str] = {}
-        maximum = task.options.get("max_files", 200)
+        maximum = options.get("max_files", 200)
         selected = 0
 
         def walk_error(error: OSError) -> None:
@@ -126,7 +138,12 @@ class XBoundaryProvider:
                 limitations.append(f"Python syntax could not be parsed: {file}")
         items = [
             item
-            for rule in (SQLInjectionRule(), CommandInjectionRule())
+            for rule in (
+                SQLInjectionRule(),
+                CommandInjectionRule(),
+                CodeEvalInjectionRule(),
+                PathTraversalRule(),
+            )
             for item in rule.apply(context)
         ]
         for item in items:
@@ -165,6 +182,8 @@ class XBoundaryProvider:
         scope_limits = [
             *SCOPE_LIMITATIONS,
             *COMMAND_LIMITATIONS,
+            *EVAL_LIMITATIONS,
+            *PATH_LIMITATIONS,
             f"Security policy catalog: {policy.digest}",
         ]
         if context.suppressed_findings:

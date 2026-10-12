@@ -139,44 +139,71 @@ def to_markdown(report: PLExReport, top_n: int = 10) -> str:
             lines.append(f"_+{len(report.suppressions) - top_n} more suppressions_")
         lines.append("")
 
-    if not report.findings:
+    security_findings = [f for f in report.findings_unified if f.category == "security"]
+    has_security_engine = any(e.engine == "xboundary" for e in report.engines)
+
+    if not report.findings and not (has_security_engine or security_findings):
         lines.append("✅ No findings (or no analyzable functions found).")
         return "\n".join(lines)
 
-    lines.append("## Top hotspots (heuristic)")
-    lines.append("")
-    has_dynamic = any(f.dynamic for f in report.findings[:top_n])
-    if has_dynamic:
-        lines.append("| Severity | Risk | Confidence | Dynamic | Hint | Location |")
-        lines.append("|---|---:|---:|---|---|---|")
+    if not report.findings and (has_security_engine or security_findings):
+        lines.append("✅ No performance findings (or no analyzable functions found).")
     else:
-        lines.append("| Severity | Risk | Confidence | Hint | Location |")
-        lines.append("|---|---:|---:|---|---|")
-    for f in report.findings[:top_n]:
-        loc = f"{f.file}:{f.lineno} `{f.qualname}`"
+        lines.append("## Top hotspots (heuristic)")
+        lines.append("")
+        has_dynamic = any(f.dynamic for f in report.findings[:top_n])
         if has_dynamic:
-            finding_dynamic = f.dynamic
-            dyn = (
-                f"{finding_dynamic.status} ({finding_dynamic.label})" if finding_dynamic else "n/a"
-            )
-            lines.append(
-                f"| {f.severity} | {f.risk_score:.3f} | {f.confidence:.2f} | {dyn} | {f.complexity_hint} | {loc} |"
-            )
+            lines.append("| Severity | Risk | Confidence | Dynamic | Hint | Location |")
+            lines.append("|---|---:|---:|---|---|---|")
         else:
-            lines.append(
-                f"| {f.severity} | {f.risk_score:.3f} | {f.confidence:.2f} | {f.complexity_hint} | {loc} |"
-            )
-
-    lines.append("")
-    finding_suggestions = [(f, f.suggestions) for f in report.findings[:top_n] if f.suggestions]
-    if finding_suggestions:
-        lines.append("### Fix suggestions")
-        lines.append("")
-        for f, items in finding_suggestions:
+            lines.append("| Severity | Risk | Confidence | Hint | Location |")
+            lines.append("|---|---:|---:|---|---|")
+        for f in report.findings[:top_n]:
             loc = f"{f.file}:{f.lineno} `{f.qualname}`"
-            joined = "; ".join(items)
-            lines.append(f"- {loc}: {joined}")
+            if has_dynamic:
+                finding_dynamic = f.dynamic
+                dyn = (
+                    f"{finding_dynamic.status} ({finding_dynamic.label})"
+                    if finding_dynamic
+                    else "n/a"
+                )
+                lines.append(
+                    f"| {f.severity} | {f.risk_score:.3f} | {f.confidence:.2f} | {dyn} | {f.complexity_hint} | {loc} |"
+                )
+            else:
+                lines.append(
+                    f"| {f.severity} | {f.risk_score:.3f} | {f.confidence:.2f} | {f.complexity_hint} | {loc} |"
+                )
+
         lines.append("")
+        finding_suggestions = [(f, f.suggestions) for f in report.findings[:top_n] if f.suggestions]
+        if finding_suggestions:
+            lines.append("### Fix suggestions")
+            lines.append("")
+            for f, items in finding_suggestions:
+                loc = f"{f.file}:{f.lineno} `{f.qualname}`"
+                joined = "; ".join(items)
+                lines.append(f"- {loc}: {joined}")
+            lines.append("")
+
+    if has_security_engine or security_findings:
+        lines.append("")
+        lines.append("## Security findings (xBOUNDARY)")
+        lines.append("")
+        if security_findings:
+            lines.append("| Severity | Rule | Location | Description |")
+            lines.append("|---|---|---|---|")
+            for sec in security_findings[:top_n]:
+                loc = f"{sec.file}:{sec.lineno}" if sec.file else "n/a"
+                desc = sec.message or sec.title
+                lines.append(f"| {sec.severity} | {sec.rule_id} | {loc} | {desc} |")
+            if len(security_findings) > top_n:
+                lines.append("")
+                lines.append(f"_+{len(security_findings) - top_n} more security findings_")
+        else:
+            lines.append("✅ No security findings detected.")
+        lines.append("")
+
     lines.append(
         "> Notes: PLEx uses static AST heuristics; dynamic verification is optional and best-effort."
     )

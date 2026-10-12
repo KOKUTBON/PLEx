@@ -2,25 +2,22 @@
   <img src="assets/logo.svg" alt="PLEx logo" width="320">
 </p>
 
-<h1 align="center">PLEx</h1>
+<h1 align="center">PLEx 2.0</h1>
 
-<p align="center">Python performance static analysis, complexity regression detection, and automated optimization.</p>
+<p align="center">Native Software Intelligence, Active Verification, and Closed-Loop Remediation Platform.</p>
 
-<p align="center"><a href="https://kokutbon.github.io/PLEx/">Website</a> · <a href="https://kokutbon.github.io/PLEx/demo/">Interactive report demo</a> · <a href="docs/">Docs</a></p>
+<p align="center"><a href="https://kokutbon.github.io/PLEx/">Website</a> · <a href="docs/COVERAGE_MATRIX.md">Coverage Matrix</a> · <a href="docs/MIGRATION_2.0.md">Migration Guide</a> · <a href="docs/">Docs</a></p>
 
-PLEx finds performance risks in Python code before they reach production. It combines AST and intermediate-representation analysis with rule-based diagnostics, safe source fixers, regression baselines, and CI reporting.
+PLEx 2.0 natively unifies performance engineering, static application security (SAST), binary artifact intelligence, scope-guarded dynamic testing (DAST), supply chain analysis, and automated verified remediation into a single, cohesive developer platform with **zero mandatory external dependencies** (100% pure Python 3.10+ standard library).
 
-## Why PLEx
+## The Six Native Pillars
 
-PLEx focuses on issues that conventional style linters and type checkers do not model:
-
-- quadratic work caused by linear searches inside loops;
-- repeated database, network, or blocking I/O calls;
-- avoidable allocations and eager iterator materialization;
-- risky regular expressions and other performance-sensitive patterns;
-- complexity regressions introduced by a change.
-
-The analyzer is static by default and does not execute repository code during ordinary analysis. Optional dynamic verification is available for trusted environments.
+1. **Performance & Complexity**: Static AST call-graph analysis, quadratic loop detection, unbuffered I/O audits, and complexity regression prevention.
+2. **Static Security (xBOUNDARY)**: Pure-Python interprocedural taint tracking detecting SQL injection, command injection, path traversal, and code evaluation.
+3. **Artifact Intelligence (PLEx Inspect)**: Pure-Python 32-bit and 64-bit ELF structural parser, section/symbol extraction, and compiler hardening audits (NX, PIE, RELRO, stack canaries).
+4. **Active Application Testing (PLEx Validate)**: Hard technical network scope guardrails (`ScopedHttpClient`), authorization manifests (`AUTHORIZATION.md`), web framework route discovery (Flask, FastAPI, Django), and deterministic zero-LLM reproduction recipes.
+5. **Supply Chain & IaC Security**: Offline dependency manifest audits (`requirements.txt`, `poetry.lock`, `Pipfile.lock`), CVE advisory correlation, Dockerfile privilege audits, and TLS configurations.
+6. **Closed-Loop Remediation (PLEx Repair)**: Deterministic patch candidate generation in disposable sandboxes verified across 5 distinct gates (syntax validation, security re-scan, active exploit re-validation, performance non-regression, and functional tests).
 
 ## Installation
 
@@ -28,61 +25,52 @@ The analyzer is static by default and does not execute repository code during or
 python -m pip install "git+https://github.com/KOKUTBON/PLEx.git"
 ```
 
-For development:
+For local development:
 
 ```bash
 python -m pip install -e ".[dev]"
 ```
 
-## Quick start
+## Quick Start & Core Commands
 
+### Multi-Engine Static Analysis
 ```bash
-plex init --preset minimal
-plex analyze .
-plex fix --diff --dry-run .
+# Analyze all checks (performance, security, supply chain)
+plex analyze . --checks all --json out/report.json --sarif out/report.sarif
+
+# Gate pull requests on severity and findings counts
+plex analyze . --fail-on-severity high --max-findings 5
 ```
 
-Example input:
-
-```python
-def contains_any(items: list[int], targets: list[int]) -> bool:
-    for item in items:
-        if item in targets:  # PLEx reports plex.linear-search-in-loop
-            return True
-    return False
-```
-
-PLEx reports the repeated linear membership check and can suggest a set-based lookup when the fixer can prove the rewrite is safe. Review changes with `plex fix --diff` before applying them.
-
-Experimental SQL and shell-command injection checks are available separately:
-
+### Closed-Loop Remediation & Repair
 ```bash
-plex security verify . --json out/security.json --sarif out/security.sarif
+# Preview reviewable patch diffs across detected findings
+plex remediate . --diff
+
+# Transactionally apply multi-engine verified repairs to repository
+plex remediate . --apply
 ```
 
-See [xBOUNDARY scope, evidence and limitations](docs/SECURITY_ANALYSIS.md).
-
-## Capabilities
-
-- Python AST and IR analysis, with optional JavaScript/TypeScript, Java, Kotlin, and Go parsing.
-- Stable and experimental rules covering complexity, allocation, I/O, regex, collections, async code, and common library calls.
-- Automated fixers with diff, check, and interactive modes.
-- Baseline comparison and changed-only analysis for pull requests.
-- Markdown, JSON, SARIF, HTML, check-run, and notification-oriented reports.
-- Watch mode, LSP server, native Git hooks, pre-commit hooks, a GitHub Action, and a VS Code extension.
-- A benchmark harness for measuring analysis throughput and rule remediations on the machine where it runs.
-
-## Common commands
-
+### Binary & Artifact Inspection
 ```bash
-plex analyze path/to/project --json out/plex.json
-plex report out/plex.json --format html --open
-plex rules list
-plex fix --check .
-plex benchmark . --iterations 3
+# Inspect ELF binary hardening and security rules using native parser
+plex inspect build/target.elf --engine native --format json -o out/inspect.json
 ```
 
-Benchmark results are environment-dependent. The repository does not publish hard-coded speedup claims; to make a reproducible claim, record the rule, input, Python version, operating system and CPU, benchmark command, before result, and after result. See [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
+### Active Application Testing
+```bash
+# Run authorized, scope-enforced active reproduction against endpoints
+plex validate . --url http://127.0.0.1:8000 --authorize AUTHORIZATION.md
+```
+
+### Declared Coverage & Comparative Accuracy
+```bash
+# View declared platform capabilities across all 7 software lifecycle surfaces
+plex coverage
+
+# Run precision/recall accuracy evaluation against held-out benchmark manifests
+plex benchmark --comparative benchmarks/manifest.json
+```
 
 ## Integrations
 

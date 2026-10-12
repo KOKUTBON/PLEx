@@ -6,6 +6,7 @@ import json
 import logging
 import os
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -27,11 +28,16 @@ from plex.analyze.pipeline import (
 from plex.config.loader import load_config
 from plex.config.templates import CONFIG_PRESETS
 from plex.config.validate import validate_config_paths
+from plex.coverage.commands import add_coverage_commands
 from plex.fix import FileFixResult, FixEngine
-from plex.providers.base import AnalysisTask
+from plex.inspect.commands import add_inspect_commands
+from plex.providers.base import AnalysisProvider, AnalysisTask
 from plex.providers.commands import add_provider_commands
 from plex.providers.orchestrator import run_providers
 from plex.providers.performance import PerformanceProvider
+from plex.providers.supply_chain import SupplyChainProvider
+from plex.providers.xboundary import XBoundaryProvider
+from plex.repair.commands import add_remediate_commands
 from plex.report.annotations import to_github_annotations
 from plex.report.format_check_run import to_check_run_output
 from plex.report.format_comment import to_comment_markdown
@@ -46,48 +52,104 @@ from plex.report.models import (
     SCHEMA_VERSION,
     PLExReport,
 )
+from plex.report.severity import severity_rank
 from plex.rules.registry import RuleRegistry
 from plex.security.commands import add_security_commands
 from plex.util.logging import setup_logging
+from plex.validate.commands import add_validate_commands
 
 log = logging.getLogger(__name__)
 
 
+def parse_checks(checks_arg: str | None) -> list[str]:
+    if not checks_arg:
+        return ["performance"]
+    tokens = [t.strip().lower() for t in checks_arg.split(",") if t.strip()]
+    if not tokens:
+        raise ValueError("No checks specified in --checks")
+    valid_checks = {"performance", "security", "xboundary", "supply_chain"}
+    normalized: list[str] = []
+    for t in tokens:
+        if t not in valid_checks:
+            raise ValueError(
+                f"Unknown check engine '{t}'. Supported checks: performance, security, supply_chain"
+            )
+        norm = "security" if t == "xboundary" else t
+        if norm not in normalized:
+            normalized.append(norm)
+    return normalized
+
+
 def cmd_analyze(args: argparse.Namespace) -> int:
-    provider = PerformanceProvider()
+    try:
+        selected_checks = parse_checks(getattr(args, "checks", None))
+    except ValueError as exc:
+        log.error("Invalid --checks: %s", exc)
+        return 1
+
+    providers: list[AnalysisProvider] = []
+    perf_provider: PerformanceProvider | None = None
+    if "performance" in selected_checks:
+        perf_provider = PerformanceProvider()
+        providers.append(perf_provider)
+    if "security" in selected_checks:
+        providers.append(XBoundaryProvider())
+    if "supply_chain" in selected_checks:
+        providers.append(SupplyChainProvider())
+
+    perf_opts = analysis_options(args)
+    sec_opts: dict[str, Any] = {
+        "max_files": getattr(args, "security_max_files", 200),
+    }
+    if getattr(args, "security_policy", None):
+        sec_opts["policy"] = args.security_policy
+
+    task_options = {
+        **perf_opts,
+        "performance": perf_opts,
+        "security": sec_opts,
+        "xboundary": sec_opts,
+    }
+
     outcome = run_providers(
-        AnalysisTask(Path(args.path).resolve(), options=analysis_options(args)),
-        [provider],
+        AnalysisTask(Path(args.path).resolve(), options=task_options),
+        providers,
     )
     report = outcome.report()
-    result = provider.last_result
-    if result is None:
-        for run in outcome.engines:
-            for limitation in run.limitations:
+
+    for run in outcome.engines:
+        for limitation in run.limitations:
+            if run.status in {"skipped", "failed"}:
                 log.error("%s: %s", run.engine, limitation)
+            else:
+                log.debug("%s limitation: %s", run.engine, limitation)
+
+    result = perf_provider.last_result if perf_provider else None
+    if perf_provider and result is None:
         if args.json_path and getattr(args, "legacy_schema", None) is None:
             write_json(report, Path(args.json_path))
         return 1
-    notify_min_severity = result.notify_min_severity
-    notify_max_items = result.notify_max_items
+
+    notify_min_severity = result.notify_min_severity if result else None
+    notify_max_items = result.notify_max_items if result else 10
     if getattr(args, "legacy_schema", None) is not None:
         try:
             report.to_dict_v7()
         except ValueError as exc:
-            log.error("Cannot export incomplete provider result as v7: %s", exc)
+            log.error("Cannot export report as v7: %s", exc)
             return 1
     if args.json_path:
         write_json(report, Path(args.json_path), legacy_schema=getattr(args, "legacy_schema", None))
         log.info("Wrote JSON report to %s", args.json_path)
 
+    if args.sarif_path:
+        write_sarif(report, Path(args.sarif_path))
+        log.info("Wrote SARIF report to %s", args.sarif_path)
+
     if args.html_path:
         is_interactive = not bool(getattr(args, "html_static", False))
         write_html(report, Path(args.html_path), top_n=int(args.top), interactive=is_interactive)
         log.info("Wrote HTML report to %s", args.html_path)
-
-    if args.sarif_path:
-        write_sarif(report, Path(args.sarif_path))
-        log.info("Wrote SARIF report to %s", args.sarif_path)
 
     if args.snippets_path:
         write_snippets(report, Path(args.snippets_path), top_n=int(args.top))
@@ -170,9 +232,41 @@ def cmd_analyze(args: argparse.Namespace) -> int:
     else:
         print(md)
 
-    for reason in result.gate_reasons:
+    gate_reasons: list[str] = []
+    perf_exit = 0
+    if result is not None:
+        gate_reasons.extend(result.gate_reasons)
+        perf_exit = result.exit_code
+
+    if "security" in selected_checks:
+        sec_threshold = getattr(args, "fail_on_severity", None) or getattr(
+            args, "fail_on_finding_severity", None
+        )
+        if sec_threshold:
+            failed_sec = [
+                f
+                for f in report.findings_unified
+                if f.category == "security"
+                and severity_rank(f.severity) >= severity_rank(sec_threshold)
+            ]
+            if failed_sec:
+                gate_reasons.append(
+                    f"Security finding meets or exceeds severity threshold '{sec_threshold}' ({len(failed_sec)} finding(s))"
+                )
+        if getattr(args, "max_findings", None) is not None:
+            if len(report.findings_unified) > args.max_findings:
+                msg = f"Total findings count ({len(report.findings_unified)}) exceeds maximum ({args.max_findings})"
+                if msg not in gate_reasons:
+                    gate_reasons.append(msg)
+
+    for reason in gate_reasons:
         log.error("Gating failed: %s", reason)
-    return result.exit_code if report.scan_status == "complete" else 1
+
+    if report.scan_status != "complete":
+        return 1
+    if gate_reasons or perf_exit != 0:
+        return 1
+    return 0
 
 
 def cmd_baseline(args: argparse.Namespace) -> int:
@@ -381,6 +475,37 @@ def cmd_fix(args: argparse.Namespace) -> int:
 
 
 def cmd_benchmark(args: argparse.Namespace) -> int:
+    if getattr(args, "comparative", None):
+        from plex.bench.comparative import BenchmarkManifest, run_comparative_benchmark
+
+        manifest_path = Path(args.comparative).resolve()
+        if not manifest_path.exists():
+            print(f"Error: Comparative benchmark manifest not found: {args.comparative}")
+            return 1
+        manifest_data = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest = BenchmarkManifest.from_dict(manifest_data)
+        corpus_dir = manifest_path.parent
+        metrics = run_comparative_benchmark(corpus_dir, manifest)
+
+        if getattr(args, "json", None):
+            out_json = Path(args.json)
+            out_json.parent.mkdir(parents=True, exist_ok=True)
+            out_json.write_text(json.dumps(metrics.to_dict(), indent=2), encoding="utf-8")
+        else:
+            print(f"Comparative Benchmark Report: {metrics.manifest_name}")
+            print(f"Target Rule: {metrics.target_rule} ({metrics.total_cases} cases)")
+            print(f"  Precision: {metrics.precision:.2%} (min: {manifest.min_precision:.2%})")
+            print(f"  Recall:    {metrics.recall:.2%} (min: {manifest.min_recall:.2%})")
+            print(f"  F1 Score:  {metrics.f1_score:.4f}")
+            print(f"  Repairs:   {metrics.repairs_verified}/{metrics.repairs_attempted} verified")
+            if metrics.threshold_failures:
+                print("Failures:")
+                for fail in metrics.threshold_failures:
+                    print(f"  - {fail}")
+            print(f"Status: {'PASS' if metrics.passed_thresholds else 'FAIL'}")
+
+        return 0 if metrics.passed_thresholds else 1
+
     if getattr(args, "rules", False) or getattr(args, "rule", None):
         from plex.bench.rule_bench import (
             format_rule_benchmark_table,
@@ -568,7 +693,10 @@ def cmd_report(args: argparse.Namespace) -> int:
         try:
             report.to_dict_v7()
         except ValueError as exc:
-            log.error("This formatter supports performance-only reports; use --format json or sarif: %s", exc)
+            log.error(
+                "This formatter supports performance-only reports; use --format json or sarif: %s",
+                exc,
+            )
             return 1
 
     if fmt == "html":
@@ -689,6 +817,10 @@ def build_parser() -> argparse.ArgumentParser:
     sub = p.add_subparsers(dest="cmd", required=True)
     add_provider_commands(sub)
     add_security_commands(sub)
+    add_inspect_commands(sub)
+    add_validate_commands(sub)
+    add_remediate_commands(sub)
+    add_coverage_commands(sub)
 
     a = sub.add_parser("analyze", help="Analyze a repository")
     _add_analyze_args(a)
@@ -821,6 +953,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="append",
         default=None,
         help="Specific rule ID(s) to benchmark (with --rules)",
+    )
+    bm.add_argument(
+        "--comparative",
+        default=None,
+        help="Path to comparative benchmark manifest JSON evaluating precision, recall, and repair fidelity",
     )
     bm.set_defaults(func=cmd_benchmark)
 

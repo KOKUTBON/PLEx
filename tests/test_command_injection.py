@@ -148,6 +148,8 @@ def test_rules_inventory_and_command_severity_gate(tmp_path, capsys):
     assert {rule["id"] for rule in json.loads(capsys.readouterr().out)} == {
         "xbnd.sql-injection",
         "xbnd.command-injection",
+        "xbnd.code-eval-taint",
+        "xbnd.path-traversal",
     }
     (tmp_path / "app.py").write_text("import os\nos.system(input())")
     assert main(["security", "verify", str(tmp_path), "--fail-on-severity", "high"]) == 1

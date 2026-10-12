@@ -338,3 +338,195 @@ class TestCLIAnalyze:
         rule_ids = {f["rule_id"] for f in data.get("findings", []) if f.get("rule_id")}
         assert "plex.db-in-loop" in rule_ids
         assert "plex.json-in-loop" not in rule_ids
+
+    def test_analyze_checks_default_is_performance(self, tmp_path: Path) -> None:
+        self._setup_repo(tmp_path)
+        out_file = tmp_path / "out.json"
+        res = subprocess.run(
+            [sys.executable, "-m", "plex", "analyze", "--json", str(out_file)],
+            cwd=str(tmp_path),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert res.returncode == 0
+        assert out_file.exists()
+        data = json.loads(out_file.read_text())
+        engines = [e["engine"] for e in data.get("engines", [])]
+        assert engines == ["performance"]
+
+    def test_analyze_checks_performance_explicit(self, tmp_path: Path) -> None:
+        self._setup_repo(tmp_path)
+        out_file = tmp_path / "out.json"
+        res = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "plex",
+                "analyze",
+                "--checks",
+                "performance",
+                "--json",
+                str(out_file),
+            ],
+            cwd=str(tmp_path),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert res.returncode == 0
+        assert out_file.exists()
+        data = json.loads(out_file.read_text())
+        engines = [e["engine"] for e in data.get("engines", [])]
+        assert engines == ["performance"]
+
+    def test_analyze_checks_security_only(self, tmp_path: Path) -> None:
+        src = tmp_path / "src"
+        src.mkdir(parents=True)
+        (src / "app.py").write_text(
+            "import os\ndef run(cmd):\n    os.system(cmd)\n\ndef view():\n    run(input())\n"
+        )
+        out_file = tmp_path / "out.json"
+        res = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "plex",
+                "analyze",
+                "--checks",
+                "security",
+                "--json",
+                str(out_file),
+            ],
+            cwd=str(tmp_path),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert res.returncode == 0
+        assert out_file.exists()
+        data = json.loads(out_file.read_text())
+        engines = [e["engine"] for e in data.get("engines", [])]
+        assert engines == ["xboundary"]
+        categories = {f.get("category") for f in data.get("findings_unified", [])}
+        assert "security" in categories
+
+    def test_analyze_checks_multi_engine(self, tmp_path: Path) -> None:
+        self._setup_repo(tmp_path)
+        (tmp_path / "src" / "sec.py").write_text(
+            "import os\ndef handle(val):\n    os.system(input())\n"
+        )
+        out_json = tmp_path / "out.json"
+        out_sarif = tmp_path / "out.sarif"
+        res = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "plex",
+                "analyze",
+                "--checks",
+                "performance,security",
+                "--json",
+                str(out_json),
+                "--sarif",
+                str(out_sarif),
+            ],
+            cwd=str(tmp_path),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert res.returncode == 0
+        assert out_json.exists()
+        assert out_sarif.exists()
+
+        data = json.loads(out_json.read_text())
+        engines = [e["engine"] for e in data.get("engines", [])]
+        assert "performance" in engines
+        assert "xboundary" in engines
+        categories = {f.get("category") for f in data.get("findings_unified", [])}
+        assert "performance" in categories
+        assert "security" in categories
+
+        sarif_data = json.loads(out_sarif.read_text())
+        assert sarif_data.get("runs")
+        all_rules = {r.get("ruleId") for run in sarif_data["runs"] for r in run.get("results", [])}
+        assert any("xbnd" in str(r) for r in all_rules)
+
+    def test_analyze_checks_invalid_engine(self, tmp_path: Path) -> None:
+        self._setup_repo(tmp_path)
+        res = subprocess.run(
+            [sys.executable, "-m", "plex", "analyze", "--checks", "performance,invalid_engine"],
+            cwd=str(tmp_path),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert res.returncode == 1
+        assert "Unknown check engine" in res.stderr
+
+    def test_analyze_checks_severity_gate(self, tmp_path: Path) -> None:
+        src = tmp_path / "src"
+        src.mkdir(parents=True)
+        (src / "app.py").write_text("import os\nos.system(input())\n")
+        res_fail = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "plex",
+                "analyze",
+                "--checks",
+                "security",
+                "--fail-on-severity",
+                "high",
+            ],
+            cwd=str(tmp_path),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert res_fail.returncode == 1
+
+        res_pass = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "plex",
+                "analyze",
+                "--checks",
+                "security",
+                "--fail-on-severity",
+                "critical",
+            ],
+            cwd=str(tmp_path),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert res_pass.returncode == 0
+
+    def test_analyze_checks_legacy_schema_rejects_security(self, tmp_path: Path) -> None:
+        src = tmp_path / "src"
+        src.mkdir(parents=True)
+        (src / "app.py").write_text("import os\nos.system(input())\n")
+        out_json = tmp_path / "out.json"
+        res = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "plex",
+                "analyze",
+                "--checks",
+                "security",
+                "--legacy-schema",
+                "7",
+                "--json",
+                str(out_json),
+            ],
+            cwd=str(tmp_path),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert res.returncode == 1
+        assert "Cannot export report as v7" in res.stderr

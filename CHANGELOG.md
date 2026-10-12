@@ -1,5 +1,15 @@
 # Changelog
 
+- Add pure-Python Software Bill of Materials (SBOM) generator (`plex.supply_chain.sbom`) and CLI commands
+  (`plex sbom` and `plex supply-chain sbom`) supporting CycloneDX (1.5/1.6 JSON) and SPDX (2.3 JSON) formats
+  with zero external dependencies. Extracts dependency inventories from manifests and lockfiles (`requirements*.txt`,
+  `poetry.lock`, `Pipfile.lock`), computes Package URLs (`purl`) and deterministic SPDX IDs, deduplicates components,
+  and correlates known security advisories (CVEs). Directly integrates with AST call-graph reachability analysis
+  to determine whether vulnerable packages and symbols are actively invoked in project source code, dynamically
+  populating CycloneDX VEX vulnerability analysis states (`exploitable`, `not_affected`, `in_triage`). Supports ASCII
+  terminal summaries, file export (`-o`), and automated CI/CD gating (`--fail-on-vulnerable`, `--fail-on-reachable`,
+  `--fail-on-unpinned`).
+
 - Add pure-Python 32-bit and 64-bit Windows Portable Executable (PE32 / PE32+) binary structural parser
   (`parse_pe`, `src/plex/inspect/pe.py`) in `plex.inspect` with zero external dependencies (no `pefile` or dumpbin).
   Structural parser extracts DOS headers (`MZ`), PE signature, COFF file headers (machine architectures: x86/i386,

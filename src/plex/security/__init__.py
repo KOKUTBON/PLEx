@@ -10,6 +10,7 @@ from .sensitive_data_leak import SENSITIVE_DATA_LIMITATIONS, SensitiveDataLeakRu
 from .sql_injection import SCOPE_LIMITATIONS, SQLInjectionRule
 from .ssrf import SSRF_LIMITATIONS, SsrfRule
 from .unsafe_deserialization import DESERIALIZATION_LIMITATIONS, UnsafeDeserializationRule
+from .weak_crypto import WEAK_CRYPTO_LIMITATIONS, WeakCryptoRule
 
 __all__ = [
     "COMMAND_LIMITATIONS",
@@ -28,4 +29,6 @@ __all__ = [
     "SensitiveDataLeakRule",
     "SsrfRule",
     "UnsafeDeserializationRule",
+    "WEAK_CRYPTO_LIMITATIONS",
+    "WeakCryptoRule",
 ]

@@ -1,5 +1,13 @@
 # Changelog
 
+- Add xBOUNDARY Wave 4 Cryptographic Security native rule (`xbnd.weak-crypto`, CWE-327 / CWE-328, OWASP A02:2025).
+  `WeakCryptoRule` statically inspects AST call sites across `hashlib`, `cryptography`, and PyCryptodome to detect:
+  broken and deprecated hashing algorithms (MD5, MD4, SHA-1) with automatic exemption for non-security checksums
+  explicitly annotated with `usedforsecurity=False`; insecure and obsolete symmetric ciphers (DES, TripleDES, RC4/ARC4, Blowfish);
+  dangerous Electronic Codebook (ECB) cipher mode (`modes.ECB`, `AES.MODE_ECB`); and weak PBKDF2 password derivation parameters
+  (deprecated MD5/SHA-1 KDF hashes, or iteration count < 100,000 below NIST SP 800-63B guidelines). Fully integrated
+  with `xboundary` provider, `plex security rules`, CLI severity gates, and inline `# plex: ignore[xbnd.weak-crypto]`.
+
 - Add pure-Python Software Bill of Materials (SBOM) generator (`plex.supply_chain.sbom`) and CLI commands
   (`plex sbom` and `plex supply-chain sbom`) supporting CycloneDX (1.5/1.6 JSON) and SPDX (2.3 JSON) formats
   with zero external dependencies. Extracts dependency inventories from manifests and lockfiles (`requirements*.txt`,

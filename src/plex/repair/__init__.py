@@ -39,6 +39,7 @@ from .ssti import SSTIFixer
 from .tenant_boundary import TenantBoundaryFixer
 from .tls_verify import TLSVerifyFixer
 from .weak_crypto import WeakCryptoFixer
+from .xss import XSSFixer
 from .xxe import XXEFixer
 
 __all__ = [
@@ -77,6 +78,7 @@ __all__ = [
     "VerificationRecord",
     "VerificationStatus",
     "WeakCryptoFixer",
+    "XSSFixer",
     "XXEFixer",
     "add_remediate_commands",
     "apply_unified_diff",

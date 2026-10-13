@@ -17,6 +17,7 @@ from .ssrf import SSRF_LIMITATIONS, SsrfRule
 from .ssti import SSTI_LIMITATIONS, SSTIRule
 from .unsafe_deserialization import DESERIALIZATION_LIMITATIONS, UnsafeDeserializationRule
 from .weak_crypto import WEAK_CRYPTO_LIMITATIONS, WeakCryptoRule
+from .xss import XSS_LIMITATIONS, XSSRule
 from .xxe import XXE_LIMITATIONS, XXERule
 
 __all__ = [
@@ -50,6 +51,8 @@ __all__ = [
     "UnsafeDeserializationRule",
     "WEAK_CRYPTO_LIMITATIONS",
     "WeakCryptoRule",
+    "XSS_LIMITATIONS",
+    "XSSRule",
     "XXE_LIMITATIONS",
     "XXERule",
 ]

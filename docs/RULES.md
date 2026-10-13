@@ -556,7 +556,28 @@ Suggestions:
 
 ## Suppressing rules
 
-Suppressions apply to the whole function:
+### Statement-Level Suppressions
+
+For targeted suppressions without ignoring the entire enclosing function, use statement-level directives on the line immediately preceding the finding:
+
+```python
+# Suppress performance rule on next line:
+# plex: disable-next[plex.db-in-loop] reason="batched iterator with bounded page size"
+record = db.query(Model).get(item_id)
+
+# Suppress security injection rule on next line:
+# plex: disable-next[xbnd.sql-injection] reason="query constructed from static enum mapping"
+cursor.execute(sql)
+```
+
+Supported comment directives:
+- `# plex: disable-next[<rule_id>] reason="..."`: Suppresses `<rule_id>` on the next non-comment line.
+- `# plex: disable-next-line[<rule_id>] reason="..."`: Equivalent alias for `disable-next`.
+- `# plex: ignore[<rule_id>] reason="..."`: Suppresses on the same line or next line.
+
+### Function-Level Suppressions
+
+Suppressions can also apply to an entire function definition:
 
 ```python
 # plex: ignore reason="legacy path" ticket="PERF-123"
@@ -564,4 +585,18 @@ def slow_but_expected(...):
     ...
 ```
 
-Suppressions are recorded in the report for auditability.
+Suppressions are recorded in the generated scan report for auditability and compliance tracking.
+
+---
+
+## Known Boundaries & Limitations
+
+### Algorithmic Complexity Rules
+- **Static Heuristics**: Signals like nested loops and recursion depth are analyzed statically on the IR. Complex dynamic loop break conditions or external pagination boundaries that limit iterations at runtime should be annotated with statement-level suppressions.
+- **Dynamic Verification**: Heuristic findings are graduated with dynamic benchmarking fixtures when available.
+
+### Security Injection Analysis (xBOUNDARY)
+- **Dynamic Reflection**: Taint tracking does not inspect dynamic attributes (`getattr`), dynamic imports (`importlib`), or metaclass runtime dispatch.
+- **Sanitizer Modeling**: Type conversions (`int`, `float`, `bool`) strip taint. Arbitrary quoting functions (`shlex.quote`, string replacements) preserve taint by default unless explicitly configured in `.plex/security.yml`.
+- **Parameterization**: Parameterized query structures (`cursor.execute(sql, params)`) are modeled as safe, whereas interpolated strings passed to the query parameter remain flagged.
+

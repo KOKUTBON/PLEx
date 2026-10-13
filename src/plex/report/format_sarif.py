@@ -114,6 +114,12 @@ def _relpath(path_str: str, repo_root: str) -> str:
         return path_str
 
 
+def rule_help_uri(rule_id: str) -> str:
+    """Return documentation URL for a given rule ID pointing to docs/RULES.md anchor."""
+    slug = rule_id.lower().replace(".", "").replace(":", "-").replace("_", "-")
+    return f"https://github.com/KOKUTBON/PLEx/blob/main/docs/RULES.md#{slug}"
+
+
 def _regression_keys(report: PLExReport) -> set[tuple[str, str, int]]:
     return {(r.file, r.qualname, r.lineno) for r in report.regressions}
 
@@ -134,6 +140,7 @@ def to_sarif(report: PLExReport) -> dict:
                     "indicate higher algorithmic complexity. Review the implementation to confirm."
                 ),
             },
+            "helpUri": rule_help_uri("plex.hotspot"),
             "properties": {
                 "tags": ["performance", "complexity", "plex"],
                 "precision": "medium",
@@ -153,6 +160,7 @@ def to_sarif(report: PLExReport) -> dict:
                     "baseline. Review recent changes for added loops, recursion, or sorting."
                 ),
             },
+            "helpUri": rule_help_uri("plex.regression"),
             "properties": {
                 "tags": ["performance", "complexity", "regression", "plex"],
                 "precision": "high",
@@ -258,17 +266,22 @@ def to_sarif(report: PLExReport) -> dict:
         if finding.id not in mirror_ids:
             results.append(_unified_result(finding, report.repo_root))
     known_rules = {rule["id"] for rule in rules}
-    for finding in report.findings_unified or mirrors:
-        if finding.rule_id not in known_rules:
+    all_findings = list(report.findings_unified) + [m for m in mirrors if m.rule_id not in known_rules]
+    for finding in all_findings:
+        if finding.rule_id and finding.rule_id not in known_rules:
             rules.append(
                 {
                     "id": finding.rule_id,
-                    "name": finding.title,
-                    "shortDescription": {"text": finding.title},
+                    "name": finding.title or finding.rule_id,
+                    "shortDescription": {"text": finding.title or finding.rule_id},
+                    "helpUri": rule_help_uri(finding.rule_id),
                     "properties": {"tags": [finding.category, *finding.cwe, *finding.owasp]},
                 }
             )
             known_rules.add(finding.rule_id)
+    for rule in rules:
+        if "helpUri" not in rule and "id" in rule:
+            rule["helpUri"] = rule_help_uri(rule["id"])
     invocation: dict = {
         "executionSuccessful": report.scan_status == "complete",
         "endTimeUtc": report.generated_at,

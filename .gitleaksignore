@@ -3,3 +3,23 @@
 # Limit exceptions to these exact historical commit/file/rule/line fingerprints.
 9299b4aedeb6406b06f9a835a8d9feea921ad7a9:tests/fixtures/security/pygoat/injection_sql_lab.py.txt:generic-api-key:17
 9299b4aedeb6406b06f9a835a8d9feea921ad7a9:tests/fixtures/security/pygoat/injection_sql_lab.py.txt:generic-api-key:19
+985fe1a9eb12e24a9407654802946c7216877816:tests/fixtures/security/pygoat/injection_sql_lab.py.txt:generic-api-key:17
+985fe1a9eb12e24a9407654802946c7216877816:tests/fixtures/security/pygoat/injection_sql_lab.py.txt:generic-api-key:19
+5656d9ba6083e7270142a90568c4312b659ff37e:tests/fixtures/security/pygoat/injection_sql_lab.py.txt:generic-api-key:17
+5656d9ba6083e7270142a90568c4312b659ff37e:tests/fixtures/security/pygoat/injection_sql_lab.py.txt:generic-api-key:19
+
+# Synthetic test fixtures for secret detection and remediation recipes
+e74e776ebc0dacae1cbf6e8a93f17e0adbf2959c:tests/test_plaintext_secret_fixer.py:generic-api-key:32
+e74e776ebc0dacae1cbf6e8a93f17e0adbf2959c:tests/test_plaintext_secret_fixer.py:generic-api-key:58
+e74e776ebc0dacae1cbf6e8a93f17e0adbf2959c:tests/test_plaintext_secret_fixer.py:generic-api-key:79
+5b333d7975446086556b57aa13d741746e956b5d:tests/test_sensitive_data_recipe.py:stripe-access-token:141
+5b333d7975446086556b57aa13d741746e956b5d:tests/test_sensitive_data_recipe.py:jwt:104
+8b2f42b9076e9504910ae6f9abf7c2c1cc7ba351:tests/test_wave3_security_rules.py:generic-api-key:48
+d5b787719798305804d596c5e0d26d697de0d3e3:tests/test_sandbox.py:generic-api-key:40
+d5b787719798305804d596c5e0d26d697de0d3e3:tests/test_native_inspect.py:private-key:405
+d5b787719798305804d596c5e0d26d697de0d3e3:tests/test_rea_provider.py:private-key:52
+
+# Built-in inspection and REA rule regex pattern definitions
+90620a69863ad8ed6d4705c79861871d685c5abe:src/plex/inspect/archive.py:private-key:49
+d5b787719798305804d596c5e0d26d697de0d3e3:src/plex/inspect/rules.py:private-key:31
+d5b787719798305804d596c5e0d26d697de0d3e3:src/plex/providers/rea/rules.py:private-key:48

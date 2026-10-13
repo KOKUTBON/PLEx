@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from .broken_tenant_isolation import TENANT_LIMITATIONS, BrokenTenantIsolationRule
 from .command_injection import COMMAND_LIMITATIONS, CommandInjectionRule
+from .csrf import CSRF_LIMITATIONS, CSRFRule
 from .eval_injection import EVAL_LIMITATIONS, CodeEvalInjectionRule
 from .insecure_cookie import COOKIE_LIMITATIONS, InsecureCookieRule
 from .mass_assignment import MASS_ASSIGNMENT_LIMITATIONS, MassAssignmentRule
@@ -21,6 +22,8 @@ __all__ = [
     "BrokenTenantIsolationRule",
     "COMMAND_LIMITATIONS",
     "COOKIE_LIMITATIONS",
+    "CSRF_LIMITATIONS",
+    "CSRFRule",
     "CodeEvalInjectionRule",
     "CommandInjectionRule",
     "DESERIALIZATION_LIMITATIONS",

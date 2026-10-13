@@ -192,3 +192,51 @@ def evaluate_debug_code(content: str, file_path: str) -> list[ConfigSecurityFind
 
     return findings
 
+
+CSRF_EXEMPT_REGEX = re.compile(r"^@(?:csrf_exempt|csrf\.exempt)\b")
+CSRF_DISABLE_REGEX = re.compile(
+    r"\b(?:WTF_CSRF_ENABLED|CSRF_ENABLED)\s*=\s*False\b|\bconfig\[['\"]WTF_CSRF_ENABLED['\"]\]\s*=\s*False\b"
+)
+
+
+def evaluate_csrf_code(content: str, file_path: str) -> list[ConfigSecurityFinding]:
+    """Scan Python source or configuration code for disabled CSRF protection (CWE-352 / OWASP A01:2025)."""
+    findings: list[ConfigSecurityFinding] = []
+
+    for lineno, raw_line in enumerate(content.splitlines(), start=1):
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+
+        if CSRF_EXEMPT_REGEX.search(line):
+            findings.append(
+                ConfigSecurityFinding(
+                    rule_id="cfg.csrf-disabled",
+                    severity="high",
+                    file=file_path,
+                    lineno=lineno,
+                    title="CSRF protection disabled via decorator exemption",
+                    message=f"Endpoint disables CSRF protection via '{line}', allowing cross-site request forgery attacks.",
+                    remediation="Remove '@csrf_exempt' decorator and validate anti-CSRF tokens for state-changing requests.",
+                    cwe=("CWE-352",),
+                    details={"line": line},
+                )
+            )
+        elif CSRF_DISABLE_REGEX.search(line):
+            findings.append(
+                ConfigSecurityFinding(
+                    rule_id="cfg.csrf-disabled",
+                    severity="high",
+                    file=file_path,
+                    lineno=lineno,
+                    title="CSRF protection disabled in configuration",
+                    message=f"CSRF protection is globally disabled via '{line}', exposing users to forged state-changing requests.",
+                    remediation="Enable CSRF protection (WTF_CSRF_ENABLED = True) in production configurations.",
+                    cwe=("CWE-352",),
+                    details={"line": line},
+                )
+            )
+
+    return findings
+
+

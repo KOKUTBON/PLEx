@@ -7,6 +7,7 @@ from .command_array import CommandArrayFixer
 from .commands import add_remediate_commands, cmd_remediate
 from .coordinator import RemediationCoordinator, RemediationPlan
 from .cors_allowlist import CORSAllowlistFixer
+from .csrf import CSRFFixer
 from .debug_mode import DebugModeFixer
 from .dependency_pin import DependencyPinFixer
 from .dependency_upgrade import DependencyUpgradeFixer
@@ -41,6 +42,7 @@ from .xxe import XXEFixer
 
 __all__ = [
     "CORSAllowlistFixer",
+    "CSRFFixer",
     "CodeEvalFixer",
     "CommandArrayFixer",
     "DebugModeFixer",

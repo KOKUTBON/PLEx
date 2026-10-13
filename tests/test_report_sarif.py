@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from plex.report.format_sarif import rule_help_uri, to_sarif
-from plex.report.models import FindingReport, PLExReport, RegressionFinding, SCHEMA_VERSION
+from plex.report.models import SCHEMA_VERSION, FindingReport, PLExReport, RegressionFinding
 from plex.report.unified import AnalysisFinding
 
 

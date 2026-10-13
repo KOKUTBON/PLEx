@@ -118,6 +118,7 @@
                 "markdown": "Static analysis detected signals (loops, recursion, sort calls) that may indicate higher algorithmic complexity. Review the implementation to confirm.",
                 "text": "Review loop nesting, recursion, and sorting patterns to confirm complexity."
               },
+              "helpUri": "https://github.com/KOKUTBON/PLEx/blob/main/docs/RULES.md#plexhotspot",
               "id": "plex.hotspot",
               "name": "Complexity hotspot",
               "properties": {
@@ -140,6 +141,7 @@
                 "markdown": "PLEx detected a higher risk score or complexity hint compared to the baseline. Review recent changes for added loops, recursion, or sorting.",
                 "text": "Compare baseline and head signals to confirm a regression."
               },
+              "helpUri": "https://github.com/KOKUTBON/PLEx/blob/main/docs/RULES.md#plexregression",
               "id": "plex.regression",
               "name": "Complexity regression",
               "properties": {

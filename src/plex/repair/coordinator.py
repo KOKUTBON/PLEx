@@ -33,6 +33,7 @@ from plex.repair.security_headers import SecurityHeadersFixer
 from plex.repair.sensitive_log_redact import SensitiveLogRedactFixer
 from plex.repair.sql_parameterize import SQLParameterizeFixer
 from plex.repair.ssrf_validate import SSRFUrlValidateFixer
+from plex.repair.ssti import SSTIFixer
 from plex.repair.tenant_boundary import TenantBoundaryFixer
 from plex.repair.tls_verify import TLSVerifyFixer
 from plex.repair.weak_crypto import WeakCryptoFixer
@@ -97,6 +98,7 @@ class RemediationCoordinator:
             OpenRedirectFixer(),
             XXEFixer(),
             MassAssignmentFixer(),
+            SSTIFixer(),
         ]
 
     def plan_and_verify(

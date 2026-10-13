@@ -33,6 +33,7 @@ from .security_headers import SecurityHeadersFixer
 from .sensitive_log_redact import SensitiveLogRedactFixer
 from .sql_parameterize import SQLParameterizeFixer
 from .ssrf_validate import SSRFUrlValidateFixer
+from .ssti import SSTIFixer
 from .tenant_boundary import TenantBoundaryFixer
 from .tls_verify import TLSVerifyFixer
 from .weak_crypto import WeakCryptoFixer
@@ -62,6 +63,7 @@ __all__ = [
     "RepairVerificationRunner",
     "SQLParameterizeFixer",
     "SSRFUrlValidateFixer",
+    "SSTIFixer",
     "SafeDeserializationFixer",
     "SecurityHeadersFixer",
     "SensitiveLogRedactFixer",

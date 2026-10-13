@@ -1,5 +1,10 @@
 # Changelog
 
+- Add static rule, active reproduction recipe, and automated fixer for Server-Side Template Injection (SSTI) (CWE-1336 / OWASP A05:2025):
+  - `SSTIRule` (`xbnd.ssti`) in `plex.security.ssti` detects dynamic template rendering sinks (`render_template_string`, `jinja2.Template`, `from_string`) evaluated with untrusted or formatted user input.
+  - `SSTIRecipe` (`val.ssti`, `xbnd.ssti`) in `plex.validate.recipes.ssti` actively probes candidate endpoints with arithmetic template canary expressions (`{{49*49}}` -> `2401`) and verifies dynamic evaluation without literal escaping.
+  - `SSTIFixer` (`fix.ssti`, `xbnd.ssti`) in `plex.repair.ssti` automatically refactors dynamic template strings into safe parameterized context arguments (`render_template_string("...", var=var)`).
+
 - Add static rule, active reproduction recipe, and automated fixer for Mass Assignment / Parameter Binding (CWE-915 / OWASP A06:2025):
   - `MassAssignmentRule` (`xbnd.mass-assignment-taint`) in `plex.security.mass_assignment` detects bulk dictionary unpacking (`**data`, `**payload`, `**request.json`) into model constructors and ORM sinks.
   - `MassAssignmentRecipe` (`val.mass-assignment`, `xbnd.mass-assignment-taint`) in `plex.validate.recipes.mass_assignment` actively probes endpoints with unauthorized privileged parameters (`role=admin`, `is_admin=True`, `permissions=all`) and verifies reflection.

@@ -27,6 +27,7 @@ from plex.security.policy import PolicyError, load_policy
 from plex.security.sensitive_data_leak import SENSITIVE_DATA_LIMITATIONS, SensitiveDataLeakRule
 from plex.security.sql_injection import SCOPE_LIMITATIONS, SQLInjectionRule
 from plex.security.ssrf import SsrfRule
+from plex.security.ssti import SSTIRule
 from plex.security.unsafe_deserialization import UnsafeDeserializationRule
 from plex.security.weak_crypto import WeakCryptoRule
 from plex.security.xxe import XXERule
@@ -161,6 +162,7 @@ class XBoundaryProvider:
                 OpenRedirectRule(),
                 XXERule(),
                 MassAssignmentRule(),
+                SSTIRule(),
             )
             for item in rule.apply(context)
         ]

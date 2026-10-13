@@ -25,6 +25,7 @@ from .models import (
     VerificationRecord,
     VerificationStatus,
 )
+from .nosql_injection import NoSQLInjectionFixer
 from .open_redirect import OpenRedirectFixer
 from .path_boundary import PathBoundaryFixer
 from .plaintext_secret import PlaintextSecretFixer
@@ -54,6 +55,7 @@ __all__ = [
     "InsecureCookieFixer",
     "InsecureIndexFixer",
     "MassAssignmentFixer",
+    "NoSQLInjectionFixer",
     "OpenRedirectFixer",
     "PatchCandidate",
     "PathBoundaryFixer",

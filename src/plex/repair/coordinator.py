@@ -25,6 +25,7 @@ from plex.repair.insecure_cookie import InsecureCookieFixer
 from plex.repair.insecure_index import InsecureIndexFixer
 from plex.repair.mass_assignment import MassAssignmentFixer
 from plex.repair.models import PatchCandidate, RepairRecord
+from plex.repair.nosql_injection import NoSQLInjectionFixer
 from plex.repair.open_redirect import OpenRedirectFixer
 from plex.repair.path_boundary import PathBoundaryFixer
 from plex.repair.plaintext_secret import PlaintextSecretFixer
@@ -101,6 +102,7 @@ class RemediationCoordinator:
             MassAssignmentFixer(),
             SSTIFixer(),
             CSRFFixer(),
+            NoSQLInjectionFixer(),
         ]
 
     def plan_and_verify(

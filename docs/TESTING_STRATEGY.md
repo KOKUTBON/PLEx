@@ -81,3 +81,4 @@ Before release:
 - Schema and report compatibility checks.
 - Benchmark delta review against baseline thresholds.
 - Security checklist and dependency review complete.
+- Clean environment installation and CLI smoke test verified using `scripts/verify_clean_install.sh`.

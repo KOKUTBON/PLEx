@@ -280,7 +280,7 @@ def to_sarif(report: PLExReport) -> dict:
             )
             known_rules.add(finding.rule_id)
     for rule in rules:
-        if "helpUri" not in rule and "id" in rule:
+        if "helpUri" not in rule and "id" in rule and isinstance(rule["id"], str):
             rule["helpUri"] = rule_help_uri(rule["id"])
     invocation: dict = {
         "executionSuccessful": report.scan_status == "complete",

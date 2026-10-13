@@ -155,3 +155,40 @@ def evaluate_tls_code(content: str, file_path: str) -> list[ConfigSecurityFindin
             )
 
     return findings
+
+
+DEBUG_ASSIGN_REGEX = re.compile(r"^DEBUG\s*=\s*True\b")
+DEBUG_KWARG_REGEX = re.compile(r"\b(?:run|FastAPI|Starlette)\s*\([^)]*\bdebug\s*=\s*True\b")
+DEBUG_ATTR_REGEX = re.compile(r"\b\w+\.debug\s*=\s*True\b|\b\w+\.config\[['\"]DEBUG['\"]\]\s*=\s*True\b")
+
+
+def evaluate_debug_code(content: str, file_path: str) -> list[ConfigSecurityFinding]:
+    """Scan Python source or configuration code for enabled debug mode (CWE-489 / CWE-215)."""
+    findings: list[ConfigSecurityFinding] = []
+
+    for lineno, raw_line in enumerate(content.splitlines(), start=1):
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+
+        if (
+            DEBUG_ASSIGN_REGEX.search(line)
+            or DEBUG_KWARG_REGEX.search(line)
+            or DEBUG_ATTR_REGEX.search(line)
+        ):
+            findings.append(
+                ConfigSecurityFinding(
+                    rule_id="cfg.debug-enabled",
+                    severity="high",
+                    file=file_path,
+                    lineno=lineno,
+                    title="Application debug mode enabled in code or configuration",
+                    message="Active debug mode exposes interactive debuggers, environment variables, and stack traces.",
+                    remediation="Disable debug mode (debug=False / DEBUG = False) in production configurations.",
+                    cwe=("CWE-489", "CWE-215"),
+                    details={"line": line},
+                )
+            )
+
+    return findings
+

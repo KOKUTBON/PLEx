@@ -28,7 +28,15 @@ def redact_headers(headers: dict[str, str]) -> dict[str, str]:
     """Redact sensitive authorization, cookies, and secret headers."""
     redacted: dict[str, str] = {}
     for k, v in headers.items():
-        if k.lower() in SENSITIVE_HEADER_KEYS:
+        k_low = k.lower()
+        if k_low == "set-cookie":
+            parts = [p.strip() for p in v.split(";") if p.strip()]
+            if parts and "=" in parts[0]:
+                cookie_name = parts[0].split("=", 1)[0].strip()
+                redacted[k] = "; ".join([f"{cookie_name}=[REDACTED]", *parts[1:]])
+            else:
+                redacted[k] = "[REDACTED]"
+        elif k_low in SENSITIVE_HEADER_KEYS:
             redacted[k] = "[REDACTED]"
         else:
             redacted[k] = v

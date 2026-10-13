@@ -14,6 +14,7 @@ from plex.providers import AnalysisTask, SupplyChainProvider, XBoundaryProvider,
 from plex.repair.code_eval import CodeEvalFixer
 from plex.repair.command_array import CommandArrayFixer
 from plex.repair.cors_allowlist import CORSAllowlistFixer
+from plex.repair.debug_mode import DebugModeFixer
 from plex.repair.dependency_pin import DependencyPinFixer
 from plex.repair.dependency_upgrade import DependencyUpgradeFixer
 from plex.repair.docker_sudo import DockerSudoFixer
@@ -89,6 +90,7 @@ class RemediationCoordinator:
             DependencyUpgradeFixer(),
             SecurityHeadersFixer(),
             CORSAllowlistFixer(),
+            DebugModeFixer(),
         ]
 
     def plan_and_verify(

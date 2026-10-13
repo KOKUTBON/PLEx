@@ -1,5 +1,18 @@
 # Changelog
 
+- Add automated debug mode disabler fixer in `plex.repair` (`DebugModeFixer`, `fix.debug-mode`, `cfg.debug-enabled`, CWE-489 / CWE-215 / OWASP A05:2025):
+  Automatically disables active production debug flags (`DEBUG = True`, `app.debug = True`, `app.config["DEBUG"] = True`,
+  `app.run(..., debug=True)`, and `FastAPI(..., debug=True)`) to prevent interactive debugger and stack trace exposure.
+  Paired with static `evaluate_debug_code` detection (`cfg.debug-enabled`) in `plex.supply_chain`.
+
+- Add native active debug and stack trace exposure testing in `plex.validate` (`DebugExposureRecipe`, `val.debug-exposure`, `cfg.debug-enabled`, CWE-489 / CWE-215):
+  Probes endpoints directly and via debugger query triggers (`?__debugger__=yes`) to detect exposed Werkzeug interactive debuggers,
+  Django `DEBUG=True` error pages, Python unhandled stack traces, and debug toolbar headers.
+
+- Add native active HTTP cookie security attributes testing in `plex.validate` (`InsecureCookieRecipe`, `val.insecure-cookie`, `xbnd.insecure-cookie`, CWE-614 / CWE-1004 / CWE-1275):
+  Inspects `Set-Cookie` response headers on active endpoints to verify `HttpOnly`, `Secure`, and non-permissive `SameSite` flags,
+  completing closed-loop active validation alongside `InsecureCookieRule` and `InsecureCookieFixer`.
+
 - Add automated CORS origin allowlist fixer in `plex.repair` (`CORSAllowlistFixer`, `fix.cors-allowlist`, `cfg.cors-wildcard`, CWE-942 / OWASP A05:2025):
   Automatically replaces permissive wildcard CORS configurations (`allow_origins=["*"]` in FastAPI `CORSMiddleware`, unconstrained `CORS(app)` or
   `origins="*"` in Flask-CORS, and direct `response.headers["Access-Control-Allow-Origin"] = "*"` assignments) with explicit origin allowlists.

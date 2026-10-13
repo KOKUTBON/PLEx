@@ -5,6 +5,7 @@ from __future__ import annotations
 from .access import RoleMatrixRecipe, TenantIsolationRecipe
 from .base import TestRecipe, TestResult, ValidationHypothesis
 from .code_eval import CodeInjectionRecipe
+from .cors import CORSMisconfigRecipe
 from .headers import SecurityHeadersRecipe
 from .injection import (
     CommandInjectionRecipe,
@@ -15,6 +16,7 @@ from .sensitive_data import SensitiveDataLeakRecipe
 from .ssrf import SSRFRecipe
 
 __all__ = [
+    "CORSMisconfigRecipe",
     "CodeInjectionRecipe",
     "CommandInjectionRecipe",
     "PathTraversalRecipe",

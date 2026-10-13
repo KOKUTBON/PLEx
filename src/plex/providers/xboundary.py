@@ -28,6 +28,7 @@ from plex.security.sql_injection import SCOPE_LIMITATIONS, SQLInjectionRule
 from plex.security.ssrf import SsrfRule
 from plex.security.unsafe_deserialization import UnsafeDeserializationRule
 from plex.security.weak_crypto import WeakCryptoRule
+from plex.security.xxe import XXERule
 
 from .base import AnalysisTask, EngineCapability, FindingSink, PreflightResult, ProviderEnv
 
@@ -157,6 +158,7 @@ class XBoundaryProvider:
                 WeakCryptoRule(),
                 BrokenTenantIsolationRule(),
                 OpenRedirectRule(),
+                XXERule(),
             )
             for item in rule.apply(context)
         ]

@@ -13,6 +13,7 @@ from .sql_injection import SCOPE_LIMITATIONS, SQLInjectionRule
 from .ssrf import SSRF_LIMITATIONS, SsrfRule
 from .unsafe_deserialization import DESERIALIZATION_LIMITATIONS, UnsafeDeserializationRule
 from .weak_crypto import WEAK_CRYPTO_LIMITATIONS, WeakCryptoRule
+from .xxe import XXE_LIMITATIONS, XXERule
 
 __all__ = [
     "BrokenTenantIsolationRule",
@@ -37,4 +38,6 @@ __all__ = [
     "UnsafeDeserializationRule",
     "WEAK_CRYPTO_LIMITATIONS",
     "WeakCryptoRule",
+    "XXE_LIMITATIONS",
+    "XXERule",
 ]

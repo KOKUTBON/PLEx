@@ -1,5 +1,10 @@
 # Changelog
 
+- Add static rule, active reproduction recipe, and automated fixer for XML External Entity (XXE) Injection (CWE-611 / OWASP A05:2025):
+  - `XXERule` (`xbnd.xxe`) in `plex.security.xxe` detects unsafe standard library XML parsing sinks (`xml.etree.ElementTree`, `xml.dom.minidom`, `xml.sax`).
+  - `XXERecipe` (`val.xxe`, `xbnd.xxe`) in `plex.validate.recipes.xxe` actively probes endpoints with inline DTD entity expansion and entity error triggers.
+  - `XXEFixer` (`fix.xxe`, `xbnd.xxe`) in `plex.repair.xxe` automatically migrates standard library XML parsers to safe `defusedxml` packages (`defusedxml.ElementTree`, `defusedxml.minidom`).
+
 - Add static rule, active reproduction recipe, and automated fixer for Unvalidated URL Redirection / Open Redirect (CWE-601 / OWASP A01:2025):
   - `OpenRedirectRule` (`xbnd.open-redirect`) in `plex.security.open_redirect` detects unvalidated user-controlled redirect calls (`redirect()`, `HttpResponseRedirect()`, `RedirectResponse()`).
   - `OpenRedirectRecipe` (`val.open-redirect`, `xbnd.open-redirect`) in `plex.validate.recipes.open_redirect` actively probes redirect parameters with external and protocol-relative URLs and verifies `Location` response headers.

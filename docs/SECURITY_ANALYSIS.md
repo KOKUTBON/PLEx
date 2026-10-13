@@ -253,11 +253,38 @@ File/block/next-line directives and `disable-all` also apply. The engine records
 the number of applied rule suppressions in its limitations. Suppressions exclude
 results; they do not establish that the code is safe.
 
-This is a bounded, path-insensitive Python spike with one representative trace
+## Known Boundaries & Limitations
+
+### Dynamic Reflection & Metaprogramming
+- **Dynamic Attribute Access**: Sinks and sources resolved through `getattr()`, `setattr()`, `globals()`, `locals()`, or `vars()` are outside static taint tracking.
+- **Dynamic Imports**: Imports constructed via `__import__()`, `importlib.import_module()`, or runtime exec statements cannot be statically resolved to framework sources.
+- **Runtime Metaclasses & Decorators**: Custom wrappers that dynamically rewrite function arguments or dispatch asynchronously across thread pools without static signatures are treated as opaque call boundaries.
+
+### Sanitizer Boundaries & Framework Modeling
+- **Type Conversions**: Built-in `int()`, `float()`, and `bool()` conversions strip taint.
+- **Quoting Functions**: `shlex.quote()` and arbitrary string replacement (`.replace()`) preserve taint by default because shell grammar contexts vary across operating systems.
+- **Custom Sanitizers**: Custom validation functions must be explicitly configured under `sanitizers:` in `.plex/security.yml` to remove taint.
+- **Parameterized SQL vs. Concatenation**: Parameterized query structures (`cursor.execute("SELECT ... WHERE id = %s", (val,))`) are safe. However, interpolating strings before parameter binding remains tainted.
+
+### Recommended Inline Suppressions
+When static heuristics flag a verified safe pattern or vetted legacy code path, use targeted statement-level inline suppression comments with an audit reason:
+
+```python
+# Suppress for the immediately following statement:
+# plex: disable-next[xbnd.sql-injection] reason="table name is validated against strict allowlist"
+cursor.execute(f"SELECT * FROM {validated_table_name} WHERE id = %s", (record_id,))
+
+# Suppress command injection on a specific line:
+# plex: disable-next[xbnd.command-injection] reason="arguments sanitized via posix allowlist"
+subprocess.run(["echo", sanitized_input], shell=True)
+```
+
+This is a bounded, path-insensitive Python analysis engine with one representative trace
 per sink. It does not resolve receiver types, follow heap/object aliases, model
 deferred global changes or prove path feasibility. Dynamic import/dispatch
 summaries and additional languages remain future work. Zero findings means no
 modeled flow was detected, not that the application is secure.
+
 
 ## Corpus and reproducible measurement
 

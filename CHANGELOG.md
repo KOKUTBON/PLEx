@@ -1,5 +1,14 @@
 # Changelog
 
+- Add automated CORS origin allowlist fixer in `plex.repair` (`CORSAllowlistFixer`, `fix.cors-allowlist`, `cfg.cors-wildcard`, CWE-942 / OWASP A05:2025):
+  Automatically replaces permissive wildcard CORS configurations (`allow_origins=["*"]` in FastAPI `CORSMiddleware`, unconstrained `CORS(app)` or
+  `origins="*"` in Flask-CORS, and direct `response.headers["Access-Control-Allow-Origin"] = "*"` assignments) with explicit origin allowlists.
+  Constructs versioned `PatchCandidate` contracts.
+
+- Add native active Cross-Origin Resource Sharing (CORS) misconfiguration testing in `plex.validate` (`CORSMisconfigRecipe`, `val.cors-misconfiguration`, `cfg.cors-wildcard`, CWE-942 / OWASP A05:2025):
+  Probes endpoints with untrusted external (`https://evil-attacker.example.com`) and sandboxed `null` `Origin` headers to detect arbitrary
+  origin reflection, wildcard credential exposure (`Access-Control-Allow-Credentials: true`), and trusted `null` origins.
+
 - Add automated HTTP security headers middleware fixer in `plex.repair` (`SecurityHeadersFixer`, `fix.security-headers`, `cfg.insecure-headers`, CWE-693 / OWASP A05:2025):
   Automatically injects defensive HTTP security headers middleware into Flask (`@app.after_request`) and FastAPI (`@app.middleware("http")`)
   applications, enforcing `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, and `Content-Security-Policy: default-src 'self'`.

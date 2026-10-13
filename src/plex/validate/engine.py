@@ -25,6 +25,7 @@ from .http import ScopedHttpClient
 from .recipes import (
     CodeInjectionRecipe,
     CommandInjectionRecipe,
+    CORSMisconfigRecipe,
     PathTraversalRecipe,
     RoleMatrixRecipe,
     SecurityHeadersRecipe,
@@ -52,6 +53,8 @@ RECIPES: dict[str, TestRecipe] = {
     "xbnd.sensitive-data-leak": SensitiveDataLeakRecipe(),
     "val.security-headers": SecurityHeadersRecipe(),
     "cfg.insecure-headers": SecurityHeadersRecipe(),
+    "val.cors-misconfiguration": CORSMisconfigRecipe(),
+    "cfg.cors-wildcard": CORSMisconfigRecipe(),
 }
 
 
@@ -173,6 +176,7 @@ class ValidateEngine:
                 "xbnd.code-eval-taint",
                 "xbnd.sensitive-data-leak",
                 "val.security-headers",
+                "val.cors-misconfiguration",
             ):
                 hypotheses.append(
                     ValidationHypothesis(

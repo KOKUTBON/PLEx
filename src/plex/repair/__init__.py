@@ -6,6 +6,7 @@ from .code_eval import CodeEvalFixer
 from .command_array import CommandArrayFixer
 from .commands import add_remediate_commands, cmd_remediate
 from .coordinator import RemediationCoordinator, RemediationPlan
+from .cors_allowlist import CORSAllowlistFixer
 from .dependency_pin import DependencyPinFixer
 from .dependency_upgrade import DependencyUpgradeFixer
 from .docker_sudo import DockerSudoFixer
@@ -34,6 +35,7 @@ from .tls_verify import TLSVerifyFixer
 from .weak_crypto import WeakCryptoFixer
 
 __all__ = [
+    "CORSAllowlistFixer",
     "CodeEvalFixer",
     "CommandArrayFixer",
     "DependencyPinFixer",

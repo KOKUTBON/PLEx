@@ -9,7 +9,12 @@ from typing import Any, cast
 
 from plex.report.unified import AnalysisFinding, EvidenceRef, Severity
 
-from .config_rules import evaluate_dockerfile, evaluate_env_file, evaluate_tls_code
+from .config_rules import (
+    evaluate_debug_code,
+    evaluate_dockerfile,
+    evaluate_env_file,
+    evaluate_tls_code,
+)
 from .manifests import parse_pipfile_lock, parse_poetry_lock, parse_requirements_txt
 from .models import AdvisoryRecord, DependencyRecord
 from .reachability import ReachabilityAnalyzer
@@ -180,11 +185,12 @@ class SupplyChainScanner:
                     except Exception:
                         continue
 
-                # 6. Python files for TLS inspection
+                # 6. Python files for TLS and Debug inspection
                 elif fname.endswith(".py"):
                     try:
                         content = fpath.read_text(encoding="utf-8")
                         cfg_finds = evaluate_tls_code(content, rel_path)
+                        cfg_finds.extend(evaluate_debug_code(content, rel_path))
                         for cf in cfg_finds:
                             findings.append(self._config_to_finding(cf))
                     except Exception:

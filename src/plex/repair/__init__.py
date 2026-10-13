@@ -7,6 +7,7 @@ from .command_array import CommandArrayFixer
 from .commands import add_remediate_commands, cmd_remediate
 from .coordinator import RemediationCoordinator, RemediationPlan
 from .cors_allowlist import CORSAllowlistFixer
+from .debug_mode import DebugModeFixer
 from .dependency_pin import DependencyPinFixer
 from .dependency_upgrade import DependencyUpgradeFixer
 from .docker_sudo import DockerSudoFixer
@@ -38,6 +39,7 @@ __all__ = [
     "CORSAllowlistFixer",
     "CodeEvalFixer",
     "CommandArrayFixer",
+    "DebugModeFixer",
     "DependencyPinFixer",
     "DependencyUpgradeFixer",
     "DockerSudoFixer",

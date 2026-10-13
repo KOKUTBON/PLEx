@@ -3,7 +3,12 @@
 from __future__ import annotations
 
 from .commands import add_supply_chain_commands, cmd_sbom
-from .config_rules import evaluate_dockerfile, evaluate_env_file, evaluate_tls_code
+from .config_rules import (
+    evaluate_debug_code,
+    evaluate_dockerfile,
+    evaluate_env_file,
+    evaluate_tls_code,
+)
 from .manifests import parse_pipfile_lock, parse_poetry_lock, parse_requirements_txt
 from .models import (
     AdvisoryRecord,
@@ -33,6 +38,7 @@ __all__ = [
     "SupplyChainScanner",
     "add_supply_chain_commands",
     "cmd_sbom",
+    "evaluate_debug_code",
     "evaluate_dockerfile",
     "evaluate_env_file",
     "evaluate_tls_code",

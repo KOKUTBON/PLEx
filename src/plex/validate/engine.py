@@ -26,6 +26,8 @@ from .recipes import (
     CodeInjectionRecipe,
     CommandInjectionRecipe,
     CORSMisconfigRecipe,
+    DebugExposureRecipe,
+    InsecureCookieRecipe,
     PathTraversalRecipe,
     RoleMatrixRecipe,
     SecurityHeadersRecipe,
@@ -51,10 +53,14 @@ RECIPES: dict[str, TestRecipe] = {
     "xbnd.ssrf": SSRFRecipe(),
     "xbnd.code-eval-taint": CodeInjectionRecipe(),
     "xbnd.sensitive-data-leak": SensitiveDataLeakRecipe(),
+    "xbnd.insecure-cookie": InsecureCookieRecipe(),
+    "val.insecure-cookie": InsecureCookieRecipe(),
     "val.security-headers": SecurityHeadersRecipe(),
     "cfg.insecure-headers": SecurityHeadersRecipe(),
     "val.cors-misconfiguration": CORSMisconfigRecipe(),
     "cfg.cors-wildcard": CORSMisconfigRecipe(),
+    "val.debug-exposure": DebugExposureRecipe(),
+    "cfg.debug-enabled": DebugExposureRecipe(),
 }
 
 
@@ -175,8 +181,10 @@ class ValidateEngine:
                 "xbnd.path-traversal",
                 "xbnd.code-eval-taint",
                 "xbnd.sensitive-data-leak",
+                "xbnd.insecure-cookie",
                 "val.security-headers",
                 "val.cors-misconfiguration",
+                "val.debug-exposure",
             ):
                 hypotheses.append(
                     ValidationHypothesis(

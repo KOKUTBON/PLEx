@@ -8,12 +8,14 @@ from .code_eval import CodeInjectionRecipe
 from .cookie import InsecureCookieRecipe
 from .cors import CORSMisconfigRecipe
 from .debug_exposure import DebugExposureRecipe
+from .deserialization import UnsafeDeserializationRecipe
 from .headers import SecurityHeadersRecipe
 from .injection import (
     CommandInjectionRecipe,
     PathTraversalRecipe,
     SQLInjectionRecipe,
 )
+from .open_redirect import OpenRedirectRecipe
 from .sensitive_data import SensitiveDataLeakRecipe
 from .ssrf import SSRFRecipe
 
@@ -23,6 +25,7 @@ __all__ = [
     "CommandInjectionRecipe",
     "DebugExposureRecipe",
     "InsecureCookieRecipe",
+    "OpenRedirectRecipe",
     "PathTraversalRecipe",
     "RoleMatrixRecipe",
     "SQLInjectionRecipe",
@@ -32,5 +35,6 @@ __all__ = [
     "TenantIsolationRecipe",
     "TestRecipe",
     "TestResult",
+    "UnsafeDeserializationRecipe",
     "ValidationHypothesis",
 ]

@@ -1,5 +1,13 @@
 # Changelog
 
+- Add static rule, active reproduction recipe, and automated fixer for Unvalidated URL Redirection / Open Redirect (CWE-601 / OWASP A01:2025):
+  - `OpenRedirectRule` (`xbnd.open-redirect`) in `plex.security.open_redirect` detects unvalidated user-controlled redirect calls (`redirect()`, `HttpResponseRedirect()`, `RedirectResponse()`).
+  - `OpenRedirectRecipe` (`val.open-redirect`, `xbnd.open-redirect`) in `plex.validate.recipes.open_redirect` actively probes redirect parameters with external and protocol-relative URLs and verifies `Location` response headers.
+  - `OpenRedirectFixer` (`fix.open-redirect`, `xbnd.open-redirect`) in `plex.repair.open_redirect` automatically wraps redirect destinations in `urllib.parse.urlparse(str(url)).netloc` validation.
+
+- Add native active unsafe deserialization testing in `plex.validate` (`UnsafeDeserializationRecipe`, `val.unsafe-deserialization`, `xbnd.unsafe-deserialization`, CWE-502 / OWASP A08:2025):
+  Probes endpoints with deterministic YAML tag evaluation (`!!python/str`) and serialization stream error payloads to verify or refute unsafe deserialization sinks, completing closed-loop active validation alongside `UnsafeDeserializationRule` and `SafeDeserializationFixer`.
+
 - Add automated debug mode disabler fixer in `plex.repair` (`DebugModeFixer`, `fix.debug-mode`, `cfg.debug-enabled`, CWE-489 / CWE-215 / OWASP A05:2025):
   Automatically disables active production debug flags (`DEBUG = True`, `app.debug = True`, `app.config["DEBUG"] = True`,
   `app.run(..., debug=True)`, and `FastAPI(..., debug=True)`) to prevent interactive debugger and stack trace exposure.

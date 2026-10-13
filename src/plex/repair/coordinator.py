@@ -23,6 +23,7 @@ from plex.repair.docker_user import DockerUserFixer
 from plex.repair.insecure_cookie import InsecureCookieFixer
 from plex.repair.insecure_index import InsecureIndexFixer
 from plex.repair.models import PatchCandidate, RepairRecord
+from plex.repair.open_redirect import OpenRedirectFixer
 from plex.repair.path_boundary import PathBoundaryFixer
 from plex.repair.plaintext_secret import PlaintextSecretFixer
 from plex.repair.runner import RepairVerificationRunner, apply_unified_diff
@@ -91,6 +92,7 @@ class RemediationCoordinator:
             SecurityHeadersFixer(),
             CORSAllowlistFixer(),
             DebugModeFixer(),
+            OpenRedirectFixer(),
         ]
 
     def plan_and_verify(

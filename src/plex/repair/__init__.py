@@ -23,6 +23,7 @@ from .models import (
     VerificationRecord,
     VerificationStatus,
 )
+from .open_redirect import OpenRedirectFixer
 from .path_boundary import PathBoundaryFixer
 from .plaintext_secret import PlaintextSecretFixer
 from .runner import RepairVerificationRunner, apply_unified_diff
@@ -47,6 +48,7 @@ __all__ = [
     "DockerUserFixer",
     "InsecureCookieFixer",
     "InsecureIndexFixer",
+    "OpenRedirectFixer",
     "PatchCandidate",
     "PathBoundaryFixer",
     "PlaintextSecretFixer",

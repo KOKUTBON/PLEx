@@ -21,8 +21,7 @@ implied by this source distribution.
 
 - Enable private vulnerability reporting, secret scanning and push protection where supported.
 - Protect the default branch with the actual successful check names and review policy.
-- Follow the organization publication procedure in
-  https://github.com/KOKUTBON/.github/tree/main/ops (preview before applying).
+- Follow the repository publication procedure and review checklist before applying.
 - Publish demos only through reviewed manual workflows; verify the URL before calling it live.
 - Prepare release notes and tags separately if distributing packages or binaries.
 

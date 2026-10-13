@@ -9,7 +9,7 @@ Maintainers complete these checks for each source, package or deployment release
 - Review dependency vulnerability reports; resolve exploitable findings before releasing affected components.
 - Verify SECURITY, CODE_OF_CONDUCT and SUPPORT reporting channels. Private reports go to kokutbon@gmail.com.
 - Confirm release notes, version identifiers, package names and artifact contents. Publish only through reviewed workflows with least-privilege credentials.
-- Verify branch protection, required checks, private vulnerability reporting and secret-scanning push protection where the GitHub plan supports them. The organization [publication tool](https://github.com/KOKUTBON/.github/tree/main/ops) checks and applies public-repository settings without changing visibility.
+- Verify branch protection, required checks, private vulnerability reporting and secret-scanning push protection where the GitHub plan supports them.
 - Check Sponsors links and the funding policy in SPONSORSHIP. Payments depend on GitHub approval and account eligibility.
 - Keep real user records, operational registers and deployment secrets outside version control. Run backups, restore rehearsals and integration acceptance checks in the deployment owner's environment before operating with real data.
 

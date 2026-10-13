@@ -17,6 +17,7 @@ from .injection import (
     SQLInjectionRecipe,
 )
 from .mass_assignment import MassAssignmentRecipe
+from .nosql_injection import NoSQLInjectionRecipe
 from .open_redirect import OpenRedirectRecipe
 from .sensitive_data import SensitiveDataLeakRecipe
 from .ssrf import SSRFRecipe
@@ -31,6 +32,7 @@ __all__ = [
     "DebugExposureRecipe",
     "InsecureCookieRecipe",
     "MassAssignmentRecipe",
+    "NoSQLInjectionRecipe",
     "OpenRedirectRecipe",
     "PathTraversalRecipe",
     "RoleMatrixRecipe",

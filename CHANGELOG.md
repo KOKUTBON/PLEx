@@ -1,5 +1,10 @@
 # Changelog
 
+- Add static rule, active reproduction recipe, and automated fixer for NoSQL / MongoDB Operator Injection (CWE-943 / OWASP A05:2025):
+  - `NoSQLInjectionRule` (`xbnd.nosql-injection`) in `plex.security.nosql_injection` detects unvalidated user input and dictionaries passed into NoSQL query filters (`find`, `find_one`, `delete_many`, `update_many`, `count_documents`) allowing operator injection (`$ne`, `$gt`, `$where`) and authentication bypass.
+  - `NoSQLInjectionRecipe` (`val.nosql-injection`, `xbnd.nosql-injection`) in `plex.validate.recipes.nosql_injection` actively probes candidate endpoints with operator canary payloads (`password: {"$ne": "..."}`) and verifies authentication bypass compared to baseline invalid probes.
+  - `NoSQLInjectionFixer` (`fix.nosql-injection`, `xbnd.nosql-injection`) in `plex.repair.nosql_injection` automatically sanitizes query dictionary values by applying primitive scalar casting (`str(val)`) and filtering operator keys (`not k.startswith('$')`).
+
 - Add static rule, active reproduction recipe, and automated fixer for Cross-Site Request Forgery (CSRF) Protection (CWE-352 / OWASP A01:2025):
   - `CSRFRule` (`xbnd.csrf-disabled`) in `plex.security.csrf` detects disabled CSRF protections via view exemptions (`@csrf_exempt`, `@csrf.exempt`) and insecure configurations (`WTF_CSRF_ENABLED = False`).
   - `CSRFRecipe` (`val.csrf-missing`, `xbnd.csrf-disabled`) in `plex.validate.recipes.csrf` actively probes state-changing endpoints from external origins without anti-CSRF tokens to verify forged execution.

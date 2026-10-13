@@ -8,6 +8,7 @@ from .csrf import CSRF_LIMITATIONS, CSRFRule
 from .eval_injection import EVAL_LIMITATIONS, CodeEvalInjectionRule
 from .insecure_cookie import COOKIE_LIMITATIONS, InsecureCookieRule
 from .mass_assignment import MASS_ASSIGNMENT_LIMITATIONS, MassAssignmentRule
+from .nosql_injection import NOSQL_LIMITATIONS, NoSQLInjectionRule
 from .open_redirect import OPEN_REDIRECT_LIMITATIONS, OpenRedirectRule
 from .path_traversal import PATH_LIMITATIONS, PathTraversalRule
 from .sensitive_data_leak import SENSITIVE_DATA_LIMITATIONS, SensitiveDataLeakRule
@@ -31,6 +32,8 @@ __all__ = [
     "InsecureCookieRule",
     "MASS_ASSIGNMENT_LIMITATIONS",
     "MassAssignmentRule",
+    "NOSQL_LIMITATIONS",
+    "NoSQLInjectionRule",
     "OPEN_REDIRECT_LIMITATIONS",
     "OpenRedirectRule",
     "PATH_LIMITATIONS",

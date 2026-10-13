@@ -35,6 +35,7 @@ from plex.repair.ssrf_validate import SSRFUrlValidateFixer
 from plex.repair.tenant_boundary import TenantBoundaryFixer
 from plex.repair.tls_verify import TLSVerifyFixer
 from plex.repair.weak_crypto import WeakCryptoFixer
+from plex.repair.xxe import XXEFixer
 from plex.report.unified import AnalysisFinding
 from plex.validate.authz import parse_authorization, validate_authorization
 from plex.validate.engine import ValidateEngine
@@ -93,6 +94,7 @@ class RemediationCoordinator:
             CORSAllowlistFixer(),
             DebugModeFixer(),
             OpenRedirectFixer(),
+            XXEFixer(),
         ]
 
     def plan_and_verify(

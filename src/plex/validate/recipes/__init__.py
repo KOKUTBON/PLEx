@@ -18,6 +18,7 @@ from .injection import (
 from .open_redirect import OpenRedirectRecipe
 from .sensitive_data import SensitiveDataLeakRecipe
 from .ssrf import SSRFRecipe
+from .xxe import XXERecipe
 
 __all__ = [
     "CORSMisconfigRecipe",
@@ -37,4 +38,5 @@ __all__ = [
     "TestResult",
     "UnsafeDeserializationRecipe",
     "ValidationHypothesis",
+    "XXERecipe",
 ]

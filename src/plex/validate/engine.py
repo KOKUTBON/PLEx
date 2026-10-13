@@ -40,6 +40,7 @@ from .recipes import (
     TestResult,
     UnsafeDeserializationRecipe,
     ValidationHypothesis,
+    XXERecipe,
 )
 from .routes import RouteEndpoint, correlate_finding_to_route, discover_routes
 from .scope import NetworkScope
@@ -61,6 +62,8 @@ RECIPES: dict[str, TestRecipe] = {
     "val.unsafe-deserialization": UnsafeDeserializationRecipe(),
     "xbnd.open-redirect": OpenRedirectRecipe(),
     "val.open-redirect": OpenRedirectRecipe(),
+    "xbnd.xxe": XXERecipe(),
+    "val.xxe": XXERecipe(),
     "val.security-headers": SecurityHeadersRecipe(),
     "cfg.insecure-headers": SecurityHeadersRecipe(),
     "val.cors-misconfiguration": CORSMisconfigRecipe(),

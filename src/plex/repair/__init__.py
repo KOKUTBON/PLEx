@@ -35,6 +35,7 @@ from .ssrf_validate import SSRFUrlValidateFixer
 from .tenant_boundary import TenantBoundaryFixer
 from .tls_verify import TLSVerifyFixer
 from .weak_crypto import WeakCryptoFixer
+from .xxe import XXEFixer
 
 __all__ = [
     "CORSAllowlistFixer",
@@ -68,6 +69,7 @@ __all__ = [
     "VerificationRecord",
     "VerificationStatus",
     "WeakCryptoFixer",
+    "XXEFixer",
     "add_remediate_commands",
     "apply_unified_diff",
     "cmd_remediate",

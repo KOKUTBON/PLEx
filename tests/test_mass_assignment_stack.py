@@ -62,7 +62,7 @@ def test_mass_assignment_fixer_sanitizes_unpacking() -> None:
     fixer = MassAssignmentFixer()
     fixed, changes = fixer.fix(src, "views.py")
 
-    assert "{k: v for k, v in data.items() if k in" in fixed
+    assert any(pat in fixed for pat in ("{k: v for k, v in data.items() if k in", "{k: v for (k, v) in data.items() if k in"))
     assert len(changes) == 1
     assert changes[0].rule_id == "xbnd.mass-assignment-taint"
     ast.parse(fixed)
@@ -81,7 +81,13 @@ def test_mass_assignment_fixer_propose_patch() -> None:
     assert patch.rule_id == "xbnd.mass-assignment-taint"
     assert patch.engine == "xboundary"
     assert patch.generator == "plex.repair.mass_assignment"
-    assert "Profile.objects.update(**{k: v for k, v in payload.items()" in patch.diff
+    assert any(
+        pat in patch.diff
+        for pat in (
+            "Profile.objects.update(**{k: v for k, v in payload.items()",
+            "Profile.objects.update(**{k: v for (k, v) in payload.items()",
+        )
+    )
     assert patch.rollback_diff != ""
 
 

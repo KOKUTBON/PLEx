@@ -1,5 +1,10 @@
 # Changelog
 
+- Add static rule, active reproduction recipe, and automated fixer for Mass Assignment / Parameter Binding (CWE-915 / OWASP A06:2025):
+  - `MassAssignmentRule` (`xbnd.mass-assignment-taint`) in `plex.security.mass_assignment` detects bulk dictionary unpacking (`**data`, `**payload`, `**request.json`) into model constructors and ORM sinks.
+  - `MassAssignmentRecipe` (`val.mass-assignment`, `xbnd.mass-assignment-taint`) in `plex.validate.recipes.mass_assignment` actively probes endpoints with unauthorized privileged parameters (`role=admin`, `is_admin=True`, `permissions=all`) and verifies reflection.
+  - `MassAssignmentFixer` (`fix.mass-assignment`, `xbnd.mass-assignment-taint`) in `plex.repair.mass_assignment` automatically injects explicit dictionary comprehension key allowlists around untrusted dictionary unpacking.
+
 - Add static rule, active reproduction recipe, and automated fixer for XML External Entity (XXE) Injection (CWE-611 / OWASP A05:2025):
   - `XXERule` (`xbnd.xxe`) in `plex.security.xxe` detects unsafe standard library XML parsing sinks (`xml.etree.ElementTree`, `xml.dom.minidom`, `xml.sax`).
   - `XXERecipe` (`val.xxe`, `xbnd.xxe`) in `plex.validate.recipes.xxe` actively probes endpoints with inline DTD entity expansion and entity error triggers.

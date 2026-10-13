@@ -20,6 +20,7 @@ from plex.security.command_injection import COMMAND_LIMITATIONS, CommandInjectio
 from plex.security.dataflow import SQLDataflow
 from plex.security.eval_injection import EVAL_LIMITATIONS, CodeEvalInjectionRule
 from plex.security.insecure_cookie import COOKIE_LIMITATIONS, InsecureCookieRule
+from plex.security.mass_assignment import MassAssignmentRule
 from plex.security.open_redirect import OpenRedirectRule
 from plex.security.path_traversal import PATH_LIMITATIONS, PathTraversalRule
 from plex.security.policy import PolicyError, load_policy
@@ -159,6 +160,7 @@ class XBoundaryProvider:
                 BrokenTenantIsolationRule(),
                 OpenRedirectRule(),
                 XXERule(),
+                MassAssignmentRule(),
             )
             for item in rule.apply(context)
         ]

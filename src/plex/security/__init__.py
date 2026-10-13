@@ -12,6 +12,7 @@ from .path_traversal import PATH_LIMITATIONS, PathTraversalRule
 from .sensitive_data_leak import SENSITIVE_DATA_LIMITATIONS, SensitiveDataLeakRule
 from .sql_injection import SCOPE_LIMITATIONS, SQLInjectionRule
 from .ssrf import SSRF_LIMITATIONS, SsrfRule
+from .ssti import SSTI_LIMITATIONS, SSTIRule
 from .unsafe_deserialization import DESERIALIZATION_LIMITATIONS, UnsafeDeserializationRule
 from .weak_crypto import WEAK_CRYPTO_LIMITATIONS, WeakCryptoRule
 from .xxe import XXE_LIMITATIONS, XXERule
@@ -35,6 +36,8 @@ __all__ = [
     "SENSITIVE_DATA_LIMITATIONS",
     "SQLInjectionRule",
     "SSRF_LIMITATIONS",
+    "SSTI_LIMITATIONS",
+    "SSTIRule",
     "SensitiveDataLeakRule",
     "SsrfRule",
     "TENANT_LIMITATIONS",
@@ -44,3 +47,4 @@ __all__ = [
     "XXE_LIMITATIONS",
     "XXERule",
 ]
+

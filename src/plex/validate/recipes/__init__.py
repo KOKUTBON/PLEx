@@ -19,6 +19,7 @@ from .mass_assignment import MassAssignmentRecipe
 from .open_redirect import OpenRedirectRecipe
 from .sensitive_data import SensitiveDataLeakRecipe
 from .ssrf import SSRFRecipe
+from .ssti import SSTIRecipe
 from .xxe import XXERecipe
 
 __all__ = [
@@ -33,6 +34,7 @@ __all__ = [
     "RoleMatrixRecipe",
     "SQLInjectionRecipe",
     "SSRFRecipe",
+    "SSTIRecipe",
     "SecurityHeadersRecipe",
     "SensitiveDataLeakRecipe",
     "TenantIsolationRecipe",

@@ -1,5 +1,10 @@
 # Changelog
 
+- Add static rule, active reproduction recipe, and automated fixer for Cross-Site Scripting (XSS) (CWE-79 / OWASP A03:2021 / A05:2025):
+  - `XSSRule` (`xbnd.xss`) in `plex.security.xss` detects unescaped user input passed into HTML markup sinks (`mark_safe`, `Markup`, `HttpResponse`, `HTMLResponse`) allowing reflected and stored cross-site scripting.
+  - `XSSRecipe` (`val.xss`, `xbnd.xss`) in `plex.validate.recipes.xss` actively probes candidate endpoints with canary HTML payloads (`<plex-xss-test-payload-1337>`) and verifies unescaped reflection in HTTP response bodies.
+  - `XSSFixer` (`fix.xss`, `xbnd.xss`) in `plex.repair.xss` automatically neutralizes XSS sinks by wrapping dynamic expressions in `html.escape()` and ensuring standard library imports.
+
 - Add static rule, active reproduction recipe, and automated fixer for NoSQL / MongoDB Operator Injection (CWE-943 / OWASP A05:2025):
   - `NoSQLInjectionRule` (`xbnd.nosql-injection`) in `plex.security.nosql_injection` detects unvalidated user input and dictionaries passed into NoSQL query filters (`find`, `find_one`, `delete_many`, `update_many`, `count_documents`) allowing operator injection (`$ne`, `$gt`, `$where`) and authentication bypass.
   - `NoSQLInjectionRecipe` (`val.nosql-injection`, `xbnd.nosql-injection`) in `plex.validate.recipes.nosql_injection` actively probes candidate endpoints with operator canary payloads (`password: {"$ne": "..."}`) and verifies authentication bypass compared to baseline invalid probes.

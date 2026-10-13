@@ -44,6 +44,7 @@ from .recipes import (
     TestResult,
     UnsafeDeserializationRecipe,
     ValidationHypothesis,
+    XSSRecipe,
     XXERecipe,
 )
 from .routes import RouteEndpoint, correlate_finding_to_route, discover_routes
@@ -74,6 +75,8 @@ RECIPES: dict[str, TestRecipe] = {
     "val.ssti": SSTIRecipe(),
     "xbnd.nosql-injection": NoSQLInjectionRecipe(),
     "val.nosql-injection": NoSQLInjectionRecipe(),
+    "xbnd.xss": XSSRecipe(),
+    "val.xss": XSSRecipe(),
     "cfg.csrf-disabled": CSRFRecipe(),
     "val.csrf-missing": CSRFRecipe(),
     "val.security-headers": SecurityHeadersRecipe(),

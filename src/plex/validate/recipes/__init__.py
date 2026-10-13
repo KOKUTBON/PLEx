@@ -22,6 +22,7 @@ from .open_redirect import OpenRedirectRecipe
 from .sensitive_data import SensitiveDataLeakRecipe
 from .ssrf import SSRFRecipe
 from .ssti import SSTIRecipe
+from .xss import XSSRecipe
 from .xxe import XXERecipe
 
 __all__ = [
@@ -46,5 +47,6 @@ __all__ = [
     "TestResult",
     "UnsafeDeserializationRecipe",
     "ValidationHypothesis",
+    "XSSRecipe",
     "XXERecipe",
 ]

@@ -39,6 +39,7 @@ from plex.repair.ssti import SSTIFixer
 from plex.repair.tenant_boundary import TenantBoundaryFixer
 from plex.repair.tls_verify import TLSVerifyFixer
 from plex.repair.weak_crypto import WeakCryptoFixer
+from plex.repair.xss import XSSFixer
 from plex.repair.xxe import XXEFixer
 from plex.report.unified import AnalysisFinding
 from plex.validate.authz import parse_authorization, validate_authorization
@@ -103,6 +104,7 @@ class RemediationCoordinator:
             SSTIFixer(),
             CSRFFixer(),
             NoSQLInjectionFixer(),
+            XSSFixer(),
         ]
 
     def plan_and_verify(

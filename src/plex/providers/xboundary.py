@@ -31,6 +31,7 @@ from plex.security.ssrf import SsrfRule
 from plex.security.ssti import SSTIRule
 from plex.security.unsafe_deserialization import UnsafeDeserializationRule
 from plex.security.weak_crypto import WeakCryptoRule
+from plex.security.xss import XSSRule
 from plex.security.xxe import XXERule
 
 from .base import AnalysisTask, EngineCapability, FindingSink, PreflightResult, ProviderEnv
@@ -165,6 +166,7 @@ class XBoundaryProvider:
                 MassAssignmentRule(),
                 SSTIRule(),
                 NoSQLInjectionRule(),
+                XSSRule(),
             )
             for item in rule.apply(context)
         ]

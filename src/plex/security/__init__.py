@@ -6,6 +6,7 @@ from .broken_tenant_isolation import TENANT_LIMITATIONS, BrokenTenantIsolationRu
 from .command_injection import COMMAND_LIMITATIONS, CommandInjectionRule
 from .eval_injection import EVAL_LIMITATIONS, CodeEvalInjectionRule
 from .insecure_cookie import COOKIE_LIMITATIONS, InsecureCookieRule
+from .open_redirect import OPEN_REDIRECT_LIMITATIONS, OpenRedirectRule
 from .path_traversal import PATH_LIMITATIONS, PathTraversalRule
 from .sensitive_data_leak import SENSITIVE_DATA_LIMITATIONS, SensitiveDataLeakRule
 from .sql_injection import SCOPE_LIMITATIONS, SQLInjectionRule
@@ -22,6 +23,8 @@ __all__ = [
     "DESERIALIZATION_LIMITATIONS",
     "EVAL_LIMITATIONS",
     "InsecureCookieRule",
+    "OPEN_REDIRECT_LIMITATIONS",
+    "OpenRedirectRule",
     "PATH_LIMITATIONS",
     "PathTraversalRule",
     "SCOPE_LIMITATIONS",

@@ -28,6 +28,7 @@ from .recipes import (
     CORSMisconfigRecipe,
     DebugExposureRecipe,
     InsecureCookieRecipe,
+    OpenRedirectRecipe,
     PathTraversalRecipe,
     RoleMatrixRecipe,
     SecurityHeadersRecipe,
@@ -37,6 +38,7 @@ from .recipes import (
     TenantIsolationRecipe,
     TestRecipe,
     TestResult,
+    UnsafeDeserializationRecipe,
     ValidationHypothesis,
 )
 from .routes import RouteEndpoint, correlate_finding_to_route, discover_routes
@@ -55,6 +57,10 @@ RECIPES: dict[str, TestRecipe] = {
     "xbnd.sensitive-data-leak": SensitiveDataLeakRecipe(),
     "xbnd.insecure-cookie": InsecureCookieRecipe(),
     "val.insecure-cookie": InsecureCookieRecipe(),
+    "xbnd.unsafe-deserialization": UnsafeDeserializationRecipe(),
+    "val.unsafe-deserialization": UnsafeDeserializationRecipe(),
+    "xbnd.open-redirect": OpenRedirectRecipe(),
+    "val.open-redirect": OpenRedirectRecipe(),
     "val.security-headers": SecurityHeadersRecipe(),
     "cfg.insecure-headers": SecurityHeadersRecipe(),
     "val.cors-misconfiguration": CORSMisconfigRecipe(),

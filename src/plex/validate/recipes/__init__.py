@@ -7,6 +7,7 @@ from .base import TestRecipe, TestResult, ValidationHypothesis
 from .code_eval import CodeInjectionRecipe
 from .cookie import InsecureCookieRecipe
 from .cors import CORSMisconfigRecipe
+from .csrf import CSRFRecipe
 from .debug_exposure import DebugExposureRecipe
 from .deserialization import UnsafeDeserializationRecipe
 from .headers import SecurityHeadersRecipe
@@ -24,6 +25,7 @@ from .xxe import XXERecipe
 
 __all__ = [
     "CORSMisconfigRecipe",
+    "CSRFRecipe",
     "CodeInjectionRecipe",
     "CommandInjectionRecipe",
     "DebugExposureRecipe",

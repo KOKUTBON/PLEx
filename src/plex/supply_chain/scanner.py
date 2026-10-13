@@ -10,6 +10,7 @@ from typing import Any, cast
 from plex.report.unified import AnalysisFinding, EvidenceRef, Severity
 
 from .config_rules import (
+    evaluate_csrf_code,
     evaluate_debug_code,
     evaluate_dockerfile,
     evaluate_env_file,
@@ -191,6 +192,7 @@ class SupplyChainScanner:
                         content = fpath.read_text(encoding="utf-8")
                         cfg_finds = evaluate_tls_code(content, rel_path)
                         cfg_finds.extend(evaluate_debug_code(content, rel_path))
+                        cfg_finds.extend(evaluate_csrf_code(content, rel_path))
                         for cf in cfg_finds:
                             findings.append(self._config_to_finding(cf))
                     except Exception:

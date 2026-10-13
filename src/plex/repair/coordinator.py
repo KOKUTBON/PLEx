@@ -14,6 +14,7 @@ from plex.providers import AnalysisTask, SupplyChainProvider, XBoundaryProvider,
 from plex.repair.code_eval import CodeEvalFixer
 from plex.repair.command_array import CommandArrayFixer
 from plex.repair.cors_allowlist import CORSAllowlistFixer
+from plex.repair.csrf import CSRFFixer
 from plex.repair.debug_mode import DebugModeFixer
 from plex.repair.dependency_pin import DependencyPinFixer
 from plex.repair.dependency_upgrade import DependencyUpgradeFixer
@@ -99,6 +100,7 @@ class RemediationCoordinator:
             XXEFixer(),
             MassAssignmentFixer(),
             SSTIFixer(),
+            CSRFFixer(),
         ]
 
     def plan_and_verify(

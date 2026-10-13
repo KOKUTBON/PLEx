@@ -1,5 +1,10 @@
 # Changelog
 
+- Add static rule, active reproduction recipe, and automated fixer for Cross-Site Request Forgery (CSRF) Protection (CWE-352 / OWASP A01:2025):
+  - `CSRFRule` (`xbnd.csrf-disabled`) in `plex.security.csrf` detects disabled CSRF protections via view exemptions (`@csrf_exempt`, `@csrf.exempt`) and insecure configurations (`WTF_CSRF_ENABLED = False`).
+  - `CSRFRecipe` (`val.csrf-missing`, `xbnd.csrf-disabled`) in `plex.validate.recipes.csrf` actively probes state-changing endpoints from external origins without anti-CSRF tokens to verify forged execution.
+  - `CSRFFixer` (`fix.csrf-protection`, `xbnd.csrf-disabled`) in `plex.repair.csrf` automatically strips `@csrf_exempt` decorators and enables `WTF_CSRF_ENABLED = True`.
+
 - Add static rule, active reproduction recipe, and automated fixer for Server-Side Template Injection (SSTI) (CWE-1336 / OWASP A05:2025):
   - `SSTIRule` (`xbnd.ssti`) in `plex.security.ssti` detects dynamic template rendering sinks (`render_template_string`, `jinja2.Template`, `from_string`) evaluated with untrusted or formatted user input.
   - `SSTIRecipe` (`val.ssti`, `xbnd.ssti`) in `plex.validate.recipes.ssti` actively probes candidate endpoints with arithmetic template canary expressions (`{{49*49}}` -> `2401`) and verifies dynamic evaluation without literal escaping.

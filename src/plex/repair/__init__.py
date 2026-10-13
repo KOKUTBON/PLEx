@@ -15,6 +15,7 @@ from .docker_tag_pin import DockerTagPinFixer
 from .docker_user import DockerUserFixer
 from .insecure_cookie import InsecureCookieFixer
 from .insecure_index import InsecureIndexFixer
+from .mass_assignment import MassAssignmentFixer
 from .models import (
     PatchCandidate,
     RepairRecord,
@@ -49,6 +50,7 @@ __all__ = [
     "DockerUserFixer",
     "InsecureCookieFixer",
     "InsecureIndexFixer",
+    "MassAssignmentFixer",
     "OpenRedirectFixer",
     "PatchCandidate",
     "PathBoundaryFixer",

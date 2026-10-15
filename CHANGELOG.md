@@ -1,5 +1,7 @@
 # Changelog
 
+- Validate redirect targets once and reject browser URL bypasses. (#61)
+
 - Escape untrusted HTML values in supported rendering contexts. (#59)
 
 - Separate Flask template input from template code. (#57)

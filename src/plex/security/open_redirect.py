@@ -12,6 +12,7 @@ from plex.rules.base import Rule, RuleContext, RuleFinding
 
 OPEN_REDIRECT_LIMITATIONS = (
     "Open redirect rule evaluates redirect, HttpResponseRedirect, and RedirectResponse call-site arguments",
+    "urlparse/urlsplit, url_has_allowed_host_and_scheme, is_safe_url, .netloc checks and the _plex_safe_redirect helper inserted by fix.open-redirect are treated as validation",
     "External reverse-proxy or gateway redirect rewrites require active HTTP validation",
 )
 
@@ -41,6 +42,8 @@ SAFE_VALIDATORS = {
     "urlsplit",
     "url_has_allowed_host_and_scheme",
     "is_safe_url",
+    # Relative-URL check inserted by fix.open-redirect.
+    "_plex_safe_redirect",
 }
 
 __all__ = ["OPEN_REDIRECT_LIMITATIONS", "OpenRedirectRule"]

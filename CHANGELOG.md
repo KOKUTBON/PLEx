@@ -1,5 +1,7 @@
 # Changelog
 
+- Reject nested MongoDB operators without changing legitimate query types. (#55)
+
 - Resolve eval safely and retain manual review for literal evaluation. (#53)
 
 - Confine filesystem repairs to a known base directory. (#51)

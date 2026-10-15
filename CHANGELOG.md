@@ -1,5 +1,7 @@
 # Changelog
 
+- Escape untrusted HTML values in supported rendering contexts. (#59)
+
 - Separate Flask template input from template code. (#57)
 
 - Reject nested MongoDB operators without changing legitimate query types. (#55)

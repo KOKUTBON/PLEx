@@ -111,30 +111,33 @@ def test_xss_fixer_escapes_fstring_in_mark_safe() -> None:
     fixer = XSSFixer()
     fixed, changes = fixer.fix(src, "views.py")
 
-    assert "html.escape(name)" in fixed
-    assert "import html" in fixed
+    assert "mark_safe(f'Hello {conditional_escape(name)}!')" in fixed
+    assert "from django.utils.html import conditional_escape" in fixed
     assert len(changes) == 1
     assert changes[0].rule_id == "xbnd.xss"
     ast.parse(fixed)
 
 
-def test_xss_fixer_escapes_direct_arg_in_markup() -> None:
+def test_xss_fixer_escapes_value_in_markup() -> None:
     src = (
+        "from markupsafe import Markup\n\n"
         "def view(request):\n"
         "    data = request.POST['bio']\n"
-        "    return Markup(data)\n"
+        "    return Markup('<p>' + data + '</p>')\n"
     )
     fixer = XSSFixer()
     fixed, changes = fixer.fix(src, "views.py")
 
-    assert "html.escape(data)" in fixed
-    assert "import html" in fixed
+    # Markup + "literal" would escape the literal, so a plain str is concatenated.
+    assert "Markup('<p>' + str(escape(data)) + '</p>')" in fixed
+    assert "from markupsafe import escape" in fixed
     assert len(changes) == 1
     ast.parse(fixed)
 
 
 def test_xss_fixer_propose_patch() -> None:
     src = (
+        "from django.http import HttpResponse\n\n"
         "def view(request):\n"
         "    user = request.GET.get('user')\n"
         "    return HttpResponse(f'<div>{user}</div>')\n"
@@ -146,7 +149,7 @@ def test_xss_fixer_propose_patch() -> None:
     assert patch.rule_id == "xbnd.xss"
     assert patch.engine == "xboundary"
     assert patch.generator == "plex.repair.xss"
-    assert "html.escape(" in patch.diff
+    assert "conditional_escape(user)" in patch.diff
     assert patch.rollback_diff != ""
 
 

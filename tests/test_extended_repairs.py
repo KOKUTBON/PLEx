@@ -29,8 +29,8 @@ def test_command_array_fixer_fstring():
     )
     fixed, changes = fixer.fix(source)
     assert len(changes) == 1
-    assert "['ping', '-c', '1', target]" in fixed
-    assert "shell=True" not in fixed
+    assert "['ping', '-c', '1', '--', str(target)]" in fixed
+    assert "shell=False" in fixed
 
     # Verify python syntax
     tree = compile(fixed, "<string>", "exec")
@@ -47,8 +47,8 @@ def test_command_array_fixer_concat():
     )
     fixed, changes = fixer.fix(source)
     assert len(changes) == 1
-    assert "['cat', name]" in fixed
-    assert "shell=True" not in fixed
+    assert "['cat', '--', name]" in fixed
+    assert "shell=False" in fixed
 
 
 def test_command_array_fixer_noop_on_safe():
@@ -66,14 +66,14 @@ def test_command_array_fixer_noop_on_safe():
 
 def test_command_array_propose_patch():
     fixer = CommandArrayFixer()
-    source = "import subprocess\nsubprocess.run(f'echo {data}', shell=True)\n"
+    source = "import subprocess\nsubprocess.run(f'cat {data}', shell=True)\n"
     cand = fixer.propose_patch(source=source, target_file="app.py")
     assert cand is not None
     assert cand.rule_id == "xbnd.command-injection"
     assert cand.target_file == "app.py"
     assert "--- a/app.py" in cand.diff
     assert "+++ b/app.py" in cand.diff
-    assert "['echo', data]" in cand.diff
+    assert "['cat', '--', str(data)]" in cand.diff
 
 
 # ==============================================================================

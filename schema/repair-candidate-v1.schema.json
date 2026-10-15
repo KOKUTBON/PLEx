@@ -1,0 +1,259 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PLEx Repair Candidate and Record Schema v1",
+  "type": "object",
+  "anyOf": [
+    {
+      "$ref": "#/$defs/repair_record"
+    },
+    {
+      "$ref": "#/$defs/patch_candidate"
+    }
+  ],
+  "$defs": {
+    "patch_candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "finding_ids",
+        "rule_id",
+        "engine",
+        "source_digest",
+        "target_file",
+        "diff",
+        "description",
+        "preconditions",
+        "generator",
+        "generator_version",
+        "confidence",
+        "risk",
+        "rollback_diff",
+        "metadata"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "finding_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "rule_id": {
+          "type": "string"
+        },
+        "engine": {
+          "type": "string"
+        },
+        "source_digest": {
+          "type": "string"
+        },
+        "target_file": {
+          "type": "string"
+        },
+        "diff": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "preconditions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "generator": {
+          "type": "string"
+        },
+        "generator_version": {
+          "type": "string"
+        },
+        "confidence": {
+          "type": "string",
+          "enum": [
+            "observed",
+            "derived",
+            "inferred"
+          ]
+        },
+        "risk": {
+          "type": "string",
+          "enum": [
+            "info",
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        },
+        "rollback_diff": {
+          "type": "string"
+        },
+        "metadata": {
+          "type": "object"
+        }
+      }
+    },
+    "verification_check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "passed",
+        "duration_ms",
+        "command",
+        "details"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "passed": {
+          "type": "boolean"
+        },
+        "duration_ms": {
+          "type": "number",
+          "minimum": 0
+        },
+        "command": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "details": {
+          "type": "object"
+        }
+      }
+    },
+    "verification_record": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "patch_id",
+        "finding_id",
+        "status",
+        "verified_at",
+        "verifier",
+        "checks",
+        "environment_digest",
+        "limitations",
+        "metadata"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "patch_id": {
+          "type": "string"
+        },
+        "finding_id": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "verified",
+            "failed",
+            "inconclusive"
+          ]
+        },
+        "verified_at": {
+          "type": "string"
+        },
+        "verifier": {
+          "type": "string"
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/verification_check"
+          }
+        },
+        "environment_digest": {
+          "type": "string"
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "metadata": {
+          "type": "object"
+        }
+      }
+    },
+    "repair_record": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate",
+        "status",
+        "verification",
+        "history"
+      ],
+      "properties": {
+        "candidate": {
+          "$ref": "#/$defs/patch_candidate"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "proposed",
+            "applied-in-workspace",
+            "verified",
+            "failed",
+            "inconclusive",
+            "reverted"
+          ]
+        },
+        "verification": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/verification_record"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "history": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "from_status",
+              "to_status",
+              "reason",
+              "actor",
+              "at"
+            ],
+            "properties": {
+              "from_status": {
+                "type": "string"
+              },
+              "to_status": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              },
+              "actor": {
+                "type": "string"
+              },
+              "at": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,4 @@
+include: [src]
+use_cache: false
+rules_enabled: true
+call_graph_enabled: true

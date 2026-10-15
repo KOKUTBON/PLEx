@@ -1,0 +1,43 @@
+- id: plex
+  name: plex
+  description: "PLEx: complexity & performance regression guard"
+  entry: plex analyze
+  language: python
+  types: [python]
+  args: [--changed-only]
+  stages: [pre-commit]
+
+- id: plex-fix
+  name: plex-fix
+  description: "PLEx: automatically fix safe performance violations"
+  entry: plex fix
+  language: python
+  types: [python]
+  pass_filenames: true
+  stages: [pre-commit]
+
+- id: plex-fix-check
+  name: plex-fix-check
+  description: "PLEx: check for autofixable performance violations without modifying files"
+  entry: plex fix --check
+  language: python
+  types: [python]
+  pass_filenames: true
+  stages: [pre-commit]
+
+- id: plex-config-validate
+  name: plex-config-validate
+  description: "PLEx: validate configuration file(s)"
+  entry: plex config validate
+  language: python
+  pass_filenames: true
+  files: "\\.plex$|\\.(yml|yaml)$"
+  stages: [pre-commit]
+
+- id: plex-rules
+  name: plex-rules
+  description: "PLEx: list registered analysis rules"
+  entry: plex rules list
+  language: python
+  pass_filenames: false
+  stages: [manual]

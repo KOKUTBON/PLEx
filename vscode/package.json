@@ -1,0 +1,123 @@
+{
+  "name": "plex",
+  "displayName": "PLEx",
+  "icon": "assets/icon.png",
+  "description": "Surface PLEx findings as VS Code diagnostics.",
+  "version": "0.1.0",
+  "publisher": "reiidoda",
+  "author": {
+    "name": "Rei Doda"
+  },
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/KOKUTBON/PLEx/tree/main/vscode",
+  "bugs": {
+    "url": "https://github.com/KOKUTBON/PLEx/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/KOKUTBON/PLEx"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Linters"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onCommand:plex.loadReport",
+    "onCommand:plex.clearDiagnostics",
+    "onCommand:plex.runAnalysis",
+    "onCommand:plex.applyFix",
+    "onCommand:plex.fixCurrentFile",
+    "onCommand:plex.fixWorkspace"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "plex.loadReport",
+        "title": "PLEx: Load Report"
+      },
+      {
+        "command": "plex.clearDiagnostics",
+        "title": "PLEx: Clear Diagnostics"
+      },
+      {
+        "command": "plex.runAnalysis",
+        "title": "PLEx: Run Analysis"
+      },
+      {
+        "command": "plex.applyFix",
+        "title": "PLEx: Apply Quick Fix"
+      },
+      {
+        "command": "plex.fixCurrentFile",
+        "title": "PLEx: Fix All Violations in Current File"
+      },
+      {
+        "command": "plex.fixWorkspace",
+        "title": "PLEx: Fix All Violations in Workspace"
+      }
+    ],
+    "configuration": {
+      "title": "PLEx",
+      "properties": {
+        "plex.executablePath": {
+          "type": "string",
+          "default": "plex",
+          "description": "Path or binary name of the PLEx CLI."
+        },
+        "plex.reportPath": {
+          "type": "string",
+          "default": "out/plex.json",
+          "description": "Path to an PLEx JSON report (relative to workspace)."
+        },
+        "plex.autoLoad": {
+          "type": "boolean",
+          "default": true,
+          "description": "Load diagnostics automatically on startup if the report exists."
+        },
+        "plex.analyzeOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically run PLEx analysis when saving a supported file."
+        },
+        "plex.enableQuickFixes": {
+          "type": "boolean",
+          "default": true,
+          "description": "Provide automated quick-fixes for fixable PLEx rules."
+        },
+        "plex.extraArgs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "--changed-only"
+          ],
+          "description": "Additional CLI arguments passed to `plex analyze`."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -w -p ./",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^18.19.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^4.0.0",
+    "typescript": "^5.3.3"
+  },
+  "keywords": [
+    "performance",
+    "complexity",
+    "static-analysis",
+    "linter",
+    "python"
+  ]
+}

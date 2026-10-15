@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PLEx · Python Performance Guard</title>
+    <meta
+      name="description"
+      content="PLEx finds performance risks in Python code before they reach production: quadratic loops, N+1 queries, blocking I/O, risky regexes, and complexity regressions in pull requests — with safe automated fixes."
+    />
+    <meta name="theme-color" content="#06070d" />
+    <meta property="og:title" content="PLEx — catch slow Python before it merges" />
+    <meta
+      property="og:description"
+      content="Static performance analysis, complexity regression detection, and automated fixes for Python. Try the interactive report demo."
+    />
+    <meta property="og:image" content="https://kokutbon.github.io/PLEx/assets/img/logo-512.png" />
+    <meta property="og:url" content="https://kokutbon.github.io/PLEx/" />
+    <link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg" />
+    <link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="assets/css/base.css" />
+    <link rel="stylesheet" href="assets/css/landing.css" />
+    <script type="module" src="assets/js/landing.js"></script>
+  </head>
+  <body>
+    <a class="sr-only" href="#main">Skip to content</a>
+    <header class="nav" id="nav">
+      <div class="wrap nav-inner">
+        <a class="brand" href="./" aria-label="PLEx home">
+          <img src="assets/img/logo.svg" alt="" width="30" height="30" />
+          <span>PLEx</span>
+        </a>
+        <nav class="nav-links" aria-label="Primary">
+          <a href="#try">Try it</a>
+          <a href="#how">How it works</a>
+          <a href="#pr">Pull requests</a>
+          <a href="#rules">Rules</a>
+          <a href="#integrations">Integrations</a>
+          <a href="https://github.com/KOKUTBON/PLEx/tree/main/docs" rel="noopener">Docs</a>
+        </nav>
+        <div class="nav-actions">
+          <button class="icon-btn" id="theme-toggle" type="button" aria-label="Toggle theme">
+            <svg class="icon" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9Z" /></svg>
+          </button>
+          <a class="btn btn-sm" href="https://github.com/KOKUTBON/PLEx" rel="noopener">
+            <svg class="icon" viewBox="0 0 24 24" style="fill: currentColor; stroke: none">
+              <path
+                d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.87-1.37-3.87-1.37-.53-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.04 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.58.23 2.75.11 3.04.74.81 1.19 1.83 1.19 3.09 0 4.41-2.69 5.38-5.26 5.67.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"
+              />
+            </svg>
+            <span class="hide-sm">GitHub</span>
+          </a>
+          <a class="btn btn-sm btn-primary hide-sm" href="demo/">Live demo</a>
+        </div>
+      </div>
+    </header>
+
+    <main id="main">
+      <!-- Hero -->
+      <section class="hero">
+        <div class="hero-glow" aria-hidden="true"></div>
+        <div class="wrap hero-grid">
+          <div class="hero-copy">
+            <a class="eyebrow" href="https://github.com/KOKUTBON/PLEx/blob/main/CHANGELOG.md" rel="noopener">
+              <span class="eyebrow-dot"></span><span id="hero-version">Open source · Apache-2.0</span>
+              <svg class="icon" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+            </a>
+            <h1>Catch slow Python <span class="grad-text">before it merges.</span></h1>
+            <p class="lede">
+              PLEx finds quadratic loops, N+1 queries, blocking I/O, and risky regexes with AST and IR analysis, flags complexity
+              regressions against your base branch, and rewrites the safe ones for you.
+            </p>
+            <div class="hero-ctas">
+              <a class="btn btn-primary btn-lg" href="demo/">
+                Explore the live report
+                <svg class="icon" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+              </a>
+              <button class="install" type="button" data-copy="python -m pip install plex" aria-label="Copy install command">
+                <span class="prompt">$</span><code>python -m pip install plex</code>
+                <svg class="icon" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V6a2 2 0 0 1 2-2h9" /></svg>
+              </button>
+            </div>
+            <ul class="hero-points">
+              <li>Static by default — never executes your code</li>
+              <li>Baseline-aware PR gating</li>
+              <li>SARIF, check runs, and sticky comments</li>
+            </ul>
+          </div>
+
+          <div class="hero-visual" id="hero-visual" aria-label="Example: PLEx flags a complexity regression in a pull request">
+            <div class="window">
+              <div class="window-bar">
+                <span class="dots"><i></i><i></i><i></i></span>
+                <span class="window-title" id="hero-file">src/shop/orders.py</span>
+                <span class="window-badge" id="hero-branch"></span>
+              </div>
+              <div class="window-code" id="hero-code"></div>
+            </div>
+            <div class="float-card regression" id="hero-reg"></div>
+            <div class="float-card check" id="hero-check"></div>
+          </div>
+        </div>
+
+        <div class="wrap">
+          <dl class="stats" id="stats">
+            <div><dt>Built-in rules</dt><dd data-stat="rules">47</dd></div>
+            <div><dt>Automated fixers</dt><dd data-stat="fixers">38</dd></div>
+            <div><dt>Report formats</dt><dd>6</dd></div>
+            <div><dt>Languages parsed</dt><dd>6</dd></div>
+            <div><dt>Code executed by default</dt><dd>0 lines</dd></div>
+          </dl>
+        </div>
+      </section>
+
+      <!-- Interactive example -->
+      <section class="section" id="try">
+        <div class="wrap">
+          <header class="section-head">
+            <span class="kicker">Interactive example</span>
+            <h2>See exactly what PLEx sees.</h2>
+            <p>
+              Every finding below is real engine output from the demo project. Pick a pattern, read the diagnosis, then apply the fixer to
+              see the rewrite it would make.
+            </p>
+          </header>
+
+          <div class="playground" id="playground">
+            <div class="pg-cases" role="tablist" aria-label="Example findings" id="pg-cases"></div>
+            <div class="pg-stage">
+              <div class="pg-editor">
+                <div class="window-bar">
+                  <span class="dots"><i></i><i></i><i></i></span>
+                  <span class="window-title" id="pg-file"></span>
+                  <div class="pg-toggle segmented" role="group" aria-label="Code view">
+                    <button type="button" data-pg-mode="before" aria-pressed="true">Before</button>
+                    <button type="button" data-pg-mode="after" aria-pressed="false">After fix</button>
+                  </div>
+                </div>
+                <div class="pg-code" id="pg-code" aria-live="polite"></div>
+              </div>
+              <aside class="pg-finding" id="pg-finding" aria-live="polite"></aside>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- How it works -->
+      <section class="section" id="how">
+        <div class="wrap">
+          <header class="section-head">
+            <span class="kicker">How it works</span>
+            <h2>From source to verdict in one static pass.</h2>
+            <p>A conservative pipeline built for CI: deterministic, cacheable, and quiet unless something actually changed.</p>
+          </header>
+          <ol class="pipeline">
+            <li>
+              <span class="step-n">01</span>
+              <h3>Discover</h3>
+              <p>Include/exclude globs, <code>.gitignore</code>, and changed-only mode scope the files that matter.</p>
+            </li>
+            <li>
+              <span class="step-n">02</span>
+              <h3>Parse to IR</h3>
+              <p>Python AST plus a language-agnostic IR; optional JS/TS, Java, Kotlin, and Go parsers.</p>
+            </li>
+            <li>
+              <span class="step-n">03</span>
+              <h3>Signals &amp; rules</h3>
+              <p>Loop depth, recursion, and sorts feed complexity hints; rules flag I/O, allocation, and regex risks.</p>
+            </li>
+            <li>
+              <span class="step-n">04</span>
+              <h3>Score</h3>
+              <p>Each function gets a risk score, confidence, and severity — tunable per path and per rule.</p>
+            </li>
+            <li>
+              <span class="step-n">05</span>
+              <h3>Compare</h3>
+              <p>Head is diffed against the base ref or a stored baseline to surface regressions only.</p>
+            </li>
+            <li>
+              <span class="step-n">06</span>
+              <h3>Report &amp; gate</h3>
+              <p>JSON, Markdown, SARIF, HTML, and check runs, with a gate policy that sets the exit code.</p>
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <!-- Pull requests -->
+      <section class="section" id="pr">
+        <div class="wrap pr-grid">
+          <div>
+            <span class="kicker">Built for pull requests</span>
+            <h2>Review complexity like you review tests.</h2>
+            <p class="section-lede">
+              PLEx compares every changed function with its base version. When <code>find_vip_orders</code> gains a nested loop, the PR gets
+              a sticky comment, a check-run annotation, and a failing gate if your policy says so.
+            </p>
+            <ul class="checks">
+              <li><b>Changed-only analysis</b><span>Scan just the files and functions a diff touches.</span></li>
+              <li><b>Baselines &amp; budgets</b><span>Risk-delta budgets, per-path rules, and strict / balanced / relaxed presets.</span></li>
+              <li><b>Native CI surfaces</b><span>Step summaries, SARIF code scanning, annotations, Slack and Teams payloads.</span></li>
+            </ul>
+            <a class="btn" href="demo/#pr">Open the pull request view <svg class="icon" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6" /></svg></a>
+          </div>
+          <div class="pr-mock" id="pr-mock"></div>
+        </div>
+      </section>
+
+      <!-- Rules -->
+      <section class="section" id="rules">
+        <div class="wrap">
+          <header class="section-head">
+            <span class="kicker">Rule catalog</span>
+            <h2><span data-stat="rules">47</span> rules. Conservative by design.</h2>
+            <p>Stable rules are graduated for CI enforcement; experimental heuristics stay opt-in. Filter by what you care about.</p>
+          </header>
+          <div class="rule-tools">
+            <label class="rule-search">
+              <svg class="icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+              <span class="sr-only">Search rules</span>
+              <input id="rule-q" type="search" placeholder="Search rules — e.g. regex, loop, dict" autocomplete="off" />
+            </label>
+            <div class="segmented" role="group" aria-label="Rule filter" id="rule-filter">
+              <button type="button" data-rf="all" aria-pressed="true">All</button>
+              <button type="button" data-rf="stable" aria-pressed="false">Stable</button>
+              <button type="button" data-rf="experimental" aria-pressed="false">Experimental</button>
+              <button type="button" data-rf="fix" aria-pressed="false">Auto-fix</button>
+              <button type="button" data-rf="high" aria-pressed="false">High severity</button>
+            </div>
+          </div>
+          <div class="rule-grid" id="rule-grid"></div>
+          <div class="rule-more"><button class="btn" type="button" id="rule-more" hidden>Show all rules</button></div>
+        </div>
+      </section>
+
+      <!-- Integrations -->
+      <section class="section" id="integrations">
+        <div class="wrap int-grid">
+          <div>
+            <span class="kicker">Integrations</span>
+            <h2>Runs where your code already goes.</h2>
+            <p class="section-lede">CLI-first, so it fits any CI. First-class wiring for GitHub, pre-commit, and your editor.</p>
+            <div class="int-tabs" role="tablist" aria-label="Integration" id="int-tabs">
+              <button role="tab" type="button" data-int="action" aria-selected="true"><b>GitHub Action</b><span>Gate PRs, post comments, upload SARIF</span></button>
+              <button role="tab" type="button" data-int="precommit" aria-selected="false"><b>pre-commit</b><span>Analyze and fix staged files</span></button>
+              <button role="tab" type="button" data-int="cli" aria-selected="false"><b>CLI</b><span>Analyze, fix, report, benchmark</span></button>
+              <button role="tab" type="button" data-int="config" aria-selected="false"><b>.plex.yml</b><span>Policy as code</span></button>
+              <button role="tab" type="button" data-int="editor" aria-selected="false"><b>VS Code &amp; LSP</b><span>Diagnostics as you type</span></button>
+            </div>
+          </div>
+          <div class="int-code window">
+            <div class="window-bar">
+              <span class="dots"><i></i><i></i><i></i></span>
+              <span class="window-title" id="int-file"></span>
+              <button class="icon-btn" type="button" id="int-copy" aria-label="Copy snippet">
+                <svg class="icon" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V6a2 2 0 0 1 2-2h9" /></svg>
+              </button>
+            </div>
+            <pre class="code int-pre" id="int-pre"></pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- CTA -->
+      <section class="section">
+        <div class="wrap">
+          <div class="cta">
+            <div>
+              <h2>Open the full report explorer.</h2>
+              <p>
+                Filter findings, step through code with inline diagnostics, tune the CI gate and watch the verdict change, inspect fix diffs,
+                and export JSON or SARIF. You can also drop in your own <code>plex.json</code>; it's parsed in your browser and never uploaded.
+              </p>
+            </div>
+            <a class="btn btn-primary btn-lg" href="demo/">Launch the demo <svg class="icon" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6" /></svg></a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="wrap footer-inner">
+        <div class="footer-brand">
+          <img src="assets/img/logo.svg" alt="" width="26" height="26" />
+          <div>
+            <b>PLEx</b>
+            <span>Python performance static analysis. Apache-2.0.</span>
+          </div>
+        </div>
+        <nav aria-label="Footer">
+          <a href="https://github.com/KOKUTBON/PLEx/tree/main/docs" rel="noopener">Docs</a>
+          <a href="https://github.com/KOKUTBON/PLEx/blob/main/docs/RULES.md" rel="noopener">Rules</a>
+          <a href="https://github.com/KOKUTBON/PLEx/blob/main/docs/BENCHMARKS.md" rel="noopener">Benchmarks</a>
+          <a href="https://github.com/KOKUTBON/PLEx/blob/main/CONTRIBUTING.md" rel="noopener">Contributing</a>
+          <a href="https://github.com/KOKUTBON/PLEx/blob/main/SECURITY.md" rel="noopener">Security</a>
+          <a href="https://github.com/KOKUTBON/PLEx" rel="noopener">GitHub</a>
+        </nav>
+        <p class="footer-note" id="footer-note">
+          The demo report is regenerated from <code>site/demo-project</code> by the real engine on every deploy. PLEx publishes no hard-coded
+          speedup claims; benchmark results depend on your machine.
+        </p>
+      </div>
+    </footer>
+  </body>
+</html>

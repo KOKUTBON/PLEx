@@ -1,0 +1,3 @@
+include:
+  - "src/**/*.py"
+min_function_lines: 0

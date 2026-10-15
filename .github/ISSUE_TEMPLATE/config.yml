@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and community discussion
+    url: https://github.com/KOKUTBON/PLEx/discussions
+    about: Ask for help or discuss an idea before opening an issue.
+  - name: Private security report
+    url: https://github.com/KOKUTBON/PLEx/security/policy
+    about: Use the private reporting contact in SECURITY.md. Never post vulnerabilities publicly.
+  - name: Support KOKUTBON
+    url: https://github.com/KOKUTBON/PLEx/blob/main/SPONSORSHIP.md
+    about: GitHub Sponsors activation status and non-financial ways to contribute.

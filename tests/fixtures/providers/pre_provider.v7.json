@@ -1,0 +1,133 @@
+{
+  "schema_version": 7,
+  "generated_at": "<generated>",
+  "repo_root": "<repo>",
+  "changed_only": false,
+  "base_ref": "origin/main",
+  "regression_mode": false,
+  "findings": [
+    {
+      "file": "src/sample.py",
+      "qualname": "render",
+      "function_id": "plex:fa0f9af4de2c3448",
+      "lineno": 7,
+      "end_lineno": 9,
+      "severity": "low",
+      "complexity_hint": "Rule: String concatenation in loop",
+      "confidence": 0.7,
+      "risk_score": 1.6,
+      "signals": {
+        "loops": 0,
+        "max_loop_depth": 0,
+        "recursion": false,
+        "sort_calls": 0,
+        "comprehension": 0
+      },
+      "body_hash": "fa13f15e648bc0103a6f986f6da3bef973af08d3",
+      "explanation": "Repeated string concatenation on `text` in loop causes quadratic memory copying.",
+      "suggestions": [
+        "Collect substring chunks in a list and join them with `''.join(chunks)` after the loop.",
+        "Use io.StringIO if streaming large textual output."
+      ],
+      "rule_id": "plex.string-concat-in-loop",
+      "rule_name": "String concatenation in loop",
+      "dynamic": null
+    },
+    {
+      "file": "src/sample.py",
+      "qualname": "pairs",
+      "function_id": "plex:f69cdee063b96523",
+      "lineno": 12,
+      "end_lineno": 17,
+      "severity": "low",
+      "complexity_hint": "O(n^2) candidate",
+      "confidence": 0.75,
+      "risk_score": 1.6,
+      "signals": {
+        "loops": 2,
+        "max_loop_depth": 2,
+        "recursion": false,
+        "sort_calls": 0,
+        "comprehension": 0
+      },
+      "body_hash": "b8385ffb0f723947fa95c8549d2741ac3bebe7e0",
+      "explanation": "Nested loops detected.",
+      "suggestions": [
+        "Consider pre-indexing or batching to avoid nested iteration."
+      ],
+      "rule_id": "",
+      "rule_name": "",
+      "dynamic": null
+    },
+    {
+      "file": "src/sample.py",
+      "qualname": "render",
+      "function_id": "plex:fa0f9af4de2c3448",
+      "lineno": 4,
+      "end_lineno": 9,
+      "severity": "info",
+      "complexity_hint": "O(n) candidate",
+      "confidence": 0.65,
+      "risk_score": 0.4,
+      "signals": {
+        "loops": 1,
+        "max_loop_depth": 1,
+        "recursion": false,
+        "sort_calls": 0,
+        "comprehension": 0
+      },
+      "body_hash": "fa13f15e648bc0103a6f986f6da3bef973af08d3",
+      "explanation": "Loop count 1 with max depth 1.",
+      "suggestions": [
+        "Batch work or use vectorized/data-structure-based lookups."
+      ],
+      "rule_id": "",
+      "rule_name": "",
+      "dynamic": null
+    },
+    {
+      "file": "src/sample.py",
+      "qualname": "count",
+      "function_id": "plex:7fa996f740f7d7cb",
+      "lineno": 20,
+      "end_lineno": 21,
+      "severity": "info",
+      "complexity_hint": "O(1) / O(log n) candidate",
+      "confidence": 0.4,
+      "risk_score": 0.0,
+      "signals": {
+        "loops": 0,
+        "max_loop_depth": 0,
+        "recursion": false,
+        "sort_calls": 0,
+        "comprehension": 0
+      },
+      "body_hash": "951a362e6fd2fc97dcc3611f49a980e594d98aa6",
+      "explanation": "O(1) / O(log n) candidate based on static signals.",
+      "suggestions": [],
+      "rule_id": "",
+      "rule_name": "",
+      "dynamic": null
+    }
+  ],
+  "regressions": [],
+  "stats": {
+    "findings_total": 4,
+    "regressions_total": 0,
+    "severity_counts": {
+      "low": 2,
+      "info": 2
+    },
+    "hint_counts": {
+      "Rule: String concatenation in loop": 1,
+      "O(n^2) candidate": 1,
+      "O(n) candidate": 1,
+      "O(1) / O(log n) candidate": 1
+    },
+    "max_risk_score": 1.6,
+    "avg_risk_score": 0.9,
+    "max_regression_delta": 0.0
+  },
+  "diffs": [],
+  "suppressions": []
+}

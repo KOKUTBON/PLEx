@@ -1,0 +1,46 @@
+{
+  "repository": "https://github.com/adeyosemanputra/pygoat",
+  "commit": "19d17cc8874861142b330636d068bbde54e86b85",
+  "license": "MIT",
+  "cases": [
+    {
+      "file": "cmd_lab.py.txt",
+      "upstream_path": "introduction/views.py",
+      "upstream_start_line": 414,
+      "upstream_end_line": 450,
+      "upstream_sha256": "72fc98c98cab529f1d631d44ff980dbcb2017600c97be5a862164c8b0fd1714e",
+      "fixture_sha256": "ef3f746ea366fcd1776a3b932c0f5282b85d9f2cc732b089ec299b72dc3f89ac",
+      "added_import_header": "import re\nimport subprocess\n",
+      "expected": {
+        "xbnd.command-injection": 1
+      },
+      "label": "vulnerable command/SQL flow"
+    },
+    {
+      "file": "injection_sql_lab.py.txt",
+      "upstream_path": "introduction/views.py",
+      "upstream_start_line": 854,
+      "upstream_end_line": 904,
+      "upstream_sha256": "72fc98c98cab529f1d631d44ff980dbcb2017600c97be5a862164c8b0fd1714e",
+      "fixture_sha256": "894dc4f86f3a1229b0145c6283c8fbb99618106fe9deb2341f58cd602059109e",
+      "added_import_header": "",
+      "expected": {
+        "xbnd.sql-injection": 1,
+        "xbnd.sensitive-data-leak": 2
+      },
+      "label": "vulnerable command/SQL flow"
+    },
+    {
+      "file": "post.py.txt",
+      "upstream_path": "challenge/views.py",
+      "upstream_start_line": 27,
+      "upstream_end_line": 64,
+      "upstream_sha256": "15e22f431a68cd4dfd965c0b10081ba99190415ebd2f2fd984a7e8cff22128ba",
+      "fixture_sha256": "2a736ea27b962361494ca73f5800320d2bd48802d8cf0c00d088895b5ee7ba64",
+      "added_import_header": "import subprocess\n",
+      "expected": {},
+      "label": "no shell invocation (does not claim absence of other vulnerabilities)"
+    }
+  ],
+  "scope": "Pinned, unchanged function excerpts from a deliberately vulnerable training application; no application execution or production accuracy claim."
+}

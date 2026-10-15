@@ -1,0 +1,74 @@
+from __future__ import annotations
+
+from typing import Any
+
+from .models import PLExReport, RegressionFinding
+from .severity import normalize_severity, severity_rank
+
+
+def _select_regressions(
+    report: PLExReport,
+    min_severity: str,
+    max_items: int,
+) -> list[RegressionFinding]:
+    threshold = severity_rank(normalize_severity(min_severity))
+    items = [r for r in report.regressions if severity_rank(r.regression_severity) >= threshold]
+    items.sort(key=lambda r: (-r.risk_delta, r.file, r.lineno, r.qualname))
+    return items[: max(0, max_items or len(items))]
+
+
+def slack_payload(
+    report: PLExReport,
+    min_severity: str = "high",
+    max_items: int = 5,
+) -> dict[str, Any]:
+    items = _select_regressions(report, min_severity, max_items)
+    if not items:
+        text = f"PLEx: no regressions meeting severity >= {min_severity}."
+        return {"text": text}
+    lines = [f"*PLEx regressions* (severity >= {min_severity})"]
+    for r in items:
+        loc = f"{r.file}:{r.lineno} `{r.qualname}`"
+        lines.append(
+            f"- {r.regression_severity.upper()} delta {r.risk_delta:+.2f} {loc} - {r.explanation}"
+        )
+    return {"text": "\n".join(lines)}
+
+
+def teams_payload(
+    report: PLExReport,
+    min_severity: str = "high",
+    max_items: int = 5,
+) -> dict[str, Any]:
+    items = _select_regressions(report, min_severity, max_items)
+    if not items:
+        return {
+            "@type": "MessageCard",
+            "@context": "http://schema.org/extensions",
+            "summary": "PLEx regressions",
+            "themeColor": "2f855a",
+            "sections": [
+                {
+                    "activityTitle": "PLEx regressions",
+                    "text": f"No regressions meeting severity >= {min_severity}.",
+                }
+            ],
+        }
+    lines = []
+    for r in items:
+        loc = f"{r.file}:{r.lineno} {r.qualname}"
+        lines.append(
+            f"- **{r.regression_severity.upper()}** delta {r.risk_delta:+.2f} {loc} - {r.explanation}"
+        )
+    return {
+        "@type": "MessageCard",
+        "@context": "http://schema.org/extensions",
+        "summary": "PLEx regressions",
+        "themeColor": "c53030",
+        "sections": [
+            {
+                "activityTitle": f"PLEx regressions (severity >= {min_severity})",
+                "text": "\n".join(lines),
+            }
+        ],
+    }

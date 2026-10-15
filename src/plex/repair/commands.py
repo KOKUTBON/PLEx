@@ -42,14 +42,17 @@ def cmd_remediate(args: argparse.Namespace) -> int:
             "routes_count": len(plan.routes),
             "candidates_count": len(plan.candidates),
             "is_verified": plan.is_verified,
-            "repairs": [r.to_dict() for r in plan.repairs],
+            "repairs": [
+                {**r.to_dict(), "auto_applicable": r.candidate.id in plan.auto_applicable}
+                for r in plan.repairs
+            ],
             "graph_nodes": len(plan.graph.nodes),
             "graph_edges": len(plan.graph.edges),
         }
+        if getattr(args, "apply", False):
+            result_payload["applied_files"] = coordinator.apply_plan(plan)
         print(json.dumps(result_payload, indent=2))
-        if getattr(args, "apply", False) and plan.is_verified:
-            coordinator.apply_plan(plan)
-        return 0 if plan.is_verified or not plan.candidates else 1
+        return 1 if plan.has_failures else 0
 
     # Text output
     print(
@@ -65,26 +68,34 @@ def cmd_remediate(args: argparse.Namespace) -> int:
     print(f"  Generated {len(plan.candidates)} patch candidate(s):")
     for r in plan.repairs:
         c = r.candidate
-        status_color = "VERIFIED" if r.status == "verified" else r.status.upper()
-        print(f"    - [{status_color}] {c.target_file} ({c.rule_id}) via {c.generator}")
+        mode = "auto" if c.id in plan.auto_applicable else "proposal: review required"
+        print(f"    - [{r.status.upper()}] {c.target_file} ({c.rule_id}) via {c.generator} [{mode}]")
         if getattr(args, "diff", False):
             print(c.diff)
         if r.verification:
             for chk in r.verification.checks:
                 chk_sym = "✓" if chk.passed else "✗"
                 print(f"        {chk_sym} {chk.name} ({chk.duration_ms:.1f}ms)")
+            for limitation in r.verification.limitations:
+                print(f"        ! {limitation}")
 
+    applicable = plan.applicable_repairs
+    held_back = len(plan.repairs) - len(applicable)
     if getattr(args, "apply", False):
-        if plan.is_verified:
-            modified = coordinator.apply_plan(plan)
-            print(f"\nApplied {len(modified)} verified patch(es) directly to repository.")
-        else:
-            print("\nCannot apply patches: One or more candidates failed verification checks.")
-            return 1
-    elif plan.is_verified:
-        print("\nAll candidates verified. Use --apply to write changes to repository.")
+        modified = coordinator.apply_plan(plan)
+        print(f"\nApplied {len(modified)} verified patch(es) to the repository.")
+        if held_back:
+            print(
+                f"Not applied: {held_back} candidate(s) that are proposals, inconclusive or failed. "
+                "Review them with --diff and apply by hand."
+            )
+    elif applicable:
+        print(f"\n{len(applicable)} verified patch(es) can be written with --apply.")
+    if not applicable and not plan.has_failures:
+        print("\nNo patch is verified for automatic application. Provide --test-cmd to run "
+              "behavioral checks; proposals still need manual review.")
 
-    return 0 if plan.is_verified else 1
+    return 1 if plan.has_failures else 0
 
 
 def add_remediate_commands(sub: Any) -> None:
@@ -112,7 +123,7 @@ def add_remediate_commands(sub: Any) -> None:
     p.add_argument(
         "--apply",
         action="store_true",
-        help="Apply verified patch candidates directly to the source repository",
+        help="Write verified patches from auto-applicable fixers to the repository; proposals are never written",
     )
     p.add_argument(
         "--diff",

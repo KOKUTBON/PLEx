@@ -8,6 +8,7 @@ to report schema v8, gating semantics, and isolation boundaries.
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 from plex.cli import main
@@ -140,11 +141,11 @@ def test_cohesive_remediation_pipeline(tmp_path: Path, capsys):
     assert "--- a/app.py" in diff_captured
     assert "+++" in diff_captured
 
-    # Step 2: Run remediate with --apply
-    code = main(["remediate", str(repo), "--apply"])
+    # Step 2: Run remediate with --apply and a behavioral test command
+    code = main(["remediate", str(repo), "--apply", "--test-cmd", f"{sys.executable} -c pass"])
     assert code == 0
     apply_captured = capsys.readouterr().out
-    assert "Applied" in apply_captured
+    assert "Applied 1 verified patch(es)" in apply_captured
 
     # Step 3: Verify source code was updated and compiles
     new_src = (repo / "app.py").read_text(encoding="utf-8")

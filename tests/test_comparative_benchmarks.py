@@ -18,6 +18,8 @@ def _create_synthetic_corpus(tmp_path: Path) -> Path:
 
     # 1. Vulnerable SQL file (True Positive)
     vuln_code = (
+        "import sqlite3\n"
+        "\n"
         "def get_user_by_id(cursor, user_id: str):\n"
         "    return cursor.execute(f\"SELECT id, username FROM users WHERE id = '{user_id}'\")\n"
         "\n"
@@ -70,7 +72,9 @@ def test_comparative_benchmark_execution(tmp_path: Path):
     assert metrics.recall == 1.0
     assert metrics.f1_score == 1.0
     assert metrics.repairs_attempted == 1
-    assert metrics.repairs_verified == 1
+    # No behavioral tests are declared for the case, so the repair is inconclusive, not a regression.
+    assert metrics.repairs_verified == 0
+    assert metrics.repairs_inconclusive == 1
     assert metrics.regressions_count == 0
     assert metrics.passed_thresholds is True
     assert len(metrics.threshold_failures) == 0
@@ -79,7 +83,8 @@ def test_comparative_benchmark_execution(tmp_path: Path):
     assert d["confusion_matrix"]["tp"] == 1
     assert d["confusion_matrix"]["tn"] == 1
     assert d["metrics"]["precision"] == 1.0
-    assert d["repairs"]["verified"] == 1
+    assert d["repairs"]["verified"] == 0
+    assert d["repairs"]["inconclusive"] == 1
 
 
 def test_comparative_benchmark_threshold_failure(tmp_path: Path):

@@ -6,12 +6,11 @@ import json
 import sys
 from pathlib import Path
 
-import pytest
-
 from plex.cli import main
 from plex.repair.coordinator import RemediationCoordinator, RemediationPlan
 
 VULNERABLE_APP_CODE = '''"""Sample vulnerable application for cross-engine remediation testing."""
+import sqlite3  # noqa: F401 - declares the qmark DB-API driver
 class DummyFlask:
     def route(self, path, methods=None):
         def decorator(fn):
@@ -164,21 +163,24 @@ def test_cli_remediate_text_and_json(tmp_path: Path, capsys):
     repo.mkdir()
     (repo / "app.py").write_text(VULNERABLE_APP_CODE, encoding="utf-8")
 
-    # 1. Run CLI remediate in dry-run mode
+    # 1. Run CLI remediate in dry-run mode, without behavioral tests
     exit_code = main(["remediate", str(repo), "--diff"])
     assert exit_code == 0
     text_out = capsys.readouterr().out
     assert "PLEx Remediation:" in text_out
     assert "finding(s) detected" in text_out
-    assert "VERIFIED" in text_out
+    assert "INCONCLUSIVE" in text_out
     assert "syntax_valid" in text_out
+    assert "No behavioral regression test command was provided" in text_out
 
     # 2. Run CLI remediate with --json and --out-graph
     graph_file = tmp_path / "graph.json"
     exit_json = main(["remediate", str(repo), "--json", "--out-graph", str(graph_file)])
     assert exit_json == 0
     json_out = json.loads(capsys.readouterr().out)
-    assert json_out["is_verified"] is True
+    assert json_out["is_verified"] is False
+    assert json_out["repairs"][0]["status"] == "inconclusive"
+    assert json_out["repairs"][0]["auto_applicable"] is True
     assert json_out["findings_count"] >= 1
     assert json_out["candidates_count"] >= 1
 
@@ -195,8 +197,18 @@ def test_cli_remediate_apply(tmp_path: Path, capsys):
     app_file = repo / "app.py"
     app_file.write_text(VULNERABLE_APP_CODE, encoding="utf-8")
 
-    # Run with --apply
+    # Without behavioral tests nothing is verified, so --apply writes nothing.
     exit_code = main(["remediate", str(repo), "--apply"])
+    assert exit_code == 0
+    out = capsys.readouterr().out
+    assert "Applied 0 verified patch(es)" in out
+    assert app_file.read_text(encoding="utf-8") == VULNERABLE_APP_CODE
+
+    # With a passing behavioral test command, the SQL repair is verified and applied.
+    (repo / "test_app.py").write_text(FUNCTIONAL_TEST_CODE, encoding="utf-8")
+    exit_code = main(
+        ["remediate", str(repo), "--apply", "--test-cmd", f"{sys.executable} test_app.py"]
+    )
     assert exit_code == 0
     out = capsys.readouterr().out
     assert "Applied 1 verified patch(es)" in out
@@ -221,10 +233,13 @@ def test_remediation_on_clean_repo(tmp_path: Path):
 def test_remediation_blocks_unverified_apply(tmp_path: Path):
     repo = tmp_path / "repo"
     repo.mkdir()
-    (repo / "test.py").write_text("x = 1\n", encoding="utf-8")
+    (repo / "app.py").write_text(VULNERABLE_APP_CODE, encoding="utf-8")
 
-    bad_plan = RemediationPlan(repo_root=str(repo), repairs=())
     coordinator = RemediationCoordinator()
+    plan = coordinator.plan_and_verify(repo_root=repo, check_performance=False)
+    assert plan.repairs and all(r.status == "inconclusive" for r in plan.repairs)
+    assert coordinator.apply_plan(plan) == []
+    assert (repo / "app.py").read_text(encoding="utf-8") == VULNERABLE_APP_CODE
 
-    with pytest.raises(ValueError, match="Cannot apply unverified remediation plan"):
-        coordinator.apply_plan(bad_plan)
+    empty_plan = RemediationPlan(repo_root=str(repo), repairs=())
+    assert coordinator.apply_plan(empty_plan) == []

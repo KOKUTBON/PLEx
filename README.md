@@ -10,6 +10,14 @@ A developer tool that finds code problems and helps teams review performance and
 - Inspect binary files and generate JSON or SARIF reports.
 - Use checks in GitHub Actions and preview suggested fixes.
 
+## Repair safety
+
+`plex remediate --diff` produces patches for review. `--apply` writes only verified candidates from explicitly eligible fixers; verification requires a syntax check and a passing behavioral test command. Other candidates remain proposals.
+
+```sh
+plex remediate . --apply --test-cmd "pytest"
+```
+
 ## Screenshots
 
 ![PLEx interface](docs/screenshots/report.png)

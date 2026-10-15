@@ -1,5 +1,7 @@
 # Changelog
 
+- Confine filesystem repairs to a known base directory. (#51)
+
 - Preserve command arguments and block shell and option injection. (#49)
 
 - Require behavioral evidence before applying repair candidates. (#47)

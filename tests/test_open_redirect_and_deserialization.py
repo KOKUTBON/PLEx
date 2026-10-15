@@ -51,7 +51,7 @@ def test_open_redirect_rule_ignores_validated_redirect(tmp_path: Path) -> None:
     assert len(redirect_findings) == 0
 
 
-def test_open_redirect_fixer_wraps_redirect_and_imports_urllib() -> None:
+def test_open_redirect_fixer_wraps_redirect_target() -> None:
     src = (
         "from flask import redirect, request\n\n"
         "def bounce():\n"
@@ -61,8 +61,8 @@ def test_open_redirect_fixer_wraps_redirect_and_imports_urllib() -> None:
     fixer = OpenRedirectFixer()
     fixed, changes = fixer.fix(src, "views.py")
 
-    assert "import urllib.parse" in fixed
-    assert "urllib.parse.urlparse(str(target)).netloc" in fixed
+    assert "return redirect(_plex_safe_redirect(target))" in fixed
+    assert "def _plex_safe_redirect(url" in fixed
     assert len(changes) == 1
     assert changes[0].rule_id == "xbnd.open-redirect"
     ast.parse(fixed)

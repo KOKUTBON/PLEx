@@ -2,11 +2,11 @@
 
 ## Overview
 
-PLEx 2.0 represents the transition from a specialized performance regression analyzer into a **comprehensive native software intelligence and remediation platform**. PLEx 2.0 natively owns all core analysis pillars:
+PLEx 2.0 represents the transition from a specialized performance regression analyzer into a **native software intelligence and remediation platform**. 2.0 is in development and unreleased; only the performance pillar is supported, and the others are experimental (see [COVERAGE_MATRIX.md](COVERAGE_MATRIX.md)). The pillars are:
 
 1. **Performance & Complexity Intelligence**: AST static call-graph and quadratic loop detection.
 2. **Static Application Security (xBOUNDARY)**: Pure-Python interprocedural dataflow and taint tracking (SQL injection, command injection, path traversal, code evaluation).
-3. **Compiled Artifact Intelligence (PLEx Inspect)**: Pure-Python 32-bit and 64-bit ELF structural parser, dynamic symbol tables, and compiler hardening audits (NX, PIE, RELRO, stack canaries).
+3. **Compiled Artifact Intelligence (PLEx Inspect)**: Pure-Python ELF, Mach-O, PE and archive structural parsers, dynamic symbol tables, and compiler hardening audits (NX, PIE, RELRO, stack canaries).
 4. **Active Application Testing (PLEx Validate)**: Scope-guarded dynamic endpoint reproduction recipes (`ScopedHttpClient`), route-to-finding correlation, and redacted HTTP exchange evidence.
 5. **Supply Chain & Configuration Security**: Pure-Python manifest parsing (`requirements.txt`, `poetry.lock`, `Pipfile.lock`), offline CVE advisory matching, Dockerfile privileges, and TLS audits.
 6. **Closed-Loop Verified Remediation (PLEx Repair)**: Deterministic patch synthesis in disposable workspaces verified through a 5-gate pipeline (syntax, security rescan, active exploit block, performance non-regression, functional unit tests).
@@ -73,8 +73,8 @@ Generate, verify, and apply deterministic fixes to detected vulnerabilities:
 # Preview reviewable patch diff
 plex remediate . --diff
 
-# Apply verified patches to repository transactionally
-plex remediate . --apply
+# Apply verified patches from auto-applicable fixers (requires behavioral tests)
+plex remediate . --apply --test-cmd "pytest"
 
 # Export relational provenance graph
 plex remediate . --out-graph out/provenance_graph.json

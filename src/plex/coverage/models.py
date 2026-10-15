@@ -17,6 +17,7 @@ class SurfaceCoverage:
     engines: tuple[str, ...]
     supported_rules: tuple[str, ...]
     verification_level: str
+    experimental_rules: tuple[str, ...] = ()
     prerequisites: tuple[str, ...] = ()
     limitations: tuple[str, ...] = ()
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -38,6 +39,7 @@ class CoverageInventory:
                     "status": s.status,
                     "engines": list(s.engines),
                     "supported_rules": list(s.supported_rules),
+                    "experimental_rules": list(s.experimental_rules),
                     "verification_level": s.verification_level,
                     "prerequisites": list(s.prerequisites),
                     "limitations": list(s.limitations),

@@ -17,6 +17,7 @@ from plex.providers import (
     XBoundaryProvider,
     run_providers,
 )
+from plex.repair.diffutil import apply_unified_diff
 from plex.repair.models import (
     PatchCandidate,
     RepairRecord,
@@ -26,46 +27,7 @@ from plex.repair.models import (
 )
 from plex.sandbox import SubprocessSandbox, disposable_workspace
 
-
-def apply_unified_diff(original: str, diff: str) -> str:
-    """Apply a unified diff string to an original source string."""
-    orig_lines = original.splitlines(keepends=True)
-    diff_lines = diff.splitlines(keepends=True)
-    result: list[str] = []
-    orig_idx = 0
-    i = 0
-    while i < len(diff_lines):
-        line = diff_lines[i]
-        if line.startswith("---") or line.startswith("+++"):
-            i += 1
-            continue
-        if line.startswith("@@"):
-            parts = line.split("@@")[1].strip().split()
-            old_spec = parts[0][1:]
-            old_start = int(old_spec.split(",")[0]) - 1
-            while orig_idx < old_start and orig_idx < len(orig_lines):
-                result.append(orig_lines[orig_idx])
-                orig_idx += 1
-            i += 1
-            continue
-        if line.startswith("+"):
-            result.append(line[1:])
-            i += 1
-        elif line.startswith("-"):
-            orig_idx += 1
-            i += 1
-        elif line.startswith(" "):
-            result.append(orig_lines[orig_idx] if orig_idx < len(orig_lines) else line[1:])
-            orig_idx += 1
-            i += 1
-        else:
-            i += 1
-
-    while orig_idx < len(orig_lines):
-        result.append(orig_lines[orig_idx])
-        orig_idx += 1
-
-    return "".join(result)
+__all__ = ["RepairVerificationRunner", "apply_unified_diff"]
 
 
 @dataclass
@@ -87,6 +49,9 @@ class RepairVerificationRunner:
         """Verify candidate in an isolated disposable copy of repo_root."""
         repair = RepairRecord(candidate=candidate, status="proposed")
         checks: list[VerificationCheck] = []
+        # Required checks that could not run; any entry prevents "verified" status.
+        missing: list[str] = []
+        limitations: list[str] = []
         target_rel = Path(candidate.target_file)
 
         env_key = f"{platform.platform()}:{sys.version}:{candidate.id}"
@@ -165,9 +130,14 @@ class RepairVerificationRunner:
                     "SHELL",
                 }
                 has_from = False
+                continued = False
                 for lno, line in enumerate(patched_content.splitlines(), start=1):
                     sline = line.strip()
                     if not sline or sline.startswith("#"):
+                        continue
+                    was_continued = continued
+                    continued = sline.endswith("\\")
+                    if was_continued:
                         continue
                     token = sline.split()[0].upper()
                     if token == "FROM":
@@ -182,18 +152,24 @@ class RepairVerificationRunner:
                     syntax_passed = False
                     syntax_details = {"error": "Dockerfile lacks required FROM instruction"}
             else:
-                syntax_cmd = f"syntax_check {candidate.target_file}"
+                syntax_cmd = ""
+                missing.append(f"No syntax validator for '{candidate.target_file}'")
 
             syntax_duration = (time.monotonic() - t0) * 1000.0
-            checks.append(
-                VerificationCheck(
-                    name="syntax_valid",
-                    passed=syntax_passed,
-                    duration_ms=syntax_duration,
-                    command=syntax_cmd,
-                    details=syntax_details,
+            if syntax_cmd:
+                checks.append(
+                    VerificationCheck(
+                        name="syntax_valid",
+                        passed=syntax_passed,
+                        duration_ms=syntax_duration,
+                        command=syntax_cmd,
+                        details=syntax_details,
+                    )
                 )
-            )
+            if "dockerfile" in candidate.target_file.lower():
+                limitations.append(
+                    "Dockerfile check is instruction-level only; the image was not built"
+                )
 
             if not syntax_passed:
                 vrec = VerificationRecord.create(
@@ -245,6 +221,11 @@ class RepairVerificationRunner:
                 )
             )
 
+            limitations.append(
+                "vulnerability_cleared means the rescan no longer reports this rule in the file; "
+                "it is not proof of a semantic fix"
+            )
+
             # 4. Optional active reproduction verification (asserts exploit payload is now blocked/fails)
             active_passed = True
             if active_checker is not None:
@@ -261,6 +242,8 @@ class RepairVerificationRunner:
                         duration_ms=active_duration,
                     )
                 )
+            else:
+                limitations.append("No active reproduction was run before and after the patch")
 
             # 5. Optional PLEx Performance regression check
             perf_passed = True
@@ -284,6 +267,8 @@ class RepairVerificationRunner:
                         details={"regressions": len(perf_regressions)},
                     )
                 )
+            else:
+                limitations.append("Performance regression check was skipped")
 
             # 6. Optional regression test execution
             test_passed = True
@@ -307,12 +292,20 @@ class RepairVerificationRunner:
                         else {},
                     )
                 )
+            else:
+                missing.append("No behavioral regression test command was provided")
 
             # Aggregate verification status
             all_passed = (
                 syntax_passed and vuln_cleared and active_passed and perf_passed and test_passed
             )
-            final_status: VerificationStatus = "verified" if all_passed else "failed"
+            final_status: VerificationStatus
+            if not all_passed:
+                final_status = "failed"
+            elif missing:
+                final_status = "inconclusive"
+            else:
+                final_status = "verified"
 
             vrec = VerificationRecord.create(
                 patch_id=candidate.id,
@@ -321,12 +314,19 @@ class RepairVerificationRunner:
                 verifier=self.verifier_name,
                 checks=tuple(checks),
                 environment_digest=env_digest,
+                limitations=tuple(missing + limitations),
             )
             repair.verification = vrec
-            if all_passed:
+            if final_status == "verified":
                 repair.transition(
                     "verified",
-                    reason="All syntax, analyzer, active reproduction, and regression checks passed",
+                    reason="All required checks ran and passed",
+                )
+            elif final_status == "inconclusive":
+                repair.transition(
+                    "inconclusive",
+                    reason="Executed checks passed but required checks were missing: "
+                    + "; ".join(missing),
                 )
             else:
                 repair.transition("failed", reason="One or more verification checks failed")

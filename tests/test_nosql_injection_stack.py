@@ -144,8 +144,8 @@ def test_nosql_coordinator_end_to_end_verification(tmp_path: Path) -> None:
     findings = [f for f in plan.findings if f.rule_id == "xbnd.nosql-injection"]
     assert len(findings) == 1
     assert len(plan.repairs) == 1
-    assert plan.repairs[0].status == "verified"
-    assert plan.is_verified is True
+    assert plan.repairs[0].status == "inconclusive"
+    assert plan.is_verified is False
 
 
 def test_nosql_recipe_reproduced_on_operator_bypass() -> None:

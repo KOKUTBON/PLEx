@@ -8,6 +8,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from plex.providers import AnalysisTask, SupplyChainProvider, run_providers
+from plex.repair import apply_unified_diff
 from plex.repair.coordinator import RemediationCoordinator
 from plex.repair.docker_tag_pin import DockerTagPinFixer
 from plex.repair.docker_user import DockerUserFixer
@@ -170,9 +171,11 @@ def test_repair_runner_docker_user_verification(tmp_path: Path):
 
     runner = RepairVerificationRunner()
     repair = runner.verify(candidate=candidate, repo_root=repo)
-    assert repair.status == "verified"
+    # Executed checks pass, but no behavioral test command was supplied.
+    assert repair.status == "inconclusive"
     assert repair.verification is not None
-    assert repair.verification.status == "verified"
+    assert repair.verification.status == "inconclusive"
+    assert any("regression test" in lim for lim in repair.verification.limitations)
 
     checks = {c.name: c.passed for c in repair.verification.checks}
     assert checks.get("syntax_valid") is True
@@ -191,9 +194,11 @@ def test_repair_runner_docker_tag_pin_verification(tmp_path: Path):
 
     runner = RepairVerificationRunner()
     repair = runner.verify(candidate=candidate, repo_root=repo)
-    assert repair.status == "verified"
+    # Executed checks pass, but no behavioral test command was supplied.
+    assert repair.status == "inconclusive"
     assert repair.verification is not None
-    assert repair.verification.status == "verified"
+    assert repair.verification.status == "inconclusive"
+    assert any("regression test" in lim for lim in repair.verification.limitations)
 
     checks = {c.name: c.passed for c in repair.verification.checks}
     assert checks.get("syntax_valid") is True
@@ -218,17 +223,14 @@ def test_remediation_coordinator_dockerfile_end_to_end(tmp_path: Path):
     plan = coordinator.plan_and_verify(repo_root=repo)
 
     assert len(plan.candidates) == 2
-    assert plan.is_verified is True
+    assert all(r.status == "inconclusive" for r in plan.repairs)
 
-    # Apply verified plan directly
-    modified = coordinator.apply_plan(plan)
-    assert "Dockerfile" in modified
+    # Proposal-only fixers: nothing is written to the repository.
+    original = dockerfile.read_text(encoding="utf-8")
+    assert coordinator.apply_plan(plan) == []
+    assert dockerfile.read_text(encoding="utf-8") == original
 
-    patched_content = dockerfile.read_text(encoding="utf-8")
-    assert "FROM python:3.12-slim" in patched_content
-    assert "USER nonroot" in patched_content
-
-    # Re-scan repository: all Dockerfile configuration findings must be eliminated
-    post_outcome = run_providers(task, [SupplyChainProvider()])
-    post_rule_ids = {f.rule_id for f in post_outcome.findings if "docker" in f.rule_id}
-    assert len(post_rule_ids) == 0
+    # Each proposal applies to the original file on its own.
+    patched = [apply_unified_diff(original, c.diff) for c in plan.candidates]
+    assert any("FROM python:3.12-slim" in p for p in patched)
+    assert any("USER nonroot" in p for p in patched)

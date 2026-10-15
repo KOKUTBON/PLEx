@@ -92,8 +92,11 @@ def test_xxe_coordinator_end_to_end_verification(tmp_path: Path) -> None:
     xxe_findings = [f for f in plan.findings if f.rule_id == "xbnd.xxe"]
     assert len(xxe_findings) == 1
     assert len(plan.repairs) == 1
-    assert plan.repairs[0].status == "verified"
-    assert plan.is_verified is True
+    # No behavioral test command was supplied, so the repair cannot be "verified",
+    # and the fixer is proposal-only, so it is never written automatically.
+    assert plan.repairs[0].status == "inconclusive"
+    assert not plan.has_failures
+    assert plan.applicable_repairs == ()
 
 
 def test_xxe_recipe_reproduced_entity_expansion() -> None:

@@ -29,17 +29,17 @@ def test_apply_unified_diff_basic():
 def test_sql_parameterize_fixer_fstring_and_concat():
     fixer = SQLParameterizeFixer()
 
-    src_fstring = "cursor.execute(f\"SELECT * FROM users WHERE id = '{user_id}'\")"
+    src_fstring = "import sqlite3\ncursor.execute(f\"SELECT * FROM users WHERE id = '{user_id}'\")"
     fixed_fstring, changes = fixer.fix(src_fstring)
     assert len(changes) == 1
     assert "cursor.execute('SELECT * FROM users WHERE id = ?', (user_id,))" in fixed_fstring
 
-    src_concat = 'cursor.execute("SELECT * FROM users WHERE id = \'" + user_id + "\'")'
+    src_concat = 'import sqlite3\ncursor.execute("SELECT * FROM users WHERE id = \'" + user_id + "\'")'
     fixed_concat, changes = fixer.fix(src_concat)
     assert len(changes) == 1
     assert "cursor.execute('SELECT * FROM users WHERE id = ?', (user_id,))" in fixed_concat
 
-    src_mod = "cursor.execute(\"SELECT * FROM users WHERE id = '%s'\" % user_id)"
+    src_mod = "import sqlite3\ncursor.execute(\"SELECT * FROM users WHERE id = '%s'\" % user_id)"
     fixed_mod, changes = fixer.fix(src_mod)
     assert len(changes) == 1
     assert "cursor.execute('SELECT * FROM users WHERE id = ?', (user_id,))" in fixed_mod
@@ -86,9 +86,11 @@ def test_repair_verification_runner_end_to_end(tmp_path: Path):
     repair = runner.verify(candidate, repo_root)
 
     # Step 4: Verify repair outcome and verification assertions
-    assert repair.status == "verified"
+    # Executed checks pass, but no behavioral test command was supplied.
+    assert repair.status == "inconclusive"
     assert repair.verification is not None
-    assert repair.verification.status == "verified"
+    assert repair.verification.status == "inconclusive"
+    assert any("regression test" in lim for lim in repair.verification.limitations)
     assert len(repair.verification.checks) >= 2
 
     # Check 1: Syntax check passed
@@ -101,7 +103,7 @@ def test_repair_verification_runner_end_to_end(tmp_path: Path):
 
     # Verify audit history
     statuses = [entry["to_status"] for entry in repair.history]
-    assert statuses == ["applied-in-workspace", "verified"]
+    assert statuses == ["applied-in-workspace", "inconclusive"]
 
     # Invariant: Original target file in working repository remains UNTOUCHED
     assert target_file.read_text(encoding="utf-8") == fixture_src
@@ -145,6 +147,7 @@ def test_repair_verification_runner_with_regression_test_command(tmp_path: Path)
 
     app_file = repo_root / "app.py"
     app_file.write_text(
+        "import sqlite3\n"
         "def query(cursor, val):\n"
         "    return cursor.execute(f'SELECT * FROM t WHERE val = {val}')\n",
         encoding="utf-8",

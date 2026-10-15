@@ -1,5 +1,7 @@
 # Changelog
 
+- Separate Flask template input from template code. (#57)
+
 - Reject nested MongoDB operators without changing legitimate query types. (#55)
 
 - Resolve eval safely and retain manual review for literal evaluation. (#53)

@@ -13,6 +13,7 @@ from plex.rules.base import Rule, RuleContext, RuleFinding
 SSTI_LIMITATIONS = (
     "SSTI rule evaluates dynamic template compilation sinks (render_template_string, jinja2.Template, from_string)",
     "Static template file rendering (render_template) with parameterized contexts is treated as safe",
+    "Escaping (markupsafe.escape, html.escape) is not treated as a sanitizer: it leaves Jinja delimiters intact",
 )
 
 TEMPLATE_SINKS = {
@@ -39,12 +40,6 @@ TAINT_SOURCES = (
     "tpl",
 )
 
-SAFE_ESCAPES = (
-    "escape",
-    "markupsafe.escape",
-    "html.escape",
-)
-
 __all__ = ["SSTI_LIMITATIONS", "SSTIRule"]
 
 
@@ -53,16 +48,13 @@ def _is_tainted_expr(node: ast.AST, tainted_vars: set[str]) -> bool:
     if isinstance(node, ast.Constant):
         return False
 
+    # A local name is tainted by what was assigned to it, not by its spelling ("site_name").
+    if isinstance(node, ast.Name):
+        return node.id in tainted_vars
+
+    # escape() does not help here: it leaves "{{" intact, so the value is still template code.
     unparsed = ast.unparse(node)
-
-    # If escaped, treat as safe
-    if any(esc in unparsed for esc in SAFE_ESCAPES):
-        return False
-
     if any(src in unparsed for src in TAINT_SOURCES):
-        return True
-
-    if isinstance(node, ast.Name) and node.id in tainted_vars:
         return True
 
     for var in tainted_vars:
@@ -133,7 +125,10 @@ class SSTIRule(Rule):
                 for stmt in ast.walk(fn_node):
                     if isinstance(stmt, ast.Assign):
                         unparsed_val = ast.unparse(stmt.value)
-                        if any(src in unparsed_val for src in TAINT_SOURCES):
+                        # A constant is never tainted, whatever its text ("Hi {{ name }}").
+                        if not isinstance(stmt.value, ast.Constant) and any(
+                            src in unparsed_val for src in TAINT_SOURCES
+                        ):
                             for target in stmt.targets:
                                 if isinstance(target, ast.Name):
                                     tainted_vars.add(target.id)

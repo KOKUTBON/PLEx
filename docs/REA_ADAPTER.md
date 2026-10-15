@@ -1,5 +1,7 @@
 # REA Adapter Guide (Binary & Artifact Inspection)
 
+> **Optional interoperability, not the primary path.** Per [ADR 0003](adr/0003-native-platform-ownership.md), PLEx owns artifact inspection natively: use `plex inspect --engine native` (see [INSPECT_ENGINE.md](INSPECT_ENGINE.md)). This adapter ([ADR 0005](adr/0005-rea-binary-adapter.md), status: proposed) is an optional way to import REA results and is outside the critical path. Nothing in PLEx requires REA.
+
 The REA adapter integrates the [Reverse Engineering Agent (REA)](https://github.com/re-agent) framework
 with PLEx 2.0 to inspect compiled native binaries, Android APKs, and firmware artifacts.
 

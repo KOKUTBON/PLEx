@@ -1,8 +1,11 @@
 # Architecture Overview
 
-PLEx is a CLI-first analysis engine designed for CI pull request workflows.
+PLEx is a CLI-first analysis platform designed for CI pull request workflows.
 It computes complexity risk from source code, compares against a baseline,
-and emits machine- and human-readable outputs for gating and review.
+and emits machine- and human-readable outputs for gating and review. Its
+experimental security, supply-chain, artifact, active-testing and repair
+engines share the same report model; see `docs/COVERAGE_MATRIX.md` for
+readiness.
 
 This document describes the runtime architecture. For implementation details:
 
@@ -27,7 +30,7 @@ CLI (plex analyze | inspect | validate | remediate | coverage | benchmark)
       - XBoundaryProvider (AST taint tracking & static security)
       - SupplyChainProvider (dependency manifests & IaC config)
   -> Dedicated Native Subcommands:
-      - InspectEngine (pure-Python ELF structural & hardening audit)
+      - InspectEngine (pure-Python ELF/Mach-O/PE/archive structural & hardening audit)
       - ValidateEngine (scoped active HTTP reproduction)
       - RemediationCoordinator (closed-loop 5-gate patch verification)
   -> ProjectGraph (relational provenance linking findings, routes, active tests, repairs)
@@ -46,17 +49,17 @@ CLI (plex analyze | inspect | validate | remediate | coverage | benchmark)
 - `src/plex/providers`
   - Provider SPI, sequential orchestration, performance, xboundary, and supply chain providers.
 - `src/plex/security`
-  - xBOUNDARY AST dataflow and interprocedural taint propagation rules (SQLi, cmdi, traversal, eval).
+  - xBOUNDARY AST dataflow and bounded interprocedural taint rules (about 19 families, experimental).
 - `src/plex/inspect`
-  - Pure-Python ELF binary parser, section/symbol extraction, and compiler hardening mitigation checks.
+  - Pure-Python ELF, Mach-O, PE and ZIP/JAR/APK/Wheel parsers, section/symbol extraction, and compiler hardening mitigation checks. No disassembly backend yet.
 - `src/plex/validate`
   - Scoped active testing engine, route discovery, deterministic HTTP reproduction recipes, and authorization guardrails.
 - `src/plex/supply_chain`
   - Dependency manifest parsers (`requirements.txt`, `poetry.lock`, `Pipfile.lock`), offline CVE advisories, Dockerfile and IaC rules.
 - `src/plex/repair`
-  - Deterministic fixers (`SQLParameterizeFixer`), `PatchCandidate` contracts, and 5-stage `RepairVerificationRunner`.
+  - Deterministic security/config fixers (28, experimental), `PatchCandidate` contracts, `RemediationCoordinator`, and 5-stage `RepairVerificationRunner`.
 - `src/plex/graph`
-  - `ProjectGraph` v1 relational model connecting source findings, AST routes, active evidence, and repair audits.
+  - `ProjectGraph` v1 relational model connecting source findings, AST routes, active evidence, and repair audits. Currently built by the remediation coordinator only; not persisted by `plex analyze`.
 - `src/plex/coverage`
   - Authoritative declared coverage matrix across all seven lifecycle surfaces.
 - `src/plex/bench`

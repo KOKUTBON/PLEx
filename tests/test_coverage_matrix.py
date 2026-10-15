@@ -37,7 +37,10 @@ def test_format_coverage_markdown():
     inv = get_declared_coverage("2.0.0")
     md = format_coverage_markdown(inv)
     assert "# PLEx 2.0.0 Declared Coverage Matrix" in md
-    assert "| Surface | Status | Engines | Supported Rules & Families | Verification Level |" in md
+    assert (
+        "| Surface | Status | Engines | Supported Rules & Families | Experimental Rules | Verification Level |"
+        in md
+    )
     assert "Python Source" in md
     assert "Compiled Artifacts" in md
 
@@ -82,3 +85,20 @@ def test_cli_coverage_filter_nonexistent(capsys):
     assert code == 1
     captured = capsys.readouterr().out
     assert "No matching surface found" in captured
+
+
+def test_rule_readiness_is_disjoint_and_declared():
+    inv = get_declared_coverage()
+    for s in inv.surfaces:
+        assert not set(s.supported_rules) & set(s.experimental_rules), s.surface
+        assert s.supported_rules or s.experimental_rules, s.surface
+        if s.status == "supported":
+            assert s.supported_rules, s.surface
+    data = inv.to_dict()
+    assert "experimental_rules" in data["surfaces"][0]
+
+
+def test_unmeasured_security_rules_are_not_supported():
+    inv = get_declared_coverage()
+    supported = {r for s in inv.surfaces for r in s.supported_rules}
+    assert not {r for r in supported if r.startswith(("xbnd.", "val.", "bin."))}

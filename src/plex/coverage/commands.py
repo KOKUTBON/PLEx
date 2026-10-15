@@ -9,6 +9,12 @@ from typing import Any
 from .matrix import format_coverage_markdown, get_declared_coverage
 
 
+def _rules_line(rules: tuple[str, ...]) -> str:
+    if not rules:
+        return "none"
+    return f"{', '.join(rules[:4])}{'...' if len(rules) > 4 else ''}"
+
+
 def cmd_coverage(args: argparse.Namespace) -> int:
     """Display declared platform coverage matrix and readiness levels."""
     inventory = get_declared_coverage()
@@ -40,10 +46,11 @@ def cmd_coverage(args: argparse.Namespace) -> int:
         status_str = f"[{s.status.upper()}]"
         print(f"{status_str:<15} {s.surface}")
         print(f"  Engines:       {', '.join(s.engines)}")
-        print(f"  Rules:         {', '.join(s.supported_rules[:4])}{'...' if len(s.supported_rules) > 4 else ''}")
+        print(f"  Supported:     {_rules_line(s.supported_rules)}")
+        print(f"  Experimental:  {_rules_line(s.experimental_rules)}")
         print(f"  Verification:  {s.verification_level}")
-        if s.limitations:
-            print(f"  Limitations:   {s.limitations[0]}")
+        for i, limitation in enumerate(s.limitations):
+            print(f"  {'Limitations:' if i == 0 else '':<14} {limitation}")
         print("-" * 70)
 
     return 0

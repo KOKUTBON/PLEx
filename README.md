@@ -4,6 +4,8 @@ A developer tool that finds code problems and helps teams review performance and
 
 [Open the demo](https://kokutbon.github.io/PLEx/) · [Technical documentation](docs/README.md)
 
+> **Status:** PLEx 2.0 is in development and unreleased. Python performance rules are declared supported. Security, artifact inspection, active validation, supply chain checks, and security repairs are experimental and have not been measured on a held-out corpus. See the [coverage matrix](docs/COVERAGE_MATRIX.md) and [implementation status](docs/PLEx-2.0-PLAN.md#13-current-implementation-inventory--2026-10-15).
+
 ## Features
 
 - Check code complexity, security issues, and dependencies.
@@ -12,7 +14,7 @@ A developer tool that finds code problems and helps teams review performance and
 
 ## Repair safety
 
-`plex remediate --diff` produces patches for review. `--apply` writes only verified candidates from explicitly eligible fixers; verification requires a syntax check and a passing behavioral test command. Other candidates remain proposals.
+`plex remediate --diff` produces patches for review. `--apply` writes only verified candidates from explicitly eligible fixers; verification requires a syntax check and a passing behavioral test command. Other candidates remain proposals. See the [repair audit](docs/REPAIR_AUDIT.md) for the seven eligible security fixers and the remaining limitations.
 
 ```sh
 plex remediate . --apply --test-cmd "pytest"

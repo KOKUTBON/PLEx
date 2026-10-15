@@ -1,5 +1,7 @@
 # Changelog
 
+- Resolve eval safely and retain manual review for literal evaluation. (#53)
+
 - Confine filesystem repairs to a known base directory. (#51)
 
 - Preserve command arguments and block shell and option injection. (#49)

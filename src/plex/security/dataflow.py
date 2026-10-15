@@ -867,6 +867,8 @@ class SQLDataflow:
                 "ntpath.basename",
                 "secure_filename",
                 "werkzeug.utils.secure_filename",
+                # Base-directory containment check inserted by fix.path-boundary.
+                "_plex_within_base",
             }:
                 return ()
             if self.kind == "deserialization" and name in {

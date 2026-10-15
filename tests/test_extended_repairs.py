@@ -84,14 +84,17 @@ def test_command_array_propose_patch():
 def test_path_boundary_fixer_open():
     fixer = PathBoundaryFixer()
     source = (
-        "def read_file(filepath):\n"
-        "    with open(filepath) as f:\n"
+        "import os\n"
+        "\n"
+        "BASE = '/var/data'\n"
+        "\n"
+        "def read_file(name):\n"
+        "    with open(os.path.join(BASE, name)) as f:\n"
         "        return f.read()\n"
     )
     fixed, changes = fixer.fix(source)
     assert len(changes) == 1
-    assert "import os" in fixed
-    assert "open(os.path.basename(filepath))" in fixed
+    assert "open(_plex_within_base(BASE, os.path.join(BASE, name)))" in fixed
 
     tree = compile(fixed, "<string>", "exec")
     assert tree is not None
@@ -100,16 +103,16 @@ def test_path_boundary_fixer_open():
 def test_path_boundary_fixer_pathlib():
     fixer = PathBoundaryFixer()
     source = (
-        "import os\n"
         "from pathlib import Path\n"
         "\n"
+        "DOCS = Path('/srv/docs')\n"
+        "\n"
         "def get_doc(user_path):\n"
-        "    p = Path(user_path)\n"
-        "    return p.read_text()\n"
+        "    return (DOCS / user_path).read_text()\n"
     )
     fixed, changes = fixer.fix(source)
     assert len(changes) == 1
-    assert "Path(os.path.basename(user_path))" in fixed
+    assert "_plex_within_base(DOCS, DOCS / user_path)" in fixed
 
 
 def test_path_boundary_fixer_join():
@@ -122,8 +125,17 @@ def test_path_boundary_fixer_join():
         "    return open(target)\n"
     )
     fixed, changes = fixer.fix(source)
-    assert len(changes) >= 1
-    assert "os.path.basename(user_doc)" in fixed or "os.path.basename(target)" in fixed
+    assert len(changes) == 1
+    assert "target = _plex_within_base('/var/data', os.path.join('/var/data', user_doc))" in fixed
+
+
+def test_path_boundary_fixer_abstains_without_base():
+    fixer = PathBoundaryFixer()
+    source = "def read_file(filepath):\n    with open(filepath) as f:\n        return f.read()\n"
+    fixed, changes = fixer.fix(source)
+    assert changes == []
+    assert fixed == source
+    assert "no known base directory" in fixer.abstentions[0].reason
 
 
 def test_path_boundary_fixer_noop_on_safe():
@@ -143,14 +155,14 @@ def test_path_boundary_fixer_noop_on_safe():
 
 def test_path_boundary_propose_patch():
     fixer = PathBoundaryFixer()
-    source = "with open(user_input) as f: pass\n"
+    source = "import os\nBASE = '/srv'\nwith open(os.path.join(BASE, user_input)) as f: pass\n"
     cand = fixer.propose_patch(source=source, target_file="handler.py")
     assert cand is not None
     assert cand.rule_id == "xbnd.path-traversal"
     assert cand.target_file == "handler.py"
     assert "--- a/handler.py" in cand.diff
     assert "+++ b/handler.py" in cand.diff
-    assert "os.path.basename(user_input)" in cand.diff
+    assert "_plex_within_base(BASE, os.path.join(BASE, user_input))" in cand.diff
 
 
 # ==============================================================================
@@ -212,8 +224,10 @@ def test_path_traversal_repair_end_to_end(tmp_path: Path):
     app_code = (
         "import os\n"
         "\n"
+        "BASE = '/srv/files'\n"
+        "\n"
         "def fetch_file(filepath):\n"
-        "    with open(filepath) as f:\n"
+        "    with open(os.path.join(BASE, filepath)) as f:\n"
         "        return f.read()\n"
         "\n"
         "def handler():\n"

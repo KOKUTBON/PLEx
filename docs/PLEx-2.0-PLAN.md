@@ -3,7 +3,7 @@
 Build native performance, security, privacy, reverse-engineering, active-testing and verified-repair capabilities inside PLEx.
 
 - **Direction:** clarified by the project owner on 2026-10-12.
-- **Implementation status:** early foundation; the complete platform described here is not implemented.
+- **Implementation status:** foundations exist for every pillar; only the performance engine is supported. See section 13.
 - **Decision:** [ADR 0003 — Native platform ownership](adr/0003-native-platform-ownership.md).
 - **Supersedes:** the previous adapter-led REA/Strix roadmap in this file. Git history retains that proposal.
 
@@ -242,25 +242,26 @@ Before a rule becomes stable, set thresholds in its benchmark manifest. Initial 
 
 A “better” release claim requires published evidence on the named dimensions and workloads. Current synthetic cases and three PyGoat excerpts establish regression coverage only.
 
-## 13. Current implementation inventory — 2026-10-12
+## 13. Current implementation inventory — 2026-10-15
 
-| Capability | Actual state | Delivered milestone |
-| --- | --- | --- |
-| Performance engine, rule SDK, IR, fixers, reports/editor integrations | Implemented | Core platform foundation |
-| Unified schema v8, v7 compatibility, finding/evidence/engine records | Implemented | [ADR 0001](adr/0001-unified-finding-schema.md), Schema v8 |
-| Provider SPI, performance wrapper, discovery/preflight/doctor | Implemented | Shared orchestrator & `plex providers doctor` |
-| SQL taint with policy v1 and bounded project helpers | Implemented | xBOUNDARY AST dataflow engine |
-| Shell-command rule, code-eval taint, path traversal, deserialization, SSRF | Implemented | `xbnd.command-injection`, `xbnd.path-traversal`, `xbnd.code-eval-taint`, `xbnd.unsafe-deserialization`, `xbnd.ssrf` |
-| JSON/SARIF unified multi-engine reporting & severity gates | Implemented | `plex analyze --checks all --json --sarif` |
-| Hardened isolation & sandboxes | Implemented | `InProcessSandbox`, `SubprocessSandbox`, env allowlist, `disposable_workspace` ([ADR 0002](adr/0002-engine-isolation-model.md)) |
-| Native artifact intelligence (PLEx Inspect) | Implemented | Pure-Python 32/64-bit ELF and Mach-O parser, hardening checks, `plex inspect` ([ADR 0007](adr/0007-native-artifact-inspection.md)) |
-| Native active application testing (PLEx Validate) | Implemented | `ScopedHttpClient`, route discovery, HTTP reproduction recipes, `plex validate` ([ADR 0006](adr/0006-native-active-validation.md)) |
-| Closed-loop remediation & multi-engine verification (PLEx Repair) | Implemented | `SQLParameterizeFixer`, `CommandArrayFixer`, `PathBoundaryFixer`, `DockerUserFixer`, `DockerTagPinFixer`, 5-gate `RepairVerificationRunner`, `plex remediate` ([ADR 0008](adr/0008-integrated-intelligence-and-repair.md)) |
-| Supply chain & IaC security | Implemented | Manifest parsers, offline CVE correlation, AST call-graph reachability, Dockerfile & TLS rules (`cfg.*`, `dep.*`) |
-| Declared platform coverage matrix & comparative accuracy benchmarks | Implemented | `CoverageInventory` ([COVERAGE_MATRIX.md](COVERAGE_MATRIX.md)), `plex coverage`, `plex benchmark --comparative` ([ADR 0009](adr/0009-coverage-and-comparative-validation.md)) |
-| Cohesive release architecture & migration guide | Implemented | Cohesive integration suite, `MIGRATION_2.0.md`, [ADR 0010](adr/0010-plex-2-0-cohesive-release.md) |
+Status vocabulary follows section 1: a capability is **supported** only after it meets its documented evidence contract (section 12 thresholds, held-out corpus, per-fixer semantic fixtures). Everything else that runs is **experimental**. Code that exists and passes its unit tests is not, by itself, supported.
 
-All six pillars natively implemented with zero mandatory external dependencies.
+| Capability | Actual state | What exists | Main gaps |
+| --- | --- | --- | --- |
+| Performance engine, rule SDK, IR, fixers, reports/editor integrations | Supported | Python performance rules, baselines, deterministic fixers, JSON/SARIF/Markdown/HTML, VS Code, GitHub Action | Before/after measurement on repairs from other engines (section 5) |
+| Unified schema v8, v7 compatibility, finding/evidence/engine records | Implemented | [ADR 0001](adr/0001-unified-finding-schema.md) | Repair-status and verification-record fields still need a schema decision (section 4.3) |
+| Provider SPI, orchestrator, preflight/doctor | Implemented | `plex providers doctor` | — |
+| xBOUNDARY source security (Python) | Experimental | Bounded AST taint for ~19 families (SQL, command, path, eval, deserialization, SSRF, XSS, SSTI, XXE, NoSQL, CSRF, mass assignment, tenant isolation, weak crypto, sensitive data, cookies, open redirect) | No held-out precision/recall; real-world corpus is three PyGoat excerpts; no JS/TS taint |
+| Supply chain & IaC | Experimental | Manifest parsers, SBOM (CycloneDX/SPDX), AST reachability, Dockerfile/TLS/config rules | Offline advisory feed holds four sample advisories; no declared feed or freshness model |
+| PLEx Inspect (reverse engineering) | Experimental | Pure-Python ELF, Mach-O (incl. FAT), PE, ZIP/JAR/APK/Wheel structural parsing; hardening, banned-API, string/secret rules ([ADR 0007](adr/0007-native-artifact-inspection.md)) | No disassembly, function recovery, call graph, decompilation, tracing or source-to-artifact rebuild comparison (section 7.1 steps 3 and 5) |
+| PLEx Validate (active testing) | Experimental | `ScopedHttpClient`, authorization record, Flask/FastAPI/Django route discovery, 21 deterministic HTTP recipes ([ADR 0006](adr/0006-native-active-validation.md)) | Not evaluated against reference vulnerable applications; no browser sessions; no agent planning (section 8.3) |
+| PLEx Repair | Experimental | 28 security/config fixers plus performance fixers, `RemediationCoordinator`, 5-gate `RepairVerificationRunner`, `plex remediate` ([ADR 0008](adr/0008-integrated-intelligence-and-repair.md)) | 21 of 28 security/config fixers failed the [repair audit](REPAIR_AUDIT.md) and are proposal-only; `fix.sql-parameterize`, `fix.command-array`, `fix.path-boundary`, `fix.nosql-injection`, `fix.ssti`, `fix.xss` and `fix.open-redirect` meet the contract. Runner now requires behavioral tests for `verified` |
+| Sandboxes and isolation | Implemented | `InProcessSandbox`, `SubprocessSandbox`, env allowlist, `disposable_workspace` ([ADR 0002](adr/0002-engine-isolation-model.md)) | Stronger isolation for hostile sample execution |
+| Project graph and correlation | Partial | `ProjectGraph` v1 and `GraphCorrelator`, used by the remediation coordinator | Not persisted or exposed by `plex analyze`; no artifact/runtime edges |
+| Coverage matrix and comparative benchmark harness | Implemented (harness only) | `plex coverage`, `plex benchmark --comparative` ([ADR 0009](adr/0009-coverage-and-comparative-validation.md)) | No held-out corpus or pinned baseline comparison has been run |
+| Optional AI / agent layer | Not started | — | Model provider interface, local option, single-worker agent loop (sections 8.3, 10) |
+
+The foundation for every pillar exists and the test suite passes. No pillar other than performance has met its promotion evidence yet, and there is no PLEx 2.0 release.
 
 ## 14. Execution roadmap and exit criteria
 
@@ -268,15 +269,22 @@ All six pillars natively implemented with zero mandatory external dependencies.
 | --- | --- | --- |
 | **P0 — Correct the direction** | Native-platform plan, ADR and roadmap links | **Completed** ([ADR 0003](adr/0003-native-platform-ownership.md)) |
 | **P1 — Existing foundation** | Unified reports, provider SPI, experimental xBOUNDARY | **Completed** (Schema v8, provider orchestrator) |
-| **P2 — Shared workflow and execution contracts** | Multi-engine CLI selection/formats/gates; initial graph/evidence/repair schemas; hardened worker foundations | **Completed** (`ProjectGraph`, `disposable_workspace`, env allowlist) |
-| **P3 — First verified source repair** | Native xBOUNDARY → repair → regression-test slice; additional source families | **Completed** (`SQLParameterizeFixer`, `CommandArrayFixer`, `PathBoundaryFixer`, `RepairVerificationRunner`) |
-| **P4 — Native artifact intelligence** | PLEx Inspect ELF & Mach-O intake, backend interface, static evidence/rules, source/artifact links | **Completed** (Pure-Python ELF/Mach-O parser, `bin.*` rules, `plex inspect`) |
-| **P5 — Native active validation** | PLEx Validate route/hypothesis/test engine; authorized workers; local injection and role/tenant fixtures | **Completed** (`ScopedHttpClient`, route discovery, `plex validate`) |
-| **P6 — Integrated intelligence and repair** | Source/artifact/runtime correlation; native repair plans and verification across engines | **Completed** (`RemediationCoordinator`, `GraphCorrelator`, `plex remediate`) |
-| **P7 — Coverage and comparative validation** | Dependency/configuration checks, declared coverage matrix, held-out corpora and pinned baseline comparisons | **Completed** (`CoverageInventory`, `SupplyChainScanner`, `plex benchmark --comparative`) |
-| **P8 — PLEx 2.0 release** | Cohesive CLI/API/dashboard/editor/CI, migration docs, reproducible packages and supported native pillars | **Completed** (Cohesive test suite, `MIGRATION_2.0.md`, [ADR 0010](adr/0010-plex-2-0-cohesive-release.md)) |
+| **P2 — Shared workflow and execution contracts** | Multi-engine CLI selection/formats/gates; initial graph/evidence/repair schemas; hardened worker foundations | **Mostly completed** — graph not yet persisted or exposed by the CLI; repair/verification schema fields pending |
+| **P3 — First verified source repair** | Native xBOUNDARY → repair → regression-test slice; additional source families | **Foundation implemented** — fixers exist; no fixer yet meets the section 9.2 evidence contract |
+| **P4 — Native artifact intelligence** | PLEx Inspect intake, backend interface, static evidence/rules, source/artifact links | **In progress** — structural parsers and rules done; disassembly backend, reconstruction and source/artifact links open |
+| **P5 — Native active validation** | Route/hypothesis/test engine; authorized workers; local injection and role/tenant fixtures | **Foundation implemented** — recipes and scope enforcement done; reference-app evaluation open |
+| **P6 — Integrated intelligence and repair** | Source/artifact/runtime correlation; native repair plans and verification across engines | **In progress** — the section 3 acceptance scenario has not been demonstrated end to end |
+| **P7 — Coverage and comparative validation** | Dependency/configuration checks, declared coverage matrix, held-out corpora and pinned baseline comparisons | **In progress** — matrix and harness done; corpora and comparisons not run |
+| **P8 — PLEx 2.0 release** | Cohesive CLI/API/dashboard/editor/CI, migration docs, reproducible packages and supported native pillars | **Not started** — release gates in section 15 are unmet |
 
-All milestones P0–P8 successfully verified with 100% test pass rate across 949 tests.
+### Next increments, in order
+
+1. ~~Make `fix.sql-parameterize` driver-aware and abstain when the driver is unknown~~ (done 2026-10-15); audit of the other fixers done ([REPAIR_AUDIT.md](REPAIR_AUDIT.md)); they are proposal-only until rewritten to the same contract, starting with the injection fixers (`fix.command-array` and `fix.path-boundary` done 2026-10-15; `fix.code-eval` rewritten as a proposal-only repair; `fix.nosql-injection` done 2026-10-15).
+2. Build a held-out, licensed corpus (vulnerable reference apps plus clean projects) and publish per-rule precision/recall from `plex benchmark --comparative`.
+3. Demonstrate the section 3 acceptance scenario end to end, with the `ProjectGraph` persisted by the CLI.
+4. Add a replaceable disassembly backend and function/call reconstruction to PLEx Inspect.
+5. Add the optional model-provider interface and a single-worker agent loop under the existing scope controls.
+6. JS/TS taint and repair, then the release checklist.
 
 No next milestone is “wrap REA” or “wrap Strix.” Any interoperability work is separately justified after the native path is useful.
 

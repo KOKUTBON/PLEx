@@ -4,11 +4,20 @@ KOKUTBON's mission is open technology for public benefit. This roadmap is a prio
 
 ## PLEx 2.0 direction
 
-Build one native software-intelligence platform: **PLEx Performance**, **xBOUNDARY**, native **artifact/reverse-engineering analysis**, native **active application testing**, and a shared **repair-and-verification workflow**. PLEx owns these capabilities inside this project. Strix and REA are reference and comparison projects; replaceable low-level tools can support our engines.
+Build one native software-intelligence platform that combines what PLEx (performance), xBOUNDARY (source security), REA (reverse engineering) and Strix (active testing and repair) each do: **PLEx Performance**, **xBOUNDARY**, native **artifact/reverse-engineering analysis**, native **active application testing**, and a shared **repair-and-verification workflow**. PLEx owns these capabilities inside this project. Strix and REA are reference and comparison projects; replaceable low-level tools can support our engines.
 
 The [PLEx 2.0 implementation plan](docs/PLEx-2.0-PLAN.md) defines current status, coverage, milestones and measurable quality goals. [ADR 0003](docs/adr/0003-native-platform-ownership.md) records the ownership decision.
 
-The next implementation increment is shared multi-engine static CLI selection, formats and gates. It leads into project/evidence/repair contracts, restricted workers, a first verified source repair, native artifact inspection, native active validation and integrated regression prevention. Broader language, artifact and rule coverage follows measured validation; current experimental rules do not establish a complete 2.0 platform.
+**Current state (2026-10-15):** foundations exist for every pillar and the test suite passes, but only the performance engine is supported. Security, supply-chain, inspection, validation and repair capabilities are experimental until measured. 2.0 is not released.
+
+Next increments, in order (details in [plan section 14](docs/PLEx-2.0-PLAN.md#14-execution-roadmap-and-exit-criteria)):
+
+1. Make the SQL repair driver-aware and audit every security fixer for preconditions, abstention and failing-before/passing-after fixtures.
+2. Build a held-out corpus and publish per-rule precision/recall.
+3. Demonstrate the end-to-end source → reproduction → repair → verification scenario, with the project graph persisted.
+4. Add disassembly and function/call reconstruction to PLEx Inspect.
+5. Add the optional model-provider interface and a single-worker agent loop under the existing scope controls.
+6. JS/TS taint and repair, then the release checklist.
 
 ## Ongoing release priorities
 

@@ -1,7 +1,9 @@
 # ADR 0010: PLEx 2.0 Cohesive Release Architecture and Native Platform Ownership
 
-- **Status**: accepted
+- **Status**: accepted (architecture); release not yet made
 - **Date**: 2026-10-12
+
+> **Note (2026-10-15):** This ADR records the target release architecture. The release gates in [plan section 15](../PLEx-2.0-PLAN.md#15-release-gates-and-maintenance) are not yet met, and most pillars remain experimental. See [plan section 13](../PLEx-2.0-PLAN.md#13-current-implementation-inventory--2026-10-15).
 - **Authors**: PLEx Architecture Team
 
 ## Context

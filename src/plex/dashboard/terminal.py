@@ -97,7 +97,7 @@ def build_dashboard_state(repo_root: Path) -> DashboardState:
             "surface": s.surface,
             "status": s.status,
             "engines": list(s.engines),
-            "rules_count": len(s.supported_rules),
+            "rules_count": len(s.supported_rules) + len(s.experimental_rules),
         }
         for s in DECLARED_SURFACES
     ]

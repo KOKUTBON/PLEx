@@ -153,9 +153,9 @@ Schema: `schema/repair-candidate-v1.schema.json`.
 
 - **`proposed`**: Patch candidate generated; not yet tested in a workspace.
 - **`applied-in-workspace`**: Temporarily applied to an isolated working tree or scratch branch for verification checks.
-- **`verified`**: All verification checks (syntax, reproduction test, test suite) passed.
+- **`verified`**: Every required check ran and passed (syntax check for the file type and the behavioral test command), and no optional check failed.
 - **`failed`**: Verification checks failed (e.g. syntax error or test regression).
-- **`inconclusive`**: Checks were indeterminate (e.g. test timeout or unresolvable dependencies).
+- **`inconclusive`**: Executed checks passed but a required check could not run (no test command, no syntax validator for the file type). The missing checks are listed in `VerificationRecord.limitations`.
 - **`reverted`**: Workspace was rolled back to original state.
 
 ### Patch Candidate Contract

@@ -1,5 +1,7 @@
 # Changelog
 
+- Declare experimental coverage and document repair limitations. (#63)
+
 - Validate redirect targets once and reject browser URL bypasses. (#61)
 
 - Escape untrusted HTML values in supported rendering contexts. (#59)

@@ -13,6 +13,8 @@ DECLARED_SURFACES: list[SurfaceCoverage] = [
             "plex.db-in-loop",
             "plex.quadratic-loop",
             "plex.unbuffered-io",
+        ),
+        experimental_rules=(
             "xbnd.sql-injection",
             "xbnd.command-injection",
             "xbnd.path-traversal",
@@ -30,9 +32,10 @@ DECLARED_SURFACES: list[SurfaceCoverage] = [
             "xbnd.nosql-injection",
             "xbnd.xss",
         ),
-        verification_level="AST dataflow, tainted source-to-sink tracking, call-graph analysis",
+        verification_level="Performance: AST signals, call-graph weighting and baselines. xBOUNDARY: bounded AST taint tracking",
         prerequisites=("Python 3.10+ AST",),
         limitations=(
+            "xBOUNDARY rules are experimental: regression fixtures and three PyGoat excerpts only; no held-out precision/recall measurement yet",
             "Dynamic reflection, eval-based metaprogramming, and C-extensions have bounded visibility",
         ),
     ),
@@ -40,16 +43,18 @@ DECLARED_SURFACES: list[SurfaceCoverage] = [
         surface="JS/TS and Other Languages",
         status="experimental",
         engines=("xboundary",),
-        supported_rules=("xbnd.generic-source",),
-        verification_level="Basic lexical and manifest inventory",
+        supported_rules=(),
+        experimental_rules=("xbnd.generic-source",),
+        verification_level="Basic lexical and manifest inventory (performance analyzers exist for JS/TS, Go, Java, Kotlin)",
         prerequisites=("Node / Tree-Sitter (optional)",),
         limitations=("Full AST taint tracking and repair parity in development for 2.x expansion",),
     ),
     SurfaceCoverage(
         surface="Dependencies & Supply Chain",
-        status="supported",
+        status="experimental",
         engines=("supply_chain",),
-        supported_rules=(
+        supported_rules=(),
+        experimental_rules=(
             "dep.unpinned-version",
             "dep.insecure-index",
             "dep.vulnerable-version",
@@ -57,13 +62,17 @@ DECLARED_SURFACES: list[SurfaceCoverage] = [
         ),
         verification_level="Pure-Python manifest parsing (requirements.txt, poetry.lock, Pipfile.lock), AST call-graph reachability, and CycloneDX/SPDX SBOM generation",
         prerequisites=("Checked-in manifest or lockfile",),
-        limitations=("Offline feed covers core Python package CVEs; live remote indexing optional",),
+        limitations=(
+            "Bundled offline advisory feed holds four sample advisories, not a vulnerability database; feed freshness is not declared",
+            "No held-out accuracy measurement yet",
+        ),
     ),
     SurfaceCoverage(
         surface="Configuration & IaC",
-        status="supported",
+        status="experimental",
         engines=("supply_chain", "config"),
-        supported_rules=(
+        supported_rules=(),
+        experimental_rules=(
             "cfg.docker-root-user",
             "cfg.docker-latest-tag",
             "cfg.docker-sudo-nopasswd",
@@ -76,13 +85,17 @@ DECLARED_SURFACES: list[SurfaceCoverage] = [
         ),
         verification_level="Pure-Python Dockerfile, .env, and TLS configuration analyzers",
         prerequisites=("Committed container definitions or config files",),
-        limitations=("Complex multi-stage orchestration scripts evaluated per directive",),
+        limitations=(
+            "Complex multi-stage orchestration scripts evaluated per directive",
+            "No held-out accuracy measurement yet",
+        ),
     ),
     SurfaceCoverage(
         surface="Running Web & API Services",
-        status="supported",
+        status="experimental",
         engines=("plex.validate",),
-        supported_rules=(
+        supported_rules=(),
+        experimental_rules=(
             "val.sql-injection",
             "val.command-injection",
             "val.path-traversal",
@@ -106,13 +119,18 @@ DECLARED_SURFACES: list[SurfaceCoverage] = [
         ),
         verification_level="Technical network scope boundaries, ScopedHttpClient, deterministic zero-LLM reproduction recipes",
         prerequisites=("Running authorized local/staging service", "Valid AUTHORIZATION.md record"),
-        limitations=("Refuses network tests without explicit authorization record and network scope",),
+        limitations=(
+            "Recipes are exercised against local test fixtures only; no evaluation against deliberately vulnerable reference applications yet",
+            "No browser-session scenarios and no optional agent planning layer yet",
+            "Refuses network tests without explicit authorization record and network scope",
+        ),
     ),
     SurfaceCoverage(
         surface="Compiled Artifacts",
-        status="supported",
+        status="experimental",
         engines=("plex.inspect",),
-        supported_rules=(
+        supported_rules=(),
+        experimental_rules=(
             "bin.weak-hardening",
             "bin.banned-api",
             "bin.deprecated-crypto",
@@ -127,15 +145,17 @@ DECLARED_SURFACES: list[SurfaceCoverage] = [
         verification_level="Pure-Python 32/64-bit ELF, Mach-O, PE, and archive/package (ZIP, JAR, APK, Wheel) structural parsers, compiler mitigations, and embedded binary analysis",
         prerequisites=("Valid ELF, Mach-O, PE, or archive (ZIP/JAR/APK/Wheel) artifact",),
         limitations=(
-            "Advanced interactive disassembly and decompilation planned for 2.x roadmap",
+            "Structural parsing only: no disassembly, function recovery, call graph or decompilation yet",
+            "No dynamic tracing; no source-to-artifact rebuild comparison yet",
+            "String and import matches are leads, not proof of runtime behavior",
         ),
     ),
     SurfaceCoverage(
         surface="Remediation & Repairs",
-        status="supported",
+        status="experimental",
         engines=("plex.repair",),
-        supported_rules=(
-            "fix.performance",
+        supported_rules=("fix.performance",),
+        experimental_rules=(
             "fix.sql-parameterize",
             "fix.command-array",
             "fix.path-boundary",
@@ -167,7 +187,19 @@ DECLARED_SURFACES: list[SurfaceCoverage] = [
         ),
         verification_level="Disposable workspace sandbox, multi-engine verification runner (syntax, security rescan, active exploit blocked, performance check, functional tests)",
         prerequisites=("Disposable workspace support", "Source code with deterministic fixer"),
-        limitations=("Arbitrary binary rewriting requires semantic checks; limited to verified source patches",),
+        limitations=(
+            "Only fix.sql-parameterize, fix.command-array, fix.path-boundary, fix.nosql-injection, fix.ssti, fix.xss and fix.open-redirect meet their evidence contract and are auto-applicable; the other 21 security/configuration fixers produce proposals for manual review (see docs/REPAIR_AUDIT.md)",
+            "fix.command-array abstains on pipes, redirects, globs, variables, quoting, non-constant executables and programs outside its allowlist of utilities that honour '--'",
+            "fix.code-eval is proposal-only by design: ast.literal_eval keeps behavior only if every legitimate input is a Python literal, which source code cannot prove; it abstains on namespaces, formatted code, exec and compile",
+            "fix.path-boundary only confines paths joined under a base directory built from module-level values; a bare untrusted path, a function-local base or string-formatted paths are not repaired",
+            "fix.nosql-injection only rejects operators in values of dict-literal filters in files that import a MongoDB driver; whole user-supplied filters, ** mappings, user-chosen field names and $where are left for review",
+            "fix.ssti only rewrites flask.render_template_string; user values are rendered with |safe to keep output unchanged, so existing XSS exposure is not fixed, and whole user-supplied templates, jinja2.Template and from_string are left for review",
+            "fix.xss only escapes values in HTML text nodes and quoted non-URL attributes of Django, markupsafe and Starlette/FastAPI sinks; script/style bodies, event handlers, URL attributes with an open scheme and whole user-supplied bodies are left for review",
+            "fix.open-redirect only keeps relative URLs on the site and redirects everything else to '/', including absolute URLs to the site itself; targets mixing user input with server-built absolute URLs, Django view-name redirects and functions with their own URL validation are left for review",
+            "A repair is verified only when a syntax check and the caller's behavioral test command ran and passed; otherwise it is inconclusive",
+            "fix.sql-parameterize abstains unless the DB-API paramstyle is known (qmark or format drivers); named/numeric paramstyles, asyncpg, SQLAlchemy and identifier interpolation are not repaired",
+            "Arbitrary binary rewriting is out of scope; only source patches are proposed",
+        ),
     ),
 ]
 
@@ -177,19 +209,25 @@ def get_declared_coverage(version: str = "2.0.0-dev") -> CoverageInventory:
     return CoverageInventory(version=version, surfaces=tuple(DECLARED_SURFACES))
 
 
+def _rules_summary(rules: tuple[str, ...]) -> str:
+    if not rules:
+        return "none"
+    return f"{len(rules)} rules (`{rules[0]}`...)"
+
+
 def format_coverage_markdown(inventory: CoverageInventory) -> str:
     """Format coverage inventory as a clean Markdown table."""
     lines = [
         f"# PLEx {inventory.version} Declared Coverage Matrix",
         "",
-        "| Surface | Status | Engines | Supported Rules & Families | Verification Level |",
-        "| --- | --- | --- | --- | --- |",
+        "| Surface | Status | Engines | Supported Rules & Families | Experimental Rules | Verification Level |",
+        "| --- | --- | --- | --- | --- | --- |",
     ]
     for s in inventory.surfaces:
         status_tag = f"**{s.status.upper()}**" if s.status == "supported" else s.status.capitalize()
         engines_str = ", ".join(s.engines)
-        rules_str = f"{len(s.supported_rules)} rules (`{s.supported_rules[0]}`...)"
         lines.append(
-            f"| {s.surface} | {status_tag} | {engines_str} | {rules_str} | {s.verification_level} |"
+            f"| {s.surface} | {status_tag} | {engines_str} | {_rules_summary(s.supported_rules)} "
+            f"| {_rules_summary(s.experimental_rules)} | {s.verification_level} |"
         )
     return "\n".join(lines)

@@ -1,13 +1,13 @@
-"""Unit and integration tests for NoSQL / MongoDB Operator Injection rule, recipe, and fixer (CWE-943)."""
+"""Tests for the NoSQL / MongoDB operator injection rule and recipe (CWE-943).
+
+Fixer tests are in test_nosql_injection_fixer.py.
+"""
 
 from __future__ import annotations
 
-import ast
 from pathlib import Path
 
 from plex.providers import AnalysisTask, XBoundaryProvider, run_providers
-from plex.repair.coordinator import RemediationCoordinator
-from plex.repair.nosql_injection import NoSQLInjectionFixer
 from plex.validate.engine import RECIPES
 from plex.validate.http import HttpExchange, ScopedHttpClient, make_exchange
 from plex.validate.recipes.base import ValidationHypothesis
@@ -82,70 +82,35 @@ def test_nosql_rule_ignores_scalar_casts(tmp_path: Path) -> None:
     assert len(findings) == 0
 
 
-def test_nosql_fixer_sanitizes_dict_literal_values() -> None:
-    src = (
-        "def auth(request):\n"
-        "    data = request.json\n"
-        "    return db.users.find_one({'username': data['username'], 'password': data['password']})\n"
-    )
-    fixer = NoSQLInjectionFixer()
-    fixed, changes = fixer.fix(src, "views.py")
-
-    assert "str(data['username'])" in fixed or 'str(data["username"])' in fixed
-    assert "str(data['password'])" in fixed or 'str(data["password"])' in fixed
-    assert len(changes) == 1
-    assert changes[0].rule_id == "xbnd.nosql-injection"
-    ast.parse(fixed)
-
-
-def test_nosql_fixer_sanitizes_untrusted_direct_filter() -> None:
-    src = (
-        "def search(request):\n"
-        "    return db.users.find(request.json)\n"
-    )
-    fixer = NoSQLInjectionFixer()
-    fixed, changes = fixer.fix(src, "views.py")
-
-    assert "startswith('$')" in fixed
-    assert len(changes) == 1
-    ast.parse(fixed)
-
-
-def test_nosql_fixer_propose_patch() -> None:
-    src = (
-        "def login(request):\n"
-        "    data = request.json\n"
-        "    return db.users.find_one({'username': data['username']})\n"
-    )
-    fixer = NoSQLInjectionFixer()
-    patch = fixer.propose_patch(src, "views.py", finding_ids=("find:nosql_01",))
-
-    assert patch is not None
-    assert patch.rule_id == "xbnd.nosql-injection"
-    assert patch.engine == "xboundary"
-    assert patch.generator == "plex.repair.nosql_injection"
-    assert "str(" in patch.diff
-    assert patch.rollback_diff != ""
-
-
-def test_nosql_coordinator_end_to_end_verification(tmp_path: Path) -> None:
-    repo = tmp_path / "service"
+def test_nosql_rule_detects_nested_operator_values_and_built_queries(tmp_path: Path) -> None:
+    repo = tmp_path / "app"
     repo.mkdir()
-    (repo / "app.py").write_text(
-        "def authenticate(request):\n"
-        "    payload = request.json\n"
-        "    return db.users.find_one({'user': payload['user'], 'pwd': payload['pwd']})\n",
+    (repo / "views.py").write_text(
+        "def by_age(request):\n"
+        "    return db.users.find({'age': {'$gt': request.args['min']}})\n\n"
+        "def by_name(request):\n"
+        "    q = {'name': request.args['name']}\n"
+        "    return db.users.find(q)\n",
         encoding="utf-8",
     )
 
-    coordinator = RemediationCoordinator()
-    plan = coordinator.plan_and_verify(repo, check_performance=False)
+    outcome = run_providers(AnalysisTask(repo_root=repo), [XBoundaryProvider()])
+    lines = sorted(f.lineno for f in outcome.findings if f.rule_id == "xbnd.nosql-injection")
+    assert lines == [2, 6]
 
-    findings = [f for f in plan.findings if f.rule_id == "xbnd.nosql-injection"]
-    assert len(findings) == 1
-    assert len(plan.repairs) == 1
-    assert plan.repairs[0].status == "inconclusive"
-    assert plan.is_verified is False
+
+def test_nosql_rule_treats_operator_rejection_as_sanitized(tmp_path: Path) -> None:
+    repo = tmp_path / "app"
+    repo.mkdir()
+    (repo / "views.py").write_text(
+        "def by_name(request):\n"
+        "    q = {'name': _plex_reject_operators(request.args['name'])}\n"
+        "    return db.users.find(q)\n",
+        encoding="utf-8",
+    )
+
+    outcome = run_providers(AnalysisTask(repo_root=repo), [XBoundaryProvider()])
+    assert not [f for f in outcome.findings if f.rule_id == "xbnd.nosql-injection"]
 
 
 def test_nosql_recipe_reproduced_on_operator_bypass() -> None:

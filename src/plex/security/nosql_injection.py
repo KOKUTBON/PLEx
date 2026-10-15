@@ -51,6 +51,8 @@ SAFE_CASTS = (
     "bool",
     "ObjectId",
     "bytes",
+    # Added by the PLEx repair: raises on any $-prefixed key in the value.
+    "_plex_reject_operators",
 )
 
 __all__ = ["NOSQL_LIMITATIONS", "NoSQLInjectionRule"]
@@ -74,6 +76,10 @@ def _is_tainted_expr(node: ast.AST, tainted_vars: set[str]) -> bool:
     if _is_safe_cast(node) or isinstance(node, (ast.Constant, ast.Dict)):
         return False
 
+    # A local name is tainted by what was assigned to it, not by its spelling ("query").
+    if isinstance(node, ast.Name):
+        return node.id in tainted_vars
+
     unparsed = ast.unparse(node)
     if any(src in unparsed for src in TAINT_SOURCES):
         return True
@@ -87,6 +93,17 @@ def _is_tainted_expr(node: ast.AST, tainted_vars: set[str]) -> bool:
             return True
 
     return False
+
+
+def _has_tainted_leaf(node: ast.AST, tainted_vars: set[str]) -> bool:
+    """Return True if a dict/list literal holds a tainted value at any depth (incl. ``**``)."""
+    if isinstance(node, ast.Dict):
+        return any(_has_tainted_leaf(v, tainted_vars) for v in node.values)
+    if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
+        return any(_has_tainted_leaf(e, tainted_vars) for e in node.elts)
+    if isinstance(node, ast.Starred):
+        return _has_tainted_leaf(node.value, tainted_vars)
+    return _is_tainted_expr(node, tainted_vars)
 
 
 class NoSQLInjectionRule(Rule):
@@ -120,7 +137,12 @@ class NoSQLInjectionRule(Rule):
                 for stmt in ast.walk(fn_node):
                     if isinstance(stmt, ast.Assign):
                         unparsed_val = ast.unparse(stmt.value)
-                        if any(src in unparsed_val for src in TAINT_SOURCES):
+                        if isinstance(stmt.value, ast.Dict):
+                            # A query built as a literal is tainted by its values, not its text.
+                            value_tainted = _has_tainted_leaf(stmt.value, tainted_vars)
+                        else:
+                            value_tainted = any(src in unparsed_val for src in TAINT_SOURCES)
+                        if value_tainted:
                             for target in stmt.targets:
                                 if isinstance(target, ast.Name):
                                     tainted_vars.add(target.id)
@@ -154,7 +176,7 @@ class NoSQLInjectionRule(Rule):
                                 vulnerable = True
                                 vuln_detail = f"$where expression '{ast.unparse(v)}'"
                                 break
-                            elif _is_tainted_expr(v, tainted_vars):
+                            elif _has_tainted_leaf(v, tainted_vars):
                                 vulnerable = True
                                 vuln_detail = f"query field {k_src}='{ast.unparse(v)}'"
                                 break

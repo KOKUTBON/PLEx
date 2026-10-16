@@ -14,7 +14,7 @@ A developer tool that finds code problems and helps teams review performance and
 
 ## Repair safety
 
-`plex remediate --diff` produces patches for review. `--apply` writes only verified candidates from explicitly eligible fixers; verification requires a syntax check and a passing behavioral test command. Other candidates remain proposals. See the [repair audit](docs/REPAIR_AUDIT.md) for the seven eligible security fixers and the remaining limitations.
+`plex remediate --diff` produces patches for review. `--apply` writes only verified candidates from explicitly eligible fixers; verification requires a syntax check and a passing behavioral test command. Other candidates remain proposals. See the [repair audit](docs/REPAIR_AUDIT.md) for the eight eligible security fixers and the remaining limitations.
 
 ```sh
 plex remediate . --apply --test-cmd "pytest"

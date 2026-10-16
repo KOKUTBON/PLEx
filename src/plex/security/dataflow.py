@@ -521,7 +521,9 @@ class SQLDataflow:
             "dill.loads",
             "dill.load",
             "yaml.unsafe_load",
+            "yaml.unsafe_load_all",
             "yaml.load",
+            "yaml.load_all",
         }
         attr_name = node.func.attr if isinstance(node.func, ast.Attribute) else ""
         is_sink = name in deserialization_sinks or (
@@ -532,15 +534,20 @@ class SQLDataflow:
             )
         )
         if is_sink:
-            if name == "yaml.load" or (attr_name == "load" and "yaml" in name):
-                loader_kw = next((kw for kw in node.keywords if kw.arg == "Loader"), None)
-                if loader_kw:
-                    loader_name = dotted(loader_kw.value)
-                    if loader_name in {
-                        "yaml.SafeLoader",
+            if name in {"yaml.load", "yaml.load_all"} or (
+                attr_name in {"load", "load_all"} and "yaml" in name
+            ):
+                # The loader is the second positional argument or the Loader keyword,
+                # resolved through imports (``import yaml as y``, ``from yaml import ...``).
+                loader = node.args[1] if len(node.args) > 1 else None
+                loader = next((kw.value for kw in node.keywords if kw.arg == "Loader"), loader)
+                if loader is not None:
+                    module, _, loader_name = self.name(loader).rpartition(".")
+                    if module in {"yaml", "yaml.loader", "yaml.cyaml"} and loader_name in {
                         "SafeLoader",
-                        "yaml.CSafeLoader",
                         "CSafeLoader",
+                        "BaseLoader",
+                        "CBaseLoader",
                     }:
                         return ()
             target = (

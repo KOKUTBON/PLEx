@@ -1,5 +1,7 @@
 # Changelog
 
+- Repair supported unsafe PyYAML loaders without changing loader argument positions or rewriting incompatible serialization formats; abstain on custom schemas and ambiguous bindings. (#65)
+
 - Declare experimental coverage and document repair limitations. (#63)
 
 - Validate redirect targets once and reject browser URL bypasses. (#61)

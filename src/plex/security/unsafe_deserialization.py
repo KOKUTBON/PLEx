@@ -5,8 +5,8 @@ from __future__ import annotations
 from .injection import DataflowInjectionRule
 
 DESERIALIZATION_LIMITATIONS = (
-    "Deserialization rule models pickle, yaml.load, marshal, dill, and shelve sinks",
-    "yaml.SafeLoader, yaml.safe_load, and json.loads are treated as safe alternatives",
+    "Deserialization rule models pickle, yaml.load/load_all, yaml.unsafe_load/unsafe_load_all, marshal, dill, and shelve sinks",
+    "yaml.load/load_all with SafeLoader, CSafeLoader, BaseLoader or CBaseLoader (keyword or positional, resolved through imports), yaml.safe_load and json.loads are treated as safe alternatives",
     "Custom object reduction (__reduce__) semantics are outside the static boundary",
 )
 

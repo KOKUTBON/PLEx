@@ -64,7 +64,7 @@ plex remediate path/to/repo --apply --test-cmd "pytest tests/test_app.py"
 ```
 
 - A repair is **verified** only when every required check ran and passed: a syntax check for the file type and your `--test-cmd`. Without `--test-cmd`, or for file types without a syntax validator, repairs are **inconclusive** and the missing checks are listed.
-- Only fixers that meet their evidence contract are auto-applicable; today that is `fix.sql-parameterize`, `fix.command-array`, `fix.path-boundary`, `fix.nosql-injection`, `fix.ssti`, `fix.xss` and `fix.open-redirect`. Other fixers produce **proposals**: review them with `--diff` and apply them by hand. See [REPAIR_AUDIT.md](REPAIR_AUDIT.md).
+- Only fixers that meet their evidence contract are auto-applicable; today that is `fix.sql-parameterize`, `fix.command-array`, `fix.path-boundary`, `fix.nosql-injection`, `fix.ssti`, `fix.xss`, `fix.open-redirect` and `fix.safe-deserialization`. Other fixers produce **proposals**: review them with `--diff` and apply them by hand. See [REPAIR_AUDIT.md](REPAIR_AUDIT.md).
 - `--apply` never writes failed, inconclusive or proposal-only candidates, and skips a diff that no longer matches the file.
 
 ---

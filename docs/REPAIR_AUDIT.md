@@ -14,11 +14,12 @@ This audit checked every deterministic security/configuration fixer in `src/plex
 | `fix.ssti` | Meets contract (rewritten 2026-10-15) | Yes |
 | `fix.xss` | Meets contract (rewritten 2026-10-15) | Yes |
 | `fix.open-redirect` | Meets contract (rewritten 2026-10-15) | Yes |
-| All 20 others | Unsafe or proposal-only (below) | **No**: proposals only |
+| `fix.safe-deserialization` | Supported unsafe PyYAML loaders rewritten 2026-10-16; other formats and custom schemas require review | Yes, for supported YAML calls |
+| All 19 others | Unsafe or proposal-only (below) | **No**: proposals only |
 
 Containment applied while the fixers are rewritten:
 
-- `plex remediate --apply` writes only **verified** patches from fixers marked `auto_apply = True` (currently `fix.sql-parameterize`, `fix.command-array`, `fix.path-boundary`, `fix.nosql-injection`, `fix.ssti`, `fix.xss` and `fix.open-redirect`). Everything else is shown as a proposal for manual review.
+- `plex remediate --apply` writes only **verified** patches from fixers marked `auto_apply = True` (currently `fix.sql-parameterize`, `fix.command-array`, `fix.path-boundary`, `fix.nosql-injection`, `fix.ssti`, `fix.xss`, `fix.open-redirect` and `fix.safe-deserialization`). Everything else is shown as a proposal for manual review.
 - A repair is `verified` only when every required check ran and passed: a real syntax check for the file type and the caller's behavioral test command. A missing required check gives `inconclusive`, and every skipped check is listed in the verification record's `limitations`.
 - Diffs keep a missing final newline (previously the last line of such files was deleted on apply) and are refused if their context no longer matches the file.
 - Findings that produce the same whole-file patch share one candidate.
@@ -44,7 +45,7 @@ Containment applied while the fixers are rewritten:
 | `ssti` (fixed) | Duplicates keywords (SyntaxError); applies Flask call shape to `jinja2.Template`/`string.Template` (TypeError); mangles concatenation; replaces real templates with `{{ content }}` | Only Flask `render_template_string`; keyword-collision check |
 | `xss` (fixed) | `html.escape` on rendered templates/JSON/bytes; escapes before format specs; wrong context (`href=javascript:`, unquoted attrs, `<script>`) still exploitable; shadowed `html` name | Only HTML text nodes / quoted non-URL attributes; skip non-string bodies |
 | `open_redirect` (fixed) | Evaluates target 3 times (validates one value, redirects to another); `/\evil.com` and `\\evil.com` bypass; rewrites `url_for(...)`/model redirects | Bind once; reject backslashes and schemes; only request-tainted args |
-| `safe_deserialization` | Positional loader → `safe_load(s, Loader)` TypeError; custom/`CSafeLoader` rewritten; `pickle` → `json` breaks stored data and `encoding=` kwarg | yaml only with keyword loader; pickle proposal-only |
+| `safe_deserialization` (fixed for supported YAML) | Previously broke positional loaders, rewrote custom/safe loaders and switched pickle to incompatible JSON | Resolve unsafe PyYAML loaders through imports; preserve positional/keyword shape and C parser; abstain on custom schemas, FullLoader, shadowed names and unpacked arguments; never rewrite pickle-like formats |
 | `ssrf_validate` | Injected `_validate_url` catches its own `ValueError`, so private IPs are **never blocked**; IPv6/decimal/octal/trailing-dot/DNS bypasses; redirects followed; wraps `Request` objects (AttributeError) | Proposal-only until a resolving, pinning validator exists |
 | `xxe` | `from xml... import` becomes `defuseddefusedxml` (ModuleNotFoundError); multi-line imports produce SyntaxError; rewrites serialization-only imports; adds undeclared `defusedxml` dependency | Name-by-name mapping; parse-only imports; dependency declared |
 | `mass_assignment` | Invents a fixed field allowlist; substring taint matches unrelated calls (`**metadata`, `str.format`); two unpackings produce SyntaxError | Allowlist derived from schema/form/model, else proposal |
@@ -74,3 +75,7 @@ Containment applied while the fixers are rewritten:
 - The benchmark counted abstentions and inconclusive repairs as regressions. **Fixed:** counted separately.
 
 Remaining: "vulnerability_cleared" only means the rescan no longer reports the rule in that file, and the Dockerfile check does not build the image. Both are recorded as limitations on every verification record.
+
+## Safe YAML repair update — 2026-10-16
+
+`fix.safe-deserialization` edits only the loader or callee of user-fed PyYAML calls. Existing safe loaders and trusted configuration loads remain unchanged. FullLoader schemas, custom or variable loaders, visible constructor registrations, wildcard imports, shadowed bindings and ambiguous signatures require manual review. Pickle, marshal, dill, shelve and jsonpickle are left unchanged because their data needs an authenticated format or a migration. Tests use real PyYAML to demonstrate object construction before repair, rejection afterward, and identical standard YAML values (including streams, timestamps, binary data, sets and anchors). The detector resolves safe loader aliases and positional loaders and covers multi-document sinks.

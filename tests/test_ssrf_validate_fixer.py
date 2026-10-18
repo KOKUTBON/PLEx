@@ -92,7 +92,7 @@ def query(endpoint):
 
 def test_injected_validate_url_blocks_private_ips_and_metadata() -> None:
     fixer = SSRFUrlValidateFixer()
-    source = "import requests\ndef fetch(u):\n    return requests.get(u)\n"
+    source = "import urllib.request\ndef fetch(u):\n    return urllib.request.urlopen(u)\n"
     fixed, _ = fixer.fix(source)
 
     ns: dict = {}

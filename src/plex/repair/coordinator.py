@@ -348,7 +348,7 @@ class RemediationCoordinator:
                         candidates[candidates.index(existing)] = merged
                     else:
                         candidates.append(candidate)
-                        if getattr(fixer, "auto_apply", False):
+                        if getattr(fixer, "auto_apply", False) and candidate.metadata.get("auto_apply", True):
                             auto_applicable.add(candidate.id)
                     break
         for candidate in candidates:

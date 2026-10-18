@@ -25,7 +25,7 @@ This audit checked every deterministic security/configuration fixer in `src/plex
 | `fix.sensitive-log-redact` | Rewritten 2026-10-16 with SourceEditor; restricted to proven loggers (`logging`, `logger`, `log`), avoiding UI dialogs and arbitrary error methods; proposal-only | No |
 | `fix.weak-crypto` | Rewritten 2026-10-16 with SourceEditor; targeted algorithm name replacement (`hashlib.md5` -> `hashlib.sha256`) preserves arguments and comments; proposal-only | No |
 | `fix.insecure-cookie` | Rewritten 2026-10-16 with SourceEditor; flips existing keywords; abstains when `**kwargs` are present on `set_cookie` to prevent duplicate keyword TypeError; proposal-only | No |
-| `fix.docker-user` | Rewritten 2026-10-16; continuation-line aware (`\`), avoids splitting RUN commands; proposal-only | No |
+| `fix.docker-user` | Meets contract (hardened 2026-10-18 with declared `useradd`/`adduser` detection and standard base image user detection) | Yes, for declared or standard base image users |
 | `fix.docker-tag-pin` | Rewritten 2026-10-16; skips stage names (`AS builder`), `scratch`, and existing digest pins (`@sha256:`); proposal-only | No |
 | `fix.docker-sudo` | Rewritten 2026-10-16; restricts matching to active instructions (`RUN`, `COPY`, `ADD`) and skips comments; proposal-only | No |
 | `fix.dependency-pin` | Rewritten 2026-10-16; never extracts versions from upper-bound or exclusion specifiers (`numpy<2`, `foo!=1.5`); proposal-only | No |
@@ -34,10 +34,11 @@ This audit checked every deterministic security/configuration fixer in `src/plex
 | `fix.csrf-protection` | Rewritten 2026-10-16 with SourceEditor; removes @csrf_exempt decorators and enables WTF_CSRF_ENABLED configs preserving indentation and comments; proposal-only | No |
 | `fix.plaintext-secret` | Rewritten 2026-10-16 with SourceEditor; migrates Python secrets to os.getenv with clean top-level import, excludes non-secret identifiers (PRIMARY_KEY, FOREIGN_KEY, etc.), masks env secrets; proposal-only | No |
 | `fix.security-headers` | Rewritten 2026-10-16 with SourceEditor; injects Flask/FastAPI security headers middleware with matching indentation; detects existing Talisman/SecureHeaders; proposal-only | No |
+| `fix.unclosed-resource` | Meets contract (hardened 2026-10-18 with AST escape analysis, return/yield/mutation abstention, and verified standard context manager scoping) | Yes |
 
 ## Remediation Policy & Containment
 
-- `plex remediate --apply` writes only **verified** patches from fixers marked `auto_apply = True` (currently `fix.sql-parameterize`, `fix.command-array`, `fix.path-boundary`, `fix.nosql-injection`, `fix.ssti`, `fix.xss`, `fix.open-redirect` and `fix.safe-deserialization`). Everything else is shown as a proposal for manual review.
+- `plex remediate --apply` writes only **verified** patches from fixers marked `auto_apply = True` (currently `fix.sql-parameterize`, `fix.command-array`, `fix.path-boundary`, `fix.nosql-injection`, `fix.ssti`, `fix.xss`, `fix.open-redirect`, `fix.safe-deserialization`, `fix.unclosed-resource`, and `fix.docker-user` for declared or standard base image users). Everything else is shown as a proposal for manual review.
 - A repair is `verified` only when every required check ran and passed: a real syntax check for the file type and the caller's behavioral test command (`--test-cmd`). A missing required check gives `inconclusive`, and every skipped check is listed in the verification record's `limitations`.
 - Diffs keep a missing final newline (previously the last line of such files was deleted on apply) and are refused if their context no longer matches the file.
 - Findings that produce the same whole-file patch share one candidate.
@@ -72,7 +73,7 @@ This audit checked every deterministic security/configuration fixer in `src/plex
 | `sensitive_log_redact` (fixed, proposal-only) | Previously treated `self.error()` and `dialog.warning()` as logging sinks due to loose name matching and misplaced helpers | Restrict to proven loggers (`logging`, `logger`, `log`), SourceEditor value-level redaction, proposal-only |
 | `weak_crypto` (fixed, proposal-only) | Previously used whole-call unparse losing argument formatting and comments | SourceEditor algorithm name replacement, proposal-only |
 | `insecure_cookie` (fixed, proposal-only) | Previously caused duplicate keyword TypeError when `**kwargs` present on `set_cookie` and lost comments | Abstain on `**kwargs`, SourceEditor targeted flag flipping and insertion, proposal-only |
-| `docker_user` (fixed, proposal-only) | Adds `USER nonroot` for a user that doesn't exist; before later root-only `RUN`; inside `RUN` continuations; ignores multi-stage | Continuation-line tracking (`\`), avoids splitting RUN commands; proposal-only |
+| `docker_user` (fixed) | Adds `USER nonroot` for a user that doesn't exist; before later root-only `RUN`; inside `RUN` continuations; ignores multi-stage | Continuation-line tracking (`\`), avoids splitting RUN commands; detects explicit `useradd`/`adduser` instructions and standard base images (`node`, `distroless`); auto-apply when user is declared or defined in base image, proposal-only fallback |
 | `docker_tag_pin` (fixed, proposal-only) | Invents tags (`python:3.12-slim`, `node:20-alpine`, `:stable`); rewrites stage names and `scratch`; touches digest-pinned lines | Skips stage names (`AS builder`), `scratch`, and existing digest pins (`@sha256:`); proposal-only |
 | `docker_sudo` (fixed, proposal-only) | Keeps full sudo grant and breaks later `sudo` steps; matches unrelated text | Restricts matching to active instructions (`RUN`, `COPY`, `ADD`) and skips comments; proposal-only |
 | `dependency_pin` (fixed, proposal-only) | Invents versions (`mylib==1.0.0`); `numpy<2` → `numpy==2`; `foo!=1.5` → `foo==1.5`; drops hashes/markers; `foo==None` | Excludes upper-bound and exclusion specifiers from pinning; proposal-only |
@@ -81,6 +82,7 @@ This audit checked every deterministic security/configuration fixer in `src/plex
 | `csrf` (fixed, proposal-only) | Whole-line deletions lost formatting; missed test file detection; loose exempt matching | SourceEditor exact line removals, WTF_CSRF_ENABLED value toggling, test file skipping; proposal-only |
 | `plaintext_secret` (fixed, proposal-only) | Misplaced `import os`; rewrote non-secret keys (PRIMARY_KEY); touched test files | SourceEditor `insert_top_level` for `import os`, non-secret identifier exclusion list, test file skipping; proposal-only |
 | `security_headers` (fixed, proposal-only) | Line splicing caused IndentationError in factory functions; missed existing middleware detection | SourceEditor insertion with matching block indentation; detects Talisman/SecureHeaders; proposal-only |
+| `unclosed_resource` (fixed) | Scoping tail statements inside `with` can alter close timing if resource escapes or constructor does not auto-close | Scoped to standard context managers (`open`, `io.open`, `tempfile.NamedTemporaryFile`); strict AST escape analysis abstains on return, yield, global/nonlocal, attribute/subscript storage, and collection mutations; auto-apply |
 
 ## Verification Runner Hardening
 

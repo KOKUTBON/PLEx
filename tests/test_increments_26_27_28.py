@@ -286,7 +286,7 @@ def test_unclosed_resource_fixer_proposes_and_verifies(tmp_path: Path) -> None:
     )
 
     fixer = UnclosedResourceFixer()
-    assert fixer.auto_apply is False
+    assert fixer.auto_apply is True
     candidate = fixer.propose_patch(
         source=vuln_code,
         target_file="loader.py",

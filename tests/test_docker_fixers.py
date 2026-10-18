@@ -253,9 +253,10 @@ def test_docker_tag_pin_skips_scratch_and_digest_and_stage_names() -> None:
     assert len(changes) == 0
 
 
-def test_docker_fixers_contract_proposal_only() -> None:
+def test_docker_fixers_contract() -> None:
     user_fixer = DockerUserFixer()
     tag_fixer = DockerTagPinFixer()
-    assert user_fixer.auto_apply is False
+    # DockerUserFixer auto-applies when a user is declared or in standard base image
+    assert user_fixer.auto_apply is True
     assert tag_fixer.auto_apply is False
 

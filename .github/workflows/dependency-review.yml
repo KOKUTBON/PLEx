@@ -24,5 +24,9 @@ jobs:
             GHSA-8988-9cw3-xx77,
             GHSA-vxq7-64xx-v4gw,
             GHSA-34jh-p97f-mpxf,
-            GHSA-pq67-6m6q-mj2v
+            GHSA-pq67-6m6q-mj2v,
+            GHSA-j8r2-6x86-q33q,
+            GHSA-9wx4-h78v-vm56,
+            GHSA-9hjg-9r4m-mvj7,
+            GHSA-gc5v-m9x4-r6x2
 

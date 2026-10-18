@@ -329,10 +329,11 @@ def test_async_blocking_call_fixer_proposes_and_verifies(tmp_path: Path) -> None
     assert any(f.rule_id == "rel.async-blocking-call" for f in findings_before)
 
     fixer = AsyncBlockingCallFixer()
-    assert fixer.auto_apply is False
+    assert fixer.auto_apply is True
     cand = fixer.propose_patch(vuln_src, "worker.py", finding_ids=(findings_before[0].id,))
     assert cand is not None
     assert cand.rule_id == "rel.async-blocking-call"
+    assert cand.metadata.get("auto_apply") is True
 
     patched = apply_unified_diff(vuln_src, cand.diff)
     assert "import asyncio" in patched

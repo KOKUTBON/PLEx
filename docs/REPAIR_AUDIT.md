@@ -19,12 +19,12 @@ This audit checked every deterministic security/configuration fixer in `src/plex
 | `fix.ssrf-validate` | Rewritten 2026-10-16 with SourceEditor; fixed private IP bypass bug; proposal-only: outbound network policy requires review | No |
 | `fix.debug-mode` | Rewritten 2026-10-16 with SourceEditor; test/dev files skipped; proposal-only | No |
 | `fix.tls-verify` | Rewritten 2026-10-16 with SourceEditor; restricted to HTTP client receivers; proposal-only | No |
-| `fix.insecure-index` | Rewritten 2026-10-16; supports '--index-url=' syntax and preserves comments; proposal-only | No |
+| `fix.insecure-index` | Meets contract (hardened 2026-10-18 with verified public PyPI domain detection) | Yes, for official PyPI domains |
 | `fix.mass-assignment` | Rewritten 2026-10-16 with SourceEditor; exact token/attribute taint matching avoids metadata false positives; multiple unpackings supported; proposal-only | No |
 | `fix.broken-tenant-isolation` | Rewritten 2026-10-16 with SourceEditor; query scoping preserves chained calls, formatting and comments; abstains when tenant context is undeclared to prevent NameError; proposal-only | No |
 | `fix.sensitive-log-redact` | Rewritten 2026-10-16 with SourceEditor; restricted to proven loggers (`logging`, `logger`, `log`), avoiding UI dialogs and arbitrary error methods; proposal-only | No |
 | `fix.weak-crypto` | Rewritten 2026-10-16 with SourceEditor; targeted algorithm name replacement (`hashlib.md5` -> `hashlib.sha256`) preserves arguments and comments; proposal-only | No |
-| `fix.insecure-cookie` | Rewritten 2026-10-16 with SourceEditor; flips existing keywords; abstains when `**kwargs` are present on `set_cookie` to prevent duplicate keyword TypeError; proposal-only | No |
+| `fix.insecure-cookie` | Meets contract (hardened 2026-10-18 with session token classification and HTTPS context detection) | Yes, for session/auth tokens under HTTPS or explicit `httponly=False` |
 | `fix.docker-user` | Meets contract (hardened 2026-10-18 with declared `useradd`/`adduser` detection and standard base image user detection) | Yes, for declared or standard base image users |
 | `fix.docker-tag-pin` | Rewritten 2026-10-16; skips stage names (`AS builder`), `scratch`, and existing digest pins (`@sha256:`); proposal-only | No |
 | `fix.docker-sudo` | Rewritten 2026-10-16; restricts matching to active instructions (`RUN`, `COPY`, `ADD`) and skips comments; proposal-only | No |
@@ -35,10 +35,12 @@ This audit checked every deterministic security/configuration fixer in `src/plex
 | `fix.plaintext-secret` | Rewritten 2026-10-16 with SourceEditor; migrates Python secrets to os.getenv with clean top-level import, excludes non-secret identifiers (PRIMARY_KEY, FOREIGN_KEY, etc.), masks env secrets; proposal-only | No |
 | `fix.security-headers` | Rewritten 2026-10-16 with SourceEditor; injects Flask/FastAPI security headers middleware with matching indentation; detects existing Talisman/SecureHeaders; proposal-only | No |
 | `fix.unclosed-resource` | Meets contract (hardened 2026-10-18 with AST escape analysis, return/yield/mutation abstention, and verified standard context manager scoping) | Yes |
+| `fix.async-blocking-call` | Meets contract (hardened 2026-10-18 for `time.sleep` in `async def`) | Yes, for `time.sleep` in `async def` |
+| `fix.unlocked-acquire` | Proposal-only: wrapping statements in `try...finally` alters lock release scope on early returns or nested exception handlers | No |
 
 ## Remediation Policy & Containment
 
-- `plex remediate --apply` writes only **verified** patches from fixers marked `auto_apply = True` (currently `fix.sql-parameterize`, `fix.command-array`, `fix.path-boundary`, `fix.nosql-injection`, `fix.ssti`, `fix.xss`, `fix.open-redirect`, `fix.safe-deserialization`, `fix.unclosed-resource`, and `fix.docker-user` for declared or standard base image users). Everything else is shown as a proposal for manual review.
+- `plex remediate --apply` writes only **verified** patches from fixers marked `auto_apply = True` (currently `fix.sql-parameterize`, `fix.command-array`, `fix.path-boundary`, `fix.nosql-injection`, `fix.ssti`, `fix.xss`, `fix.open-redirect`, `fix.safe-deserialization`, `fix.unclosed-resource`, `fix.docker-user` for declared or standard base image users, `fix.insecure-index` for official PyPI domains, `fix.insecure-cookie` for session/auth tokens under HTTPS or explicit `httponly=False`, and `fix.async-blocking-call` for `time.sleep` in `async def`). Everything else is shown as a proposal for manual review.
 - A repair is `verified` only when every required check ran and passed: a real syntax check for the file type and the caller's behavioral test command (`--test-cmd`). A missing required check gives `inconclusive`, and every skipped check is listed in the verification record's `limitations`.
 - Diffs keep a missing final newline (previously the last line of such files was deleted on apply) and are refused if their context no longer matches the file.
 - Findings that produce the same whole-file patch share one candidate.
@@ -67,12 +69,12 @@ This audit checked every deterministic security/configuration fixer in `src/plex
 | `xxe` (fixed, proposal-only) | Previously produced `defuseddefusedxml`, corrupted multi-line imports, and touched serialization-only files | SourceEditor exact module replacement; abstain on serialization-only; proposal-only as defusedxml is an external dependency |
 | `debug_mode` (fixed, proposal-only) | Previously used whole-call unparse losing comments/quotes and touched test files | SourceEditor value-only replacement; skip test/dev files; proposal-only |
 | `tls_verify` (fixed, proposal-only) | Previously used whole-call unparse and flipped verify=False on arbitrary non-network methods | Restrict to HTTP/TLS client calls; SourceEditor value-only replacement; proposal-only |
-| `insecure_index` (fixed, proposal-only) | Previously missed '--index-url=' form and modified comment lines | Support '=' separator; preserve comment URLs; proposal-only |
+| `insecure_index` (fixed) | Previously missed '--index-url=' form and modified comment lines | Support '=' separator; preserve comment URLs; verified auto-apply for official public PyPI domains (pypi.org, files.pythonhosted.org); proposal-only fallback for custom hosts |
 | `mass_assignment` (fixed, proposal-only) | Previously invented fixed field allowlist, matched substring taint (`metadata`), and broke on multiple unpackings | Exact AST token/attribute matching, SourceEditor expression replacement, proposal-only |
 | `tenant_boundary` (fixed, proposal-only) | Previously injected undeclared `current_user` causing NameError at runtime and dropped query method chaining comments | Scope query via SourceEditor, abstain when tenant context is undeclared, proposal-only |
 | `sensitive_log_redact` (fixed, proposal-only) | Previously treated `self.error()` and `dialog.warning()` as logging sinks due to loose name matching and misplaced helpers | Restrict to proven loggers (`logging`, `logger`, `log`), SourceEditor value-level redaction, proposal-only |
 | `weak_crypto` (fixed, proposal-only) | Previously used whole-call unparse losing argument formatting and comments | SourceEditor algorithm name replacement, proposal-only |
-| `insecure_cookie` (fixed, proposal-only) | Previously caused duplicate keyword TypeError when `**kwargs` present on `set_cookie` and lost comments | Abstain on `**kwargs`, SourceEditor targeted flag flipping and insertion, proposal-only |
+| `insecure_cookie` (fixed) | Previously caused duplicate keyword TypeError when `**kwargs` present on `set_cookie` and lost comments | Abstain on `**kwargs`; SourceEditor targeted flag flipping and insertion; verified auto-apply for session/auth tokens under HTTPS or explicit `httponly=False`; proposal-only fallback for CSRF cookies and dynamic keys |
 | `docker_user` (fixed) | Adds `USER nonroot` for a user that doesn't exist; before later root-only `RUN`; inside `RUN` continuations; ignores multi-stage | Continuation-line tracking (`\`), avoids splitting RUN commands; detects explicit `useradd`/`adduser` instructions and standard base images (`node`, `distroless`); auto-apply when user is declared or defined in base image, proposal-only fallback |
 | `docker_tag_pin` (fixed, proposal-only) | Invents tags (`python:3.12-slim`, `node:20-alpine`, `:stable`); rewrites stage names and `scratch`; touches digest-pinned lines | Skips stage names (`AS builder`), `scratch`, and existing digest pins (`@sha256:`); proposal-only |
 | `docker_sudo` (fixed, proposal-only) | Keeps full sudo grant and breaks later `sudo` steps; matches unrelated text | Restricts matching to active instructions (`RUN`, `COPY`, `ADD`) and skips comments; proposal-only |
@@ -83,6 +85,8 @@ This audit checked every deterministic security/configuration fixer in `src/plex
 | `plaintext_secret` (fixed, proposal-only) | Misplaced `import os`; rewrote non-secret keys (PRIMARY_KEY); touched test files | SourceEditor `insert_top_level` for `import os`, non-secret identifier exclusion list, test file skipping; proposal-only |
 | `security_headers` (fixed, proposal-only) | Line splicing caused IndentationError in factory functions; missed existing middleware detection | SourceEditor insertion with matching block indentation; detects Talisman/SecureHeaders; proposal-only |
 | `unclosed_resource` (fixed) | Scoping tail statements inside `with` can alter close timing if resource escapes or constructor does not auto-close | Scoped to standard context managers (`open`, `io.open`, `tempfile.NamedTemporaryFile`); strict AST escape analysis abstains on return, yield, global/nonlocal, attribute/subscript storage, and collection mutations; auto-apply |
+| `async_blocking_call` (fixed) | Blocking calls freeze the entire event loop thread; introducing thread dispatch alters execution semantics | Auto-applies `time.sleep` -> `await asyncio.sleep` in `async def` with safe `import asyncio` insertion; proposal-only fallback for thread-dispatch calls (`requests.get`, `subprocess.run`) |
+| `unlocked_acquire` (fixed, proposal-only) | Unguarded `acquire()` calls risk deadlock if an exception occurs before `release()` | AST `try...finally` guarding with line re-indentation; proposal-only as wrapping altered statements can affect early return and nested exception scopes |
 
 ## Verification Runner Hardening
 

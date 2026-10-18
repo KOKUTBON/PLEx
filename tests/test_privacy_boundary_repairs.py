@@ -108,9 +108,12 @@ def test_insecure_cookie_fixer_preserves_comments_and_formatting() -> None:
     assert tree is not None
 
 
-def test_insecure_cookie_fixer_contract_proposal_only() -> None:
+def test_insecure_cookie_fixer_contract_auto_apply() -> None:
     fixer = InsecureCookieFixer()
-    assert fixer.auto_apply is False
+    assert fixer.auto_apply is True
+    cand = fixer.propose_patch("def s(res, k): res.set_cookie(k, '1')", "v.py")
+    assert cand is not None
+    assert cand.metadata.get("auto_apply") is False
 
 
 # ==============================================================================

@@ -16,18 +16,84 @@ COOKIE_CALLS = frozenset({
     "set_signed_cookie",
 })
 
+SESSION_COOKIE_NAMES = frozenset({
+    "session",
+    "sessionid",
+    "session_id",
+    "sess",
+    "auth",
+    "auth_token",
+    "authtoken",
+    "jwt",
+    "token",
+    "access_token",
+    "id_token",
+    "refresh_token",
+    "user_session",
+    "connect.sid",
+    "sid",
+    "logged_in",
+})
+
+CSRF_COOKIE_NAMES = frozenset({
+    "csrf",
+    "csrftoken",
+    "csrf_token",
+    "xsrf",
+    "xsrf_token",
+    "xsrf-token",
+    "_csrf",
+    "csrf-token",
+})
+
+
+def _extract_cookie_name(node: ast.Call) -> str | None:
+    """Extract string cookie key if statically declared."""
+    if node.args and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str):
+        return node.args[0].value.lower()
+    for kw in node.keywords:
+        if kw.arg == "key" and isinstance(kw.value, ast.Constant) and isinstance(kw.value.value, str):
+            return kw.value.value.lower()
+    return None
+
+
+def _has_https_context(tree: ast.Module, call_node: ast.Call) -> bool:
+    """Check if the module or enclosing function enforces HTTPS/SSL."""
+    for stmt in ast.walk(tree):
+        if isinstance(stmt, ast.Assign):
+            for t in stmt.targets:
+                if isinstance(t, ast.Name) and t.id in (
+                    "SESSION_COOKIE_SECURE",
+                    "CSRF_COOKIE_SECURE",
+                    "SECURE_SSL_REDIRECT",
+                ):
+                    if isinstance(stmt.value, ast.Constant) and bool(stmt.value.value):
+                        return True
+        elif isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            for dec in stmt.decorator_list:
+                dec_name = ""
+                if isinstance(dec, ast.Name):
+                    dec_name = dec.id
+                elif isinstance(dec, ast.Attribute):
+                    dec_name = dec.attr
+                if any(k in dec_name.lower() for k in ("https", "ssl", "secure")):
+                    if any(c is call_node for c in ast.walk(stmt)):
+                        return True
+    return False
+
 
 class InsecureCookieFixer(BaseFixer):
     """AST fixer that hardens cookie calls with HttpOnly, Secure, and SameSite flags.
 
-    This fixer is proposal-only (``auto_apply = False``) because forcing secure=True
-    breaks local development over plaintext HTTP without HTTPS reverse proxies, and SameSite
-    policies require reviewing cross-origin authentication flows.
+    Auto-applies when cookie names represent verified authentication or session tokens
+    under HTTPS/SSL contexts, or when explicit `httponly=False` is hardened. Safely
+    falls back to proposal-only for CSRF cookies (which may be read by client-side JS),
+    dynamic cookie names, or unverified transport environments.
     """
 
     rule_id = "xbnd.insecure-cookie"
     name = "insecure_cookie"
-    auto_apply = False
+    auto_apply = True
 
     def fix(self, source: str, file_path: str = "") -> tuple[str, list[FixChange]]:
         try:
@@ -169,7 +235,76 @@ class InsecureCookieFixer(BaseFixer):
 
         source_digest = f"sha256:{hashlib.sha256(source.encode('utf-8')).hexdigest()}"
 
-        meta = {"auto_apply": False, "reason": "Cookie security flags require HTTPS and cross-origin review"}
+        try:
+            tree = ast.parse(source)
+        except SyntaxError:
+            tree = None
+
+        all_auto_applicable = True
+        reason = "Cookie security flags require HTTPS and cross-origin review"
+
+        if tree is not None:
+            cookie_calls_found = 0
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call):
+                    continue
+                call_name = ""
+                if isinstance(node.func, ast.Attribute):
+                    call_name = node.func.attr
+                elif isinstance(node.func, ast.Name):
+                    call_name = node.func.id
+                if call_name not in COOKIE_CALLS:
+                    continue
+
+                cookie_calls_found += 1
+                c_name = _extract_cookie_name(node)
+                if not c_name:
+                    all_auto_applicable = False
+                    reason = "Dynamic cookie key requires manual review"
+                    break
+
+                if any(csrf in c_name for csrf in CSRF_COOKIE_NAMES):
+                    all_auto_applicable = False
+                    reason = (
+                        "CSRF cookies may be read by client scripts in single-page apps; manual review required"
+                    )
+                    break
+
+                is_session = any(s in c_name for s in SESSION_COOKIE_NAMES)
+                httponly_kw = next((kw for kw in node.keywords if kw.arg in ("httponly", "http_only")), None)
+                secure_kw = next((kw for kw in node.keywords if kw.arg == "secure"), None)
+                explicit_httponly_false = bool(
+                    httponly_kw
+                    and isinstance(httponly_kw.value, ast.Constant)
+                    and not bool(httponly_kw.value.value)
+                )
+                explicit_secure_false = bool(
+                    secure_kw
+                    and isinstance(secure_kw.value, ast.Constant)
+                    and not bool(secure_kw.value.value)
+                )
+                has_https = _has_https_context(tree, node)
+
+                if not (is_session or explicit_httponly_false):
+                    all_auto_applicable = False
+                    reason = f"Generic cookie '{c_name}' requires manual review for HttpOnly suitability"
+                    break
+
+                # For secure=True, require either an active HTTPS context, an explicit secure=False being flipped,
+                # or secure=True already being present.
+                if not (has_https or explicit_secure_false or (secure_kw is not None and getattr(secure_kw.value, "value", None) is True)):
+                    all_auto_applicable = False
+                    reason = "Setting secure=True on cookie without proven HTTPS/SSL deployment requires review"
+                    break
+
+            if cookie_calls_found == 0:
+                all_auto_applicable = False
+        else:
+            all_auto_applicable = False
+
+        meta: dict[str, Any] = {"auto_apply": all_auto_applicable}
+        if not all_auto_applicable:
+            meta["reason"] = reason
         if metadata:
             meta.update(metadata)
 
@@ -182,9 +317,9 @@ class InsecureCookieFixer(BaseFixer):
             diff=diff,
             description="Harden cookie with httponly=True, secure=True, and samesite='lax' flags",
             generator="plex.repair.insecure_cookie",
-            generator_version="1.0.0",
-            confidence="inferred",
-            risk="medium",
+            generator_version="2.0.0",
+            confidence="derived" if all_auto_applicable else "inferred",
+            risk="medium" if all_auto_applicable else "high",
             rollback_diff=rollback_diff,
             metadata=meta,
         )

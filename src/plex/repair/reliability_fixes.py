@@ -87,7 +87,7 @@ class AsyncBlockingCallFixer(BaseFixer):
 
     rule_id = "rel.async-blocking-call"
     name = "fix.async-blocking-call"
-    auto_apply = False
+    auto_apply = True
 
     def fix(self, source: str, file_path: str = "") -> tuple[str, list[FixChange]]:
         try:
@@ -212,6 +212,18 @@ class AsyncBlockingCallFixer(BaseFixer):
         )
         source_digest = f"sha256:{hashlib.sha256(source.encode('utf-8')).hexdigest()}"
 
+        is_all_sleep = all(
+            "time.sleep" in c.before or "await asyncio.sleep" in c.after
+            for c in changes
+        )
+        meta: dict[str, Any] = {"auto_apply": is_all_sleep}
+        if not is_all_sleep:
+            meta["reason"] = (
+                "Dispatching blocking I/O calls to asyncio.to_thread requires thread pool review"
+            )
+        if metadata:
+            meta.update(metadata)
+
         return PatchCandidate.create(
             finding_ids=finding_ids,
             rule_id=self.rule_id,
@@ -226,10 +238,10 @@ class AsyncBlockingCallFixer(BaseFixer):
             ),
             generator="plex.repair.reliability_fixes.AsyncBlockingCallFixer",
             generator_version="2.0.0",
-            confidence="derived",
-            risk="low",
+            confidence="derived" if is_all_sleep else "inferred",
+            risk="low" if is_all_sleep else "medium",
             rollback_diff=rollback_diff,
-            metadata=metadata or {"auto_apply": False},
+            metadata=meta,
         )
 
 

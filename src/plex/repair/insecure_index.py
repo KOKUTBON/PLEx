@@ -20,12 +20,36 @@ PLAIN_HTTP_PYPI_PATTERN = re.compile(
 )
 
 
+PUBLIC_PYPI_DOMAINS = frozenset({
+    "pypi.org",
+    "pypi.python.org",
+    "files.pythonhosted.org",
+    "pythonhosted.org",
+})
+
+URL_DOMAIN_PATTERN = re.compile(r"https?://([a-zA-Z0-9_\-\.]+)", re.IGNORECASE)
+
+
+def _is_public_pypi_domain(domain: str) -> bool:
+    dom_lower = domain.lower()
+    return (
+        dom_lower in PUBLIC_PYPI_DOMAINS
+        or dom_lower.endswith(".pypi.org")
+        or dom_lower.endswith(".pythonhosted.org")
+    )
+
+
 class InsecureIndexFixer(BaseFixer):
-    """Supply chain fixer that upgrades insecure HTTP package index URLs to secure HTTPS (CWE-319, CWE-494)."""
+    """Supply chain fixer that upgrades insecure HTTP package index URLs to secure HTTPS (CWE-319, CWE-494).
+
+    Auto-applies when package index URLs target official public PyPI domains (pypi.org,
+    files.pythonhosted.org) which strictly require and enforce HTTPS. Retains proposal-only
+    status for custom or private repository hosts to ensure HTTPS is available.
+    """
 
     rule_id = "dep.insecure-index"
     name = "insecure_index"
-    auto_apply = False
+    auto_apply = True
 
     def fix(self, source: str, file_path: str = "") -> tuple[str, list[FixChange]]:
         lines = source.splitlines(keepends=True)
@@ -109,6 +133,25 @@ class InsecureIndexFixer(BaseFixer):
 
         source_digest = f"sha256:{hashlib.sha256(source.encode('utf-8')).hexdigest()}"
 
+        # Extract domains from all modified lines to ensure they are verified public PyPI domains
+        all_public = True
+        for change in changes:
+            domains = URL_DOMAIN_PATTERN.findall(change.before)
+            for d in domains:
+                if not _is_public_pypi_domain(d):
+                    all_public = False
+                    break
+            if not all_public:
+                break
+
+        meta: dict[str, Any] = {"auto_apply": all_public}
+        if not all_public:
+            meta["reason"] = (
+                "Custom package index host requires verifying HTTPS availability"
+            )
+        if metadata:
+            meta.update(metadata)
+
         return PatchCandidate.create(
             finding_ids=finding_ids,
             rule_id=self.rule_id,
@@ -119,8 +162,8 @@ class InsecureIndexFixer(BaseFixer):
             description="Upgrade insecure HTTP package index URL to secure HTTPS",
             generator="plex.repair.insecure_index",
             generator_version="2.0.0",
-            confidence="derived",
+            confidence="derived" if all_public else "inferred",
             risk="low",
             rollback_diff=rollback_diff,
-            metadata=metadata or {},
+            metadata=meta,
         )

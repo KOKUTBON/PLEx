@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from plex import __version__
+
 from .models import CoverageInventory, SurfaceCoverage
 
 DECLARED_SURFACES: list[SurfaceCoverage] = [
@@ -238,9 +240,9 @@ DECLARED_SURFACES: list[SurfaceCoverage] = [
 ]
 
 
-def get_declared_coverage(version: str = "2.0.0-dev") -> CoverageInventory:
+def get_declared_coverage(version: str | None = None) -> CoverageInventory:
     """Return the official declared coverage inventory."""
-    return CoverageInventory(version=version, surfaces=tuple(DECLARED_SURFACES))
+    return CoverageInventory(version=version or __version__, surfaces=tuple(DECLARED_SURFACES))
 
 
 def _rules_summary(rules: tuple[str, ...]) -> str:

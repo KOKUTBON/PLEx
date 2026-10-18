@@ -56,12 +56,12 @@ former_names = (
     "thinking_in_code",
     "examen",
 )
-former_urls = ["github.com/reiidoda/" + name for name in former_names]
+former_patterns = tuple("github.com/reiidoda/" + name for name in former_names) + ("reiidoda.github.io/",)
 tracked = subprocess.check_output(["git", "ls-files"], cwd=root, text=True).splitlines()
 for name in tracked:
     if name.endswith((".md", ".toml", ".yml", ".yaml")) and "CHANGELOG" not in name.upper():
-        content = (root / name).read_text(errors="replace")
-        if any(url in content for url in former_urls) or "reiidoda.github.io/" in content:
+        file_text = (root / name).read_text(errors="replace")
+        if any(pat in file_text for pat in former_patterns):
             errors.append(f"Outdated repository URL: {name}")
 # Each configured ecosystem has one explicit initial-distribution PR limit.
 config = (root / ".github/dependabot.yml").read_text()

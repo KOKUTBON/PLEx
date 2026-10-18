@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import re
 from typing import Any
+from urllib.parse import urlsplit
 
 from plex.report.unified import AnalysisFinding, EvidenceRef
 
@@ -136,10 +137,21 @@ def evaluate_binary_rules(
             )
 
     # Rule 3: Dangerous permission exfiltration (CWE-276 / CWE-200)
-    has_outbound_strings = any(
-        URL_REGEX.search(s) and not s.startswith("http://schemas.android.com")
-        for s in extracted_strings
-    )
+    def _is_standard_xml_namespace(target_url: str) -> bool:
+        try:
+            parsed = urlsplit(target_url)
+            host = (parsed.hostname or "").lower()
+            return host in {"schemas.android.com", "w3.org", "www.w3.org"} or host.endswith(".w3.org")
+        except Exception:
+            return False
+
+    def _is_outbound_url_string(raw: str) -> bool:
+        m = URL_REGEX.search(raw)
+        if not m:
+            return False
+        return not _is_standard_xml_namespace(m.group(0))
+
+    has_outbound_strings = any(_is_outbound_url_string(s) for s in extracted_strings)
     for perm in sorted(set(manifest_permissions)):
         if perm in DANGEROUS_PERMISSIONS and has_outbound_strings:
             fid = _hash_id("rea.dangerous-permission-exfil", artifact_path, perm)
@@ -173,16 +185,18 @@ def evaluate_binary_rules(
         match = URL_REGEX.search(s)
         if match:
             url = match.group(0)
-            if url.startswith("http://") and not ("schemas.android.com" in url or "w3.org" in url):
-                if url not in seen_urls:
-                    seen_urls.add(url)
-                    fid = _hash_id("rea.insecure-transport", artifact_path, url)
-                    findings.append(
-                        AnalysisFinding(
-                            id=f"rea.bin.{fid}",
-                            engine="rea",
-                            category="binary",
-                            rule_id="rea.insecure-transport",
+            try:
+                parsed_url = urlsplit(url)
+                if parsed_url.scheme == "http" and not _is_standard_xml_namespace(url):
+                    if url not in seen_urls:
+                        seen_urls.add(url)
+                        fid = _hash_id("rea.insecure-transport", artifact_path, url)
+                        findings.append(
+                            AnalysisFinding(
+                                id=f"rea.bin.{fid}",
+                                engine="rea",
+                                category="binary",
+                                rule_id="rea.insecure-transport",
                             severity="medium",
                             title=f"Cleartext HTTP endpoint detected: {url}",
                             status="verified",
@@ -195,6 +209,8 @@ def evaluate_binary_rules(
                             engine_meta={"url": url},
                         )
                     )
+            except Exception:
+                pass
 
     # Rule 5: Hardcoded credentials or private keys (CWE-798)
     seen_secrets: set[str] = set()

@@ -82,7 +82,8 @@ def test_ssti_rule_ignores_safe_render_template(tmp_path: Path) -> None:
     assert len(findings) == 0
 
 
-def test_ssti_rule_ignores_escaped_interpolation(tmp_path: Path) -> None:
+def test_ssti_rule_reports_escaped_interpolation(tmp_path: Path) -> None:
+    # escape() leaves "{{" intact, so the escaped value is still compiled as template code.
     repo = tmp_path / "app"
     repo.mkdir()
     (repo / "views.py").write_text(
@@ -96,11 +97,12 @@ def test_ssti_rule_ignores_escaped_interpolation(tmp_path: Path) -> None:
 
     outcome = run_providers(AnalysisTask(repo_root=repo), [XBoundaryProvider()])
     findings = [f for f in outcome.findings if f.rule_id == "xbnd.ssti"]
-    assert len(findings) == 0
+    assert len(findings) == 1
 
 
 def test_ssti_fixer_parameterizes_fstring() -> None:
     src = (
+        "from flask import render_template_string\n\n"
         "def view(request):\n"
         "    name = request.args.get('name')\n"
         "    return render_template_string(f'Welcome {name} to PLEx!')\n"
@@ -108,7 +110,7 @@ def test_ssti_fixer_parameterizes_fstring() -> None:
     fixer = SSTIFixer()
     fixed, changes = fixer.fix(src, "views.py")
 
-    assert "Welcome {{ name }} to PLEx!" in fixed
+    assert "Welcome {{ name|safe }} to PLEx!" in fixed
     assert "name=name" in fixed
     assert len(changes) == 1
     assert changes[0].rule_id == "xbnd.ssti"
@@ -117,6 +119,7 @@ def test_ssti_fixer_parameterizes_fstring() -> None:
 
 def test_ssti_fixer_parameterizes_concatenation() -> None:
     src = (
+        "from flask import render_template_string\n\n"
         "def view(request):\n"
         "    name = request.args['name']\n"
         "    return render_template_string('Welcome ' + name)\n"
@@ -124,7 +127,7 @@ def test_ssti_fixer_parameterizes_concatenation() -> None:
     fixer = SSTIFixer()
     fixed, changes = fixer.fix(src, "views.py")
 
-    assert "Welcome {{ name }}" in fixed
+    assert "Welcome {{ name|safe }}" in fixed
     assert "name=name" in fixed
     assert len(changes) == 1
     assert changes[0].rule_id == "xbnd.ssti"
@@ -133,6 +136,7 @@ def test_ssti_fixer_parameterizes_concatenation() -> None:
 
 def test_ssti_fixer_propose_patch() -> None:
     src = (
+        "from flask import render_template_string\n\n"
         "def view(request):\n"
         "    name = request.args.get('name')\n"
         "    return render_template_string(f'Hello {name}')\n"
@@ -144,7 +148,7 @@ def test_ssti_fixer_propose_patch() -> None:
     assert patch.rule_id == "xbnd.ssti"
     assert patch.engine == "xboundary"
     assert patch.generator == "plex.repair.ssti"
-    assert "Hello {{ name }}" in patch.diff
+    assert "Hello {{ name|safe }}" in patch.diff
     assert "name=name" in patch.diff
     assert patch.rollback_diff != ""
 

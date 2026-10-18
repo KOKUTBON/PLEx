@@ -365,5 +365,72 @@ def evaluate_artifact_rules(
                 )
             )
 
+    # Rule 10: Packed or encrypted executable code section (high entropy) (CWE-506 / CWE-693)
+    for sec in descriptor.sections:
+        is_exec = (
+            "X" in sec.flags
+            or sec.name in (".text", "CODE", "__text", "__TEXT.__text")
+            or (sec.flags.startswith("0x") and bool(int(sec.flags, 16) & 0x20000000))
+        )
+        if is_exec and sec.entropy >= 7.2 and sec.size >= 512:
+            fid = _finding_id("bin.packing.high-entropy", path, sec.name)
+            findings.append(
+                AnalysisFinding(
+                    id=f"bin.{fid}",
+                    engine="inspect",
+                    category="binary",
+                    rule_id="bin.packing.high-entropy",
+                    severity="medium",
+                    title=f"High entropy executable section '{sec.name}' indicates packed or encrypted code",
+                    status="verified",
+                    confidence="observed",
+                    file=path,
+                    cwe=["CWE-506", "CWE-693"],
+                    message=(
+                        f"Executable section '{sec.name}' has unusually high Shannon entropy "
+                        f"({sec.entropy:.2f} / 8.00, size {sec.size} bytes). "
+                        "High code entropy typically indicates software packing, runtime decompression, or crypter obfuscation."
+                    ),
+                    remediation=["Inspect binary for third-party packers, UPX compression, or unwanted code obfuscation."],
+                    evidence=[evidence_ref],
+                    engine_meta={"section": sec.name, "entropy": sec.entropy, "size": sec.size, "md5": sec.md5},
+                )
+            )
+
+    # Rule 11: Internal build environment or debug path exposed in binary (CWE-200 / CWE-532)
+    exposed_paths: list[str] = []
+    if descriptor.metadata.get("pdb_path"):
+        pdb = descriptor.metadata["pdb_path"]
+        if any(marker in pdb for marker in ("\\Users\\", "\\home\\", "/Users/", "/home/", "\\build\\", "/build/")):
+            exposed_paths.append(pdb)
+    if descriptor.metadata.get("compilation_directory"):
+        cdir = descriptor.metadata["compilation_directory"]
+        if any(marker in cdir for marker in ("/Users/", "/home/", "\\Users\\", "\\home\\")):
+            exposed_paths.append(cdir)
+
+    for p in exposed_paths:
+        fid = _finding_id("bin.debug.exposed-path", path, p)
+        findings.append(
+            AnalysisFinding(
+                id=f"bin.{fid}",
+                engine="inspect",
+                category="binary",
+                rule_id="bin.debug.exposed-path",
+                severity="low",
+                title=f"Internal development path exposed in binary debug metadata: '{p}'",
+                status="verified",
+                confidence="observed",
+                file=path,
+                cwe=["CWE-200", "CWE-532"],
+                message=(
+                    f"Binary debug metadata contains internal filesystem path: '{p}'. "
+                    "This leaks internal directory layouts, developer usernames, or build server environments."
+                ),
+                remediation=["Strip debug paths using linker flags, -fdebug-prefix-map, or /PDBALTPATH during release builds."],
+                evidence=[evidence_ref],
+                engine_meta={"exposed_path": p},
+            )
+        )
+
     return findings
 

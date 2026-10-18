@@ -27,6 +27,7 @@ from .disasm import (
     get_disassembly_backend,
     reconstruct_functions,
 )
+from .dwarf import parse_dwarf
 from .elf import parse_elf
 from .engine import InspectEngine
 from .intake import ArtifactIntakeError, intake_artifact
@@ -42,8 +43,9 @@ from .models import (
     ReconstructedCall,
     ReconstructedFunction,
     RelroMode,
+    compute_section_metrics,
 )
-from .pe import parse_pe
+from .pe import compute_imphash, parse_pe, parse_rich_header
 from .rebuild import (
     ArtifactDiffReport,
     diff_artifacts,
@@ -92,6 +94,8 @@ __all__ = [
     "cmd_inspect",
     "compare_artifact_functions",
     "compute_function_similarity",
+    "compute_imphash",
+    "compute_section_metrics",
     "decompile_artifact",
     "decompile_function",
     "detect_capabilities",
@@ -104,9 +108,11 @@ __all__ = [
     "intake_artifact",
     "parse_archive",
     "parse_artifact_descriptor",
+    "parse_dwarf",
     "parse_elf",
     "parse_macho",
     "parse_pe",
+    "parse_rich_header",
     "parse_trace_output",
     "rebuild_and_compare",
     "reconstruct_functions",

@@ -8,6 +8,7 @@ import logging
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 from plex.evidence import EvidenceArtifact, EvidenceStore
 from plex.report.models import SCHEMA_VERSION, PLExReport
@@ -137,7 +138,7 @@ class InspectEngine:
         # 5. Optional source and debug mapping
         if source_root and source_root.exists():
             mapper = SourceDebugMapper(source_root)
-            all_findings = mapper.map_findings(all_findings)
+            all_findings = mapper.map_findings(all_findings, descriptor=descriptor)
         status: ScanStatus = "complete" if not limitations else "partial"
 
         run = EngineRun(
@@ -151,7 +152,7 @@ class InspectEngine:
         return self._build_report(resolved, all_findings, [run], status)
 
     def _create_evidence_ref(self, descriptor: ArtifactDescriptor) -> EvidenceRef:
-        fact_dict = {
+        fact_dict: dict[str, Any] = {
             "format": descriptor.format,
             "architecture": descriptor.architecture,
             "endianness": descriptor.endianness,
@@ -171,6 +172,14 @@ class InspectEngine:
             },
         }
 
+        if "imphash" in descriptor.metadata:
+            fact_dict["imphash"] = descriptor.metadata["imphash"]
+        if "rich_header" in descriptor.metadata and descriptor.metadata["rich_header"]:
+            fact_dict["rich_header_hash"] = descriptor.metadata["rich_header"].get("hash")
+        if "pdb_path" in descriptor.metadata:
+            fact_dict["pdb_path"] = descriptor.metadata["pdb_path"]
+        if "dwarf" in descriptor.metadata and descriptor.metadata["dwarf"]:
+            fact_dict["dwarf_producer"] = descriptor.metadata["dwarf"].get("producer")
 
         if self.evidence_store:
             art = EvidenceArtifact.create(

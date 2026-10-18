@@ -166,8 +166,12 @@ DECLARED_SURFACES: list[SurfaceCoverage] = [
             "bin.capability.persistence",
             "bin.capability.dynamic-execution",
             "bin.capability.command-execution",
+            "bin.capability.imphash",
+            "bin.capability.compiler-fingerprint",
+            "bin.packing.high-entropy",
+            "bin.debug.exposed-path",
         ),
-        verification_level="Pure-Python 32/64-bit ELF, Mach-O, PE, and archive (ZIP, JAR, APK, Wheel) parsers; replaceable disassembly (pure-Python/Capstone/Objdump), pluggable decompiler backends (native lifter/Rizin/Ghidra), rebuild diffing, opt-in sandboxed runtime tracing, capability hypotheses, and source/DWARF mapping",
+        verification_level="Pure-Python 32/64-bit ELF, Mach-O, PE, and archive (ZIP, JAR, APK, Wheel) parsers; PE imphash, MSVC Rich header parsing, section entropy and cryptographic hashing, native ELF DWARF compilation unit recovery, replaceable disassembly (pure-Python/Capstone/Objdump), pluggable decompiler backends (native lifter/Rizin/Ghidra), rebuild diffing, opt-in sandboxed runtime tracing, capability hypotheses, and source/DWARF mapping",
         prerequisites=("Valid ELF, Mach-O, PE, or archive (ZIP/JAR/APK/Wheel) artifact",),
         limitations=(
             "Native pseudo-C lifter is heuristic; full AST decompilation requires optional Rizin/Cutter or Ghidra headless backends",

@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import re
 import struct
+from typing import Any
 
+from .dwarf import parse_dwarf
 from .models import (
     Architecture,
     ArtifactDescriptor,
@@ -12,6 +14,7 @@ from .models import (
     Endianness,
     HardeningProperties,
     RelroMode,
+    compute_section_metrics,
 )
 
 # ELF Header constants
@@ -183,6 +186,8 @@ def parse_elf(data: bytes, artifact_path: str, sha256: str) -> ArtifactDescripto
             else shstrtab[idx:].decode("ascii", errors="replace")
         )
 
+    dwarf_sections: dict[str, bytes] = {}
+
     # Second pass: read sections
     for i in range(e_shnum):
         sh_offset = e_shoff + i * e_shentsize
@@ -207,6 +212,8 @@ def parse_elf(data: bytes, artifact_path: str, sha256: str) -> ArtifactDescripto
         if s_flags & 4:
             flag_str += "X"
 
+        entropy, sec_md5, sec_sha256 = compute_section_metrics(data, s_off, s_size)
+
         sections.append(
             BinarySection(
                 name=sec_name,
@@ -215,8 +222,15 @@ def parse_elf(data: bytes, artifact_path: str, sha256: str) -> ArtifactDescripto
                 virtual_address=s_addr,
                 offset=s_off,
                 size=s_size,
+                entropy=entropy,
+                md5=sec_md5,
+                sha256=sec_sha256,
             )
         )
+
+        if sec_name in (".debug_info", ".debug_str", ".debug_line"):
+            if s_off + s_size <= len(data):
+                dwarf_sections[sec_name] = data[s_off : s_off + s_size]
 
         if s_type == 2:  # SHT_SYMTAB
             symtab_offset = s_off
@@ -378,6 +392,30 @@ def parse_elf(data: bytes, artifact_path: str, sha256: str) -> ArtifactDescripto
                 for match in STRING_REGEX.finditer(sec_bytes):
                     extracted_strings.append(match.group(0).decode("ascii", errors="replace"))
 
+    # Extract DWARF debug metadata if debug sections present
+    dwarf_meta: dict[str, Any] = {}
+    if (
+        ".debug_info" in dwarf_sections
+        or ".debug_str" in dwarf_sections
+        or ".debug_line" in dwarf_sections
+    ):
+        dwarf_meta = parse_dwarf(
+            debug_info=dwarf_sections.get(".debug_info", b""),
+            debug_str=dwarf_sections.get(".debug_str", b""),
+            debug_line=dwarf_sections.get(".debug_line"),
+            endian=order,
+        )
+
+    metadata: dict[str, Any] = {
+        "has_interpreter": has_pt_interp,
+        "is_pie": pie,
+        "dwarf": dwarf_meta,
+        "compiler_producer": dwarf_meta.get("producer"),
+        "compilation_directory": dwarf_meta.get("comp_dir"),
+        "source_files": dwarf_meta.get("source_files", []),
+        "include_dirs": dwarf_meta.get("include_dirs", []),
+    }
+
     return ArtifactDescriptor(
         path=artifact_path,
         sha256=sha256,
@@ -393,5 +431,5 @@ def parse_elf(data: bytes, artifact_path: str, sha256: str) -> ArtifactDescripto
         extracted_strings=tuple(extracted_strings[:1000]),
         hardening=hardening,
         is_stripped=is_stripped,
-        metadata={"has_interpreter": has_pt_interp, "is_pie": pie},
+        metadata=metadata,
     )

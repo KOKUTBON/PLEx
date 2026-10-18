@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
 import struct
 from typing import Any
@@ -12,6 +13,7 @@ from .models import (
     BinarySection,
     HardeningProperties,
     RelroMode,
+    compute_section_metrics,
 )
 
 # Header magic constants
@@ -115,6 +117,103 @@ def rva_to_file_offset(
                 return raw_ptr + delta
             return None
     return None
+
+
+def compute_imphash(imports: list[tuple[str, str | int]]) -> str | None:
+    """Compute the industry-standard PE Import Hash (imphash).
+
+    `imports` is an ordered list of (dll_name, symbol_or_ordinal).
+    Matches the standard defined by Mandiant and implemented in pefile.
+    """
+    if not imports:
+        return None
+
+    parts: list[str] = []
+    for dll, sym in imports:
+        dll_lower = dll.lower()
+        for ext in (".dll", ".sys", ".ocx"):
+            if dll_lower.endswith(ext):
+                dll_lower = dll_lower[: -len(ext)]
+                break
+
+        if isinstance(sym, int):
+            parts.append(f"{dll_lower}.ord{sym}")
+        elif isinstance(sym, str):
+            sym_clean = sym.strip()
+            if sym_clean.lower().startswith("ordinal#"):
+                ord_num = sym_clean.split("#", 1)[1]
+                parts.append(f"{dll_lower}.ord{ord_num}")
+            else:
+                parts.append(f"{dll_lower}.{sym_clean.lower()}")
+
+    if not parts:
+        return None
+    raw_str = ",".join(parts)
+    return hashlib.md5(raw_str.encode("ascii", errors="replace")).hexdigest()
+
+
+def parse_rich_header(data: bytes, e_lfanew: int) -> dict[str, Any] | None:
+    """Parse the MSVC Rich header from the DOS stub if present.
+
+    Returns decrypted tool records, XOR key, and rich header hash.
+    """
+    if e_lfanew < 0x40 or e_lfanew > len(data):
+        return None
+
+    dos_stub = data[0x40:e_lfanew]
+    rich_pos_in_stub = dos_stub.find(b"Rich")
+    if rich_pos_in_stub == -1:
+        return None
+
+    rich_pos = 0x40 + rich_pos_in_stub
+    if rich_pos + 8 > e_lfanew:
+        return None
+
+    xor_key = struct.unpack_from("<I", data, rich_pos + 4)[0]
+
+    dans_magic = 0x536E6144 ^ xor_key  # "DanS" in little-endian XORed with key
+    dans_pos = -1
+    for p in range(rich_pos - 4, 0x3C, -4):
+        val = struct.unpack_from("<I", data, p)[0]
+        if val == dans_magic:
+            dans_pos = p
+            break
+
+    if dans_pos == -1 or dans_pos + 16 > rich_pos:
+        return None
+
+    records: list[dict[str, Any]] = []
+    cur = dans_pos + 16
+    decrypted_bytes = bytearray()
+    while cur + 8 <= rich_pos:
+        dw1, dw2 = struct.unpack_from("<II", data, cur)
+        dec_dw1 = dw1 ^ xor_key
+        dec_dw2 = dw2 ^ xor_key
+        decrypted_bytes.extend(struct.pack("<II", dec_dw1, dec_dw2))
+
+        prod_id = (dec_dw1 >> 16) & 0xFFFF
+        build_id = dec_dw1 & 0xFFFF
+        count = dec_dw2
+
+        records.append(
+            {
+                "tool_id": prod_id,
+                "build_id": build_id,
+                "count": count,
+            }
+        )
+        cur += 8
+
+    if not records:
+        return None
+
+    rich_hash = hashlib.md5(decrypted_bytes).hexdigest()
+    return {
+        "xor_key": hex(xor_key),
+        "hash": rich_hash,
+        "record_count": len(records),
+        "records": records,
+    }
 
 
 def parse_pe(data: bytes, path: str, sha256: str) -> ArtifactDescriptor:
@@ -245,6 +344,8 @@ def parse_pe(data: bytes, path: str, sha256: str) -> ArtifactDescriptor:
         if is_write and is_exec:
             wx_sections.append(sec_name)
 
+        entropy, sec_md5, sec_sha256 = compute_section_metrics(data, raw_ptr, raw_size)
+
         sections.append(
             BinarySection(
                 name=sec_name,
@@ -253,6 +354,9 @@ def parse_pe(data: bytes, path: str, sha256: str) -> ArtifactDescriptor:
                 virtual_address=virt_addr,
                 offset=raw_ptr,
                 size=raw_size,
+                entropy=entropy,
+                md5=sec_md5,
+                sha256=sec_sha256,
             )
         )
         section_maps.append((virt_addr, virt_size, raw_ptr, raw_size))
@@ -260,6 +364,7 @@ def parse_pe(data: bytes, path: str, sha256: str) -> ArtifactDescriptor:
     # 7. Import Table & Symbol Extraction
     imported_symbols: set[str] = set()
     imported_dlls: list[str] = []
+    ordered_imports: list[tuple[str, str | int]] = []
 
     import_entry = data_dirs.get(IMAGE_DIRECTORY_ENTRY_IMPORT)
     if import_entry and import_entry[0] > 0 and import_entry[1] > 0:
@@ -315,6 +420,8 @@ def parse_pe(data: bytes, path: str, sha256: str) -> ArtifactDescriptor:
                         ordinal = thunk_val & 0xFFFF
                         sym_name = f"{dll_name}#{ordinal}" if dll_name else f"Ordinal#{ordinal}"
                         imported_symbols.add(sym_name)
+                        if dll_name:
+                            ordered_imports.append((dll_name, ordinal))
                     else:
                         hint_rva = thunk_val & 0x7FFFFFFF
                         hint_off = rva_to_file_offset(hint_rva, section_maps)
@@ -324,6 +431,10 @@ def parse_pe(data: bytes, path: str, sha256: str) -> ArtifactDescriptor:
                             )
                             if raw_func:
                                 imported_symbols.add(raw_func)
+                                if dll_name:
+                                    ordered_imports.append((dll_name, raw_func))
+
+    imphash = compute_imphash(ordered_imports)
 
     # 8. Export Table & Symbol Extraction
     exported_symbols: set[str] = set()
@@ -422,6 +533,60 @@ def parse_pe(data: bytes, path: str, sha256: str) -> ArtifactDescriptor:
         or num_symbols == 0
     )
 
+    # 9. Debug Directory & CodeView PDB Extraction
+    pdb_path: str | None = None
+    debug_codeview: dict[str, Any] | None = None
+    debug_entry = data_dirs.get(IMAGE_DIRECTORY_ENTRY_DEBUG)
+    if debug_entry and debug_entry[0] > 0 and debug_entry[1] >= 28:
+        debug_rva, debug_size = debug_entry
+        debug_off = rva_to_file_offset(debug_rva, section_maps)
+        if debug_off is not None:
+            num_debug_entries = min(debug_size // 28, 16)
+            for d_idx in range(num_debug_entries):
+                e_off = debug_off + d_idx * 28
+                if e_off + 28 > len(data):
+                    break
+                (
+                    _,
+                    _,
+                    _,
+                    _,
+                    dbg_type,
+                    dbg_size,
+                    _,
+                    dbg_raw_ptr,
+                ) = struct.unpack_from("<IIHHIIII", data, e_off)
+
+                # Type 2 = IMAGE_DEBUG_TYPE_CODEVIEW
+                if dbg_type == 2 and 0 <= dbg_raw_ptr < len(data):
+                    sig = data[dbg_raw_ptr : dbg_raw_ptr + 4]
+                    if sig == b"RSDS" and dbg_raw_ptr + 24 <= len(data):
+                        guid_bytes = data[dbg_raw_ptr + 4 : dbg_raw_ptr + 20]
+                        guid_str = guid_bytes.hex()
+                        age = struct.unpack_from("<I", data, dbg_raw_ptr + 20)[0]
+                        raw_pdb = data[dbg_raw_ptr + 24 : dbg_raw_ptr + dbg_size].split(b"\x00")[0]
+                        pdb_path = raw_pdb.decode("utf-8", errors="replace").strip()
+                        debug_codeview = {
+                            "type": "RSDS",
+                            "guid": guid_str,
+                            "age": age,
+                            "pdb_path": pdb_path,
+                        }
+                        break
+                    elif sig == b"NB10" and dbg_raw_ptr + 16 <= len(data):
+                        age = struct.unpack_from("<I", data, dbg_raw_ptr + 12)[0]
+                        raw_pdb = data[dbg_raw_ptr + 16 : dbg_raw_ptr + dbg_size].split(b"\x00")[0]
+                        pdb_path = raw_pdb.decode("utf-8", errors="replace").strip()
+                        debug_codeview = {
+                            "type": "NB10",
+                            "age": age,
+                            "pdb_path": pdb_path,
+                        }
+                        break
+
+    # 10. Rich Header Extraction
+    rich_header = parse_rich_header(data, e_lfanew)
+
     metadata: dict[str, Any] = {
         "machine": hex(machine),
         "machine_name": arch,
@@ -439,6 +604,11 @@ def parse_pe(data: bytes, path: str, sha256: str) -> ArtifactDescriptor:
         "imported_dlls": imported_dlls,
         "wx_sections": wx_sections,
         "section_count": len(sections),
+        "imphash": imphash,
+        "imphash_symbols_count": len(ordered_imports),
+        "rich_header": rich_header,
+        "pdb_path": pdb_path,
+        "debug_codeview": debug_codeview,
     }
 
     return ArtifactDescriptor(

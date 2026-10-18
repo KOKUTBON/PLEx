@@ -221,4 +221,69 @@ def detect_capabilities(
                 )
             )
 
+    # Check for Import Hash (imphash) capability
+    if descriptor.metadata.get("imphash"):
+        imphash = descriptor.metadata["imphash"]
+        fid = _finding_id("bin.capability.imphash", path, imphash)
+        sym_count = descriptor.metadata.get("imphash_symbols_count", 0)
+        findings.append(
+            AnalysisFinding(
+                id=f"bin.{fid}",
+                engine="inspect",
+                category="binary",
+                rule_id="bin.capability.imphash",
+                severity="info",
+                title=f"Import Table Fingerprint (imphash): {imphash}",
+                status="suspected",
+                confidence="inferred",
+                file=path,
+                lineno=0,
+                cwe=["CWE-699"],
+                message=(
+                    f"Binary import table yields standard PE import hash (imphash): {imphash} "
+                    f"across {sym_count} ordered imported functions. Used for binary lineage, malware clustering, and static triage."
+                ),
+                remediation=["Track imphash across release builds to detect unexpected dynamic import dependencies."],
+                evidence=[evidence_ref],
+                engine_meta={"imphash": imphash, "symbol_count": sym_count},
+            )
+        )
+
+    # Check for Compiler Provenance / Rich Header Fingerprint
+    producer = descriptor.metadata.get("compiler_producer")
+    rich_header = descriptor.metadata.get("rich_header")
+    if producer or rich_header:
+        fp_desc = []
+        meta_payload: dict[str, Any] = {}
+        if producer:
+            fp_desc.append(f"DWARF Producer: {producer}")
+            meta_payload["producer"] = producer
+        if rich_header:
+            r_hash = rich_header.get("hash", "")
+            r_cnt = rich_header.get("record_count", 0)
+            fp_desc.append(f"MSVC Rich Header Hash: {r_hash} ({r_cnt} build tool records)")
+            meta_payload["rich_hash"] = r_hash
+            meta_payload["tool_records"] = r_cnt
+
+        fid = _finding_id("bin.capability.compiler-fingerprint", path, ";".join(fp_desc))
+        findings.append(
+            AnalysisFinding(
+                id=f"bin.{fid}",
+                engine="inspect",
+                category="binary",
+                rule_id="bin.capability.compiler-fingerprint",
+                severity="info",
+                title="Compiler & Toolchain Provenance Fingerprint Identified",
+                status="suspected",
+                confidence="inferred",
+                file=path,
+                lineno=0,
+                cwe=["CWE-699"],
+                message=f"Artifact reveals compiler and linker build toolchain provenance. {'; '.join(fp_desc)}.",
+                remediation=["Audit compiler toolchain versions against approved baseline compiler suites."],
+                evidence=[evidence_ref],
+                engine_meta=meta_payload,
+            )
+        )
+
     return findings

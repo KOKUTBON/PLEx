@@ -13,6 +13,7 @@ from .models import (
     Endianness,
     HardeningProperties,
     RelroMode,
+    compute_section_metrics,
 )
 
 # Header magic constants
@@ -219,6 +220,7 @@ def parse_macho(data: bytes, artifact_path: str, sha256: str) -> ArtifactDescrip
                         ) = struct.unpack_from(f"{order}16s16sQQIIIIIIII", slice_data, s_offset)
                         sectname = sectname_raw.split(b"\x00")[0].decode("ascii", errors="replace")
                         full_name = f"{segname}.{sectname}" if sectname else segname
+                        entropy, sec_md5, sec_sha256 = compute_section_metrics(slice_data, sec_off, size)
                         sections.append(
                             BinarySection(
                                 name=full_name,
@@ -227,6 +229,9 @@ def parse_macho(data: bytes, artifact_path: str, sha256: str) -> ArtifactDescrip
                                 virtual_address=addr,
                                 offset=sec_off,
                                 size=size,
+                                entropy=entropy,
+                                md5=sec_md5,
+                                sha256=sec_sha256,
                             )
                         )
 
@@ -263,6 +268,7 @@ def parse_macho(data: bytes, artifact_path: str, sha256: str) -> ArtifactDescrip
                         ) = struct.unpack_from(f"{order}16s16sIIIIIIIII", slice_data, s_offset)
                         sectname = sectname_raw.split(b"\x00")[0].decode("ascii", errors="replace")
                         full_name = f"{segname}.{sectname}" if sectname else segname
+                        entropy, sec_md5, sec_sha256 = compute_section_metrics(slice_data, sec_off, size)
                         sections.append(
                             BinarySection(
                                 name=full_name,
@@ -271,6 +277,9 @@ def parse_macho(data: bytes, artifact_path: str, sha256: str) -> ArtifactDescrip
                                 virtual_address=addr,
                                 offset=sec_off,
                                 size=size,
+                                entropy=entropy,
+                                md5=sec_md5,
+                                sha256=sec_sha256,
                             )
                         )
 

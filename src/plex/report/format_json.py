@@ -56,6 +56,6 @@ def _parse_report(raw: Any) -> PLExReport:
         if not all(item.id in supplied_ids for item in performance_findings(report)):
             raise ValueError("Schema v8 must include mirrors of all legacy performance records")
         return report
-    if any(name in raw for name in ("findings_unified", "engines", "scan_status")):
+    if any(name in raw for name in ("findings_unified", "engines", "scan_status", "repairs")):
         raise ValueError("Schema v7 report contains v8 fields; refusing lossy conversion")
     return decode_record(PLExReport, raw)

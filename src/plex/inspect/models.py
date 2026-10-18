@@ -1,4 +1,4 @@
-"""Artifact models and hardening property structures for native inspection."""
+"""Artifact models, hardening properties, and disassembly structures for native inspection."""
 
 from __future__ import annotations
 
@@ -37,6 +37,41 @@ class HardeningProperties:
 
 
 @dataclass(frozen=True)
+class Instruction:
+    """A single disassembled machine instruction."""
+
+    address: int
+    mnemonic: str
+    operands: str
+    bytes_hex: str
+    size: int
+
+
+@dataclass(frozen=True)
+class ReconstructedCall:
+    """A call relationship identified in executable code."""
+
+    caller_address: int
+    caller_function: str | None = None
+    target_address: int | None = None
+    target_symbol: str | None = None
+    instruction: str = ""
+
+
+@dataclass(frozen=True)
+class ReconstructedFunction:
+    """A reconstructed function boundary and control-flow unit."""
+
+    name: str
+    start_address: int
+    end_address: int
+    size: int
+    instructions: tuple[Instruction, ...] = ()
+    calls: tuple[ReconstructedCall, ...] = ()
+    cyclomatic_complexity: int = 1
+
+
+@dataclass(frozen=True)
 class ArtifactDescriptor:
     """Normalized structural facts extracted from a compiled binary artifact."""
 
@@ -54,4 +89,6 @@ class ArtifactDescriptor:
     extracted_strings: tuple[str, ...] = ()
     hardening: HardeningProperties = field(default_factory=HardeningProperties)
     is_stripped: bool = False
+    functions: tuple[ReconstructedFunction, ...] = ()
+    calls: tuple[ReconstructedCall, ...] = ()
     metadata: dict[str, Any] = field(default_factory=dict)

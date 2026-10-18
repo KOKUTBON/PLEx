@@ -153,3 +153,34 @@ def test_propose_patch_candidate_noop_returns_none() -> None:
         finding_ids=("find-tls-102",),
     )
     assert candidate is None
+
+
+def test_tls_verify_fixer_skips_non_network_calls() -> None:
+    # Reproduced defect: previously any method named with verify=False was rewritten.
+    fixer = TLSVerifyFixer()
+    source = (
+        "user.save(verify=False)\n"
+        "form.validate(verify=False)\n"
+        "auth.authenticate(verify=False)\n"
+    )
+    fixed, changes = fixer.fix(source, "model.py")
+    assert fixed == source
+    assert len(changes) == 0
+
+
+def test_tls_verify_preserves_comments_and_formatting() -> None:
+    fixer = TLSVerifyFixer()
+    source = (
+        "# Make outbound API call\n"
+        "requests.post(\n"
+        "    'https://api.example.com',\n"
+        "    data={'k': 'v'},  # payload\n"
+        "    verify=False,  # disabled verification\n"
+        ")\n"
+    )
+    fixed, changes = fixer.fix(source, "client.py")
+    assert "# Make outbound API call" in fixed
+    assert "data={'k': 'v'},  # payload" in fixed
+    assert "verify=True,  # disabled verification" in fixed
+    assert len(changes) == 1
+

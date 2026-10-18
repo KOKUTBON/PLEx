@@ -62,7 +62,7 @@ def test_mass_assignment_fixer_sanitizes_unpacking() -> None:
     fixer = MassAssignmentFixer()
     fixed, changes = fixer.fix(src, "views.py")
 
-    assert any(pat in fixed for pat in ("{k: v for k, v in data.items() if k in", "{k: v for (k, v) in data.items() if k in"))
+    assert "{k: v for k, v in data.items() if k in" in fixed
     assert len(changes) == 1
     assert changes[0].rule_id == "xbnd.mass-assignment-taint"
     ast.parse(fixed)
@@ -81,13 +81,7 @@ def test_mass_assignment_fixer_propose_patch() -> None:
     assert patch.rule_id == "xbnd.mass-assignment-taint"
     assert patch.engine == "xboundary"
     assert patch.generator == "plex.repair.mass_assignment"
-    assert any(
-        pat in patch.diff
-        for pat in (
-            "Profile.objects.update(**{k: v for k, v in payload.items()",
-            "Profile.objects.update(**{k: v for (k, v) in payload.items()",
-        )
-    )
+    assert "Profile.objects.update(**{k: v for k, v in payload.items()" in patch.diff
     assert patch.rollback_diff != ""
 
 
@@ -209,3 +203,42 @@ def test_validate_engine_mass_assignment_recipe_wiring() -> None:
     assert "xbnd.mass-assignment-taint" in RECIPES
     assert "val.mass-assignment" in RECIPES
     assert isinstance(RECIPES["xbnd.mass-assignment-taint"], MassAssignmentRecipe)
+
+
+def test_mass_assignment_fixer_abstains_on_metadata() -> None:
+    src = (
+        "def audit_log(metadata, config):\n"
+        "    return LogEntry(**metadata)\n"
+    )
+    fixer = MassAssignmentFixer()
+    fixed, changes = fixer.fix(src, "audit.py")
+    assert fixed == src
+    assert len(changes) == 0
+
+
+def test_mass_assignment_fixer_preserves_comments_and_handles_multiple_unpackings() -> None:
+    src = (
+        "def create_record(data, payload):\n"
+        "    return Record(\n"
+        "        # Leading record comment\n"
+        "        **data,\n"
+        "        id=123,  # static id\n"
+        "        **payload,\n"
+        "    )\n"
+    )
+    fixer = MassAssignmentFixer()
+    fixed, changes = fixer.fix(src, "models.py")
+    assert len(changes) == 2
+    assert "# Leading record comment" in fixed
+    assert "# static id" in fixed
+    assert "id=123" in fixed
+    assert "{k: v for k, v in data.items() if k in" in fixed
+    assert "{k: v for k, v in payload.items() if k in" in fixed
+    # Verify result is syntactically valid
+    ast.parse(fixed)
+
+
+def test_mass_assignment_fixer_contract_proposal_only() -> None:
+    fixer = MassAssignmentFixer()
+    assert fixer.auto_apply is False
+

@@ -58,16 +58,16 @@ See `SUPPORT.md` for supported versions and support expectations.
 
 ## KOKUTBON ownership and stewardship
 
-This repository is owned by KOKUTBON and is published as open-source software under the license in `LICENSE`. Organization ownership does not change existing copyright notices.
+This repository is owned by KOKUTBON and is currently private. Organization ownership does not change existing copyright notices or the license in `LICENSE`.
 
-- @reiidoda is the initial technical maintainer. KOKUTBON organization owners administer access, appoint maintainers, and coordinate repository stewardship.
+- @reiidoda is the initial technical maintainer. KOKUTBON organization owners administer access, appoint maintainers, and approve any change to repository visibility.
 - Maintainers triage issues, review contributions, coordinate releases, and enforce the code of conduct. Routine decisions belong in issues and pull requests; significant architectural decisions should include written rationale and migration impact.
 - Use a focused pull request for changes, explain behavior and validation, and obtain maintainer review before merging when another reviewer is available. An emergency change should record its reason and receive follow-up review.
 - Breaking changes require compatibility and migration notes. Releases should identify the tested commit and describe known limitations. Support is best effort unless a separate support agreement exists.
 - Report conflicts of interest and step aside from decisions involving your own conduct. Conduct escalation goes to an uninvolved KOKUTBON organization owner where available.
-- License changes and external contribution terms require an explicit organizational decision. Preserve existing notices and third-party attribution.
+- License changes, external contribution terms, and public publication require an explicit organizational decision. Preserve existing notices and third-party attribution.
 
-These are project process rules. For public repositories, GitHub branch protection and automated GitHub Actions workflows safeguard the default branch. `CODEOWNERS` records review ownership. Passing CI checks and maintainer reviews are expected prior to merging.
+These are project process rules. GitHub Free does not enforce branch protection or rulesets on these private repositories. `CODEOWNERS` records review ownership; it does not enforce review by itself. Reassess platform enforcement before public release or after a plan change.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md), [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md), [COMMUNICATION.md](COMMUNICATION.md), and [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md).
 

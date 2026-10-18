@@ -94,3 +94,46 @@ def test_security_headers_propose_patch_none_when_no_change() -> None:
     fixer = SecurityHeadersFixer()
     patch = fixer.propose_patch(src, "const.py")
     assert patch is None
+
+
+def test_security_headers_fixer_handles_factory_indentation() -> None:
+    src = (
+        "from flask import Flask\n\n"
+        "def create_app():\n"
+        "    app = Flask(__name__)\n"
+        "    return app\n"
+    )
+    fixer = SecurityHeadersFixer()
+    fixed, changes = fixer.fix(src, "factory.py")
+
+    assert "    @app.after_request" in fixed
+    assert '    def _add_security_headers(response):' in fixed
+    assert len(changes) == 1
+    ast.parse(fixed)
+
+
+def test_security_headers_fixer_skips_when_talisman_present() -> None:
+    src = (
+        "from flask import Flask\n"
+        "from flask_talisman import Talisman\n\n"
+        "app = Flask(__name__)\n"
+        "Talisman(app)\n"
+    )
+    fixer = SecurityHeadersFixer()
+    fixed, changes = fixer.fix(src, "app.py")
+
+    assert fixed == src
+    assert len(changes) == 0
+
+
+def test_security_headers_fixer_skips_test_files() -> None:
+    src = (
+        "from flask import Flask\n\n"
+        "app = Flask(__name__)\n"
+    )
+    fixer = SecurityHeadersFixer()
+    fixed, changes = fixer.fix(src, "tests/test_server.py")
+
+    assert fixed == src
+    assert len(changes) == 0
+

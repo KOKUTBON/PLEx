@@ -36,6 +36,7 @@ EdgeKind = Literal[
     "repairs",
     "verifies",
     "correlates",
+    "executes_at_runtime",
 ]
 
 

@@ -11,6 +11,7 @@ from typing import Any
 import yaml
 
 from plex import __version__
+from plex.agent.commands import add_agent_commands
 from plex.analyze.options import add_analyze_args as _add_analyze_args
 from plex.analyze.options import analysis_options
 from plex.analyze.pipeline import (
@@ -38,6 +39,7 @@ from plex.providers.orchestrator import run_providers
 from plex.providers.performance import PerformanceProvider
 from plex.providers.supply_chain import SupplyChainProvider
 from plex.providers.xboundary import XBoundaryProvider
+from plex.reliability import ReliabilityProvider
 from plex.repair.commands import add_remediate_commands
 from plex.report.annotations import to_github_annotations
 from plex.report.format_check_run import to_check_run_output
@@ -69,16 +71,21 @@ def parse_checks(checks_arg: str | None) -> list[str]:
     tokens = [t.strip().lower() for t in checks_arg.split(",") if t.strip()]
     if not tokens:
         raise ValueError("No checks specified in --checks")
-    valid_checks = {"performance", "security", "xboundary", "supply_chain"}
+    valid_checks = {"performance", "security", "xboundary", "supply_chain", "reliability", "all"}
     normalized: list[str] = []
     for t in tokens:
         if t not in valid_checks:
             raise ValueError(
-                f"Unknown check engine '{t}'. Supported checks: performance, security, supply_chain"
+                f"Unknown check engine '{t}'. Supported checks: performance, security, supply_chain, reliability, all"
             )
-        norm = "security" if t == "xboundary" else t
-        if norm not in normalized:
-            normalized.append(norm)
+        if t == "all":
+            for c in ("performance", "security", "supply_chain", "reliability"):
+                if c not in normalized:
+                    normalized.append(c)
+        else:
+            norm = "security" if t == "xboundary" else t
+            if norm not in normalized:
+                normalized.append(norm)
     return normalized
 
 
@@ -98,6 +105,11 @@ def cmd_analyze(args: argparse.Namespace) -> int:
         providers.append(XBoundaryProvider())
     if "supply_chain" in selected_checks:
         providers.append(SupplyChainProvider())
+    if "reliability" in selected_checks:
+        providers.append(ReliabilityProvider())
+
+    if getattr(args, "advisory_feed", None):
+        os.environ["PLEX_ADVISORY_FEED"] = str(Path(args.advisory_feed).resolve())
 
     perf_opts = analysis_options(args)
     sec_opts: dict[str, Any] = {
@@ -118,6 +130,35 @@ def cmd_analyze(args: argparse.Namespace) -> int:
         providers,
     )
     report = outcome.report()
+
+    if getattr(args, "evidence_store_path", None):
+        from plex.evidence.store import ContentAddressedEvidenceStore
+
+        ev_store = ContentAddressedEvidenceStore(Path(args.evidence_store_path))
+        enriched_findings = []
+        for f in report.findings_unified:
+            stored = ev_store.put_json(
+                {
+                    "id": f.id,
+                    "rule_id": f.rule_id,
+                    "engine": f.engine,
+                    "file": f.file,
+                    "lineno": f.lineno,
+                    "title": f.title,
+                    "message": f.message,
+                },
+                engine=f.engine,
+                kind="finding_record",
+                source_revision=report.base_ref or "working-tree",
+            )
+            ev_ref = stored.to_evidence_ref()
+            if not any(existing.ref == ev_ref.ref for existing in f.evidence):
+                enriched_findings.append(
+                    dataclasses.replace(f, evidence=[*f.evidence, ev_ref])
+                )
+            else:
+                enriched_findings.append(f)
+        report = dataclasses.replace(report, findings_unified=enriched_findings)
 
     for run in outcome.engines:
         for limitation in run.limitations:
@@ -147,6 +188,27 @@ def cmd_analyze(args: argparse.Namespace) -> int:
     if args.sarif_path:
         write_sarif(report, Path(args.sarif_path))
         log.info("Wrote SARIF report to %s", args.sarif_path)
+
+    if getattr(args, "graph_path", None):
+        from plex.graph.correlate import GraphCorrelator
+        from plex.validate.routes import correlate_finding_to_route, discover_routes
+
+        resolved_root = Path(args.path).resolve()
+        correlator = GraphCorrelator(resolved_root)
+        routes = discover_routes(resolved_root)
+        for r in routes:
+            correlator.add_route(r)
+
+        for finding in report.findings_unified:
+            matched_r = correlate_finding_to_route(finding.file, finding.lineno or 1, routes)
+            correlator.add_finding(finding, producer=finding.engine or "plex", route=matched_r)
+
+
+        graph_p = Path(args.graph_path)
+        graph_p.parent.mkdir(parents=True, exist_ok=True)
+        graph_p.write_text(json.dumps(correlator.graph.to_dict(), indent=2), encoding="utf-8")
+        log.info("Wrote ProjectGraph to %s", args.graph_path)
+
 
     if args.html_path:
         is_interactive = not bool(getattr(args, "html_static", False))
@@ -240,24 +302,28 @@ def cmd_analyze(args: argparse.Namespace) -> int:
         gate_reasons.extend(result.gate_reasons)
         perf_exit = result.exit_code
 
-    if "security" in selected_checks:
+    if any(c in selected_checks for c in ("security", "supply_chain", "reliability")):
         sec_threshold = getattr(args, "fail_on_severity", None) or getattr(
             args, "fail_on_finding_severity", None
         )
         if sec_threshold:
-            failed_sec = [
+            failed_non_perf = [
                 f
                 for f in report.findings_unified
-                if f.category == "security"
+                if f.engine != "performance"
                 and severity_rank(f.severity) >= severity_rank(sec_threshold)
             ]
-            if failed_sec:
+            if failed_non_perf:
                 gate_reasons.append(
-                    f"Security finding meets or exceeds severity threshold '{sec_threshold}' ({len(failed_sec)} finding(s))"
+                    f"Finding meets or exceeds severity threshold '{sec_threshold}' ({len(failed_non_perf)} finding(s))"
                 )
         if getattr(args, "max_findings", None) is not None:
-            if len(report.findings_unified) > args.max_findings:
-                msg = f"Total findings count ({len(report.findings_unified)}) exceeds maximum ({args.max_findings})"
+            # Avoid double-counting legacy performance mirrors in findings_unified
+            unique_total = len(report.findings) + sum(
+                1 for f in report.findings_unified if f.engine != "performance"
+            )
+            if unique_total > args.max_findings:
+                msg = f"Total findings count ({unique_total}) exceeds maximum ({args.max_findings})"
                 if msg not in gate_reasons:
                     gate_reasons.append(msg)
 
@@ -478,35 +544,101 @@ def cmd_fix(args: argparse.Namespace) -> int:
 
 def cmd_benchmark(args: argparse.Namespace) -> int:
     if getattr(args, "comparative", None):
-        from plex.bench.comparative import BenchmarkManifest, run_comparative_benchmark
+        from plex.bench.comparative import (
+            BenchmarkManifest,
+            ExternalBaselineRecord,
+            compare_against_pinned_baseline,
+            run_comparative_benchmark,
+        )
 
         manifest_path = Path(args.comparative).resolve()
         if not manifest_path.exists():
             print(f"Error: Comparative benchmark manifest not found: {args.comparative}")
             return 1
-        manifest_data = json.loads(manifest_path.read_text(encoding="utf-8"))
-        manifest = BenchmarkManifest.from_dict(manifest_data)
-        corpus_dir = manifest_path.parent
-        metrics = run_comparative_benchmark(corpus_dir, manifest)
+
+        manifest_files: list[Path] = []
+        if manifest_path.is_dir():
+            manifest_files = sorted(manifest_path.glob("*.json"))
+            if not manifest_files:
+                print(f"Error: No JSON benchmark manifests found in directory: {args.comparative}")
+                return 1
+        else:
+            manifest_files = [manifest_path]
+
+        baseline_records: dict[str, ExternalBaselineRecord] = {}
+        if getattr(args, "baseline", None):
+            bpath = Path(args.baseline).resolve()
+            if not bpath.exists():
+                print(f"Error: Pinned external baseline file not found: {args.baseline}")
+                return 1
+            raw_bdata = json.loads(bpath.read_text(encoding="utf-8"))
+            items = raw_bdata if isinstance(raw_bdata, list) else [raw_bdata]
+            for item in items:
+                if isinstance(item, dict):
+                    rec = ExternalBaselineRecord.from_dict(item)
+                    baseline_records[rec.manifest_name] = rec
+
+        all_metrics = []
+        all_passed = True
+
+        for mfile in manifest_files:
+            manifest_data = json.loads(mfile.read_text(encoding="utf-8"))
+            manifest = BenchmarkManifest.from_dict(manifest_data)
+            corpus_dir = (mfile.parent / manifest.corpus_dir).resolve() if manifest.corpus_dir else mfile.parent
+            metrics = run_comparative_benchmark(corpus_dir, manifest)
+            all_metrics.append(metrics)
+            if not metrics.passed_thresholds:
+                all_passed = False
+
+            delta = None
+            if metrics.manifest_name in baseline_records:
+                delta = compare_against_pinned_baseline(
+                    metrics, baseline_records[metrics.manifest_name]
+                )
+
+            if not getattr(args, "json", None):
+                print(f"Comparative Benchmark Report: {metrics.manifest_name}")
+                print(f"Target Rule: {metrics.target_rule} ({metrics.total_cases} cases)")
+                print(f"  Precision: {metrics.precision:.2%} (min: {manifest.min_precision:.2%})")
+                print(f"  Recall:    {metrics.recall:.2%} (min: {manifest.min_recall:.2%})")
+                print(f"  F1 Score:  {metrics.f1_score:.4f}")
+                print(f"  Repairs:   {metrics.repairs_verified}/{metrics.repairs_attempted} verified")
+                if delta is not None:
+                    print(
+                        f"  Baseline Comparison vs {delta.baseline_tool} v{delta.baseline_version}:"
+                    )
+                    print(
+                        f"    F1 delta: {delta.f1_delta:+.4f} | "
+                        f"Repairs delta: {delta.repairs_verified_delta:+d} | "
+                        f"Duration delta: {delta.duration_delta_ms:+.1f}ms"
+                    )
+                    if delta.where_plex_leads:
+                        print(f"    Where PLEx leads: {', '.join(delta.where_plex_leads)}")
+                    if delta.where_baseline_leads:
+                        print(f"    Where baseline leads: {', '.join(delta.where_baseline_leads)}")
+                if metrics.threshold_failures:
+                    print("Failures:")
+                    for fail in metrics.threshold_failures:
+                        print(f"  - {fail}")
+                print(f"Status: {'PASS' if metrics.passed_thresholds else 'FAIL'}")
+                if len(manifest_files) > 1:
+                    print()
 
         if getattr(args, "json", None):
             out_json = Path(args.json)
             out_json.parent.mkdir(parents=True, exist_ok=True)
-            out_json.write_text(json.dumps(metrics.to_dict(), indent=2), encoding="utf-8")
-        else:
-            print(f"Comparative Benchmark Report: {metrics.manifest_name}")
-            print(f"Target Rule: {metrics.target_rule} ({metrics.total_cases} cases)")
-            print(f"  Precision: {metrics.precision:.2%} (min: {manifest.min_precision:.2%})")
-            print(f"  Recall:    {metrics.recall:.2%} (min: {manifest.min_recall:.2%})")
-            print(f"  F1 Score:  {metrics.f1_score:.4f}")
-            print(f"  Repairs:   {metrics.repairs_verified}/{metrics.repairs_attempted} verified")
-            if metrics.threshold_failures:
-                print("Failures:")
-                for fail in metrics.threshold_failures:
-                    print(f"  - {fail}")
-            print(f"Status: {'PASS' if metrics.passed_thresholds else 'FAIL'}")
+            serialized: list[dict[str, Any]] = []
+            for m in all_metrics:
+                d = m.to_dict()
+                if m.manifest_name in baseline_records:
+                    d["baseline_comparison"] = compare_against_pinned_baseline(
+                        m, baseline_records[m.manifest_name]
+                    ).to_dict()
+                serialized.append(d)
+            payload: Any = serialized if len(serialized) > 1 else serialized[0]
+            out_json.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
-        return 0 if metrics.passed_thresholds else 1
+        return 0 if all_passed else 1
 
     if getattr(args, "rules", False) or getattr(args, "rule", None):
         from plex.bench.rule_bench import (
@@ -824,6 +956,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_remediate_commands(sub)
     add_coverage_commands(sub)
     add_supply_chain_commands(sub)
+    add_agent_commands(sub)
 
     dash = sub.add_parser(
         "dashboard",
@@ -1123,3 +1256,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     setup_logging(bool(args.verbose))
     return int(args.func(args))
+
+
+if __name__ == "__main__":
+    import sys
+    sys.exit(main())
+

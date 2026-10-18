@@ -10,11 +10,13 @@ from plex.fix.base import BaseFixer, FixChange
 from plex.repair.diffutil import unified_diff
 from plex.repair.models import PatchCandidate
 
-HTTP_INDEX_PATTERN = re.compile(
-    r"(?:--index-url|-i|--extra-index-url)\s+http://([^\s]+)", re.IGNORECASE
+INDEX_OPTION_PATTERN = re.compile(
+    r"(\s*(?:--index-url|--extra-index-url|-i)(?:\s+|=))http://",
+    re.IGNORECASE,
 )
 PLAIN_HTTP_PYPI_PATTERN = re.compile(
-    r"http://(pypi\.org|pypi\.python\.org|files\.pythonhosted\.org)", re.IGNORECASE
+    r"http://(pypi\.org|pypi\.python\.org|files\.pythonhosted\.org)",
+    re.IGNORECASE,
 )
 
 
@@ -23,6 +25,7 @@ class InsecureIndexFixer(BaseFixer):
 
     rule_id = "dep.insecure-index"
     name = "insecure_index"
+    auto_apply = False
 
     def fix(self, source: str, file_path: str = "") -> tuple[str, list[FixChange]]:
         lines = source.splitlines(keepends=True)
@@ -34,23 +37,25 @@ class InsecureIndexFixer(BaseFixer):
 
         for lineno, line in enumerate(lines, start=1):
             stripped = line.strip()
+            # Skip comment lines completely
             if not stripped or stripped.startswith("#"):
                 new_lines.append(line)
                 continue
 
-            new_line = line
-            # 1. Match --index-url http:// or --extra-index-url http://
-            if "--index-url" in line.lower() or "--extra-index-url" in line.lower() or line.strip().startswith("-i "):
-                new_line = re.sub(
-                    r"(\s*(?:--index-url|--extra-index-url|-i)\s+)http://",
-                    r"\1https://",
-                    new_line,
-                    flags=re.IGNORECASE,
-                )
+            # Split code and inline comment so we never modify comments
+            comment_idx = line.find("#")
+            code_part = line if comment_idx == -1 else line[:comment_idx]
+            comment_part = "" if comment_idx == -1 else line[comment_idx:]
 
-            # 2. Match plain http:// for known PyPI domains
-            new_line = PLAIN_HTTP_PYPI_PATTERN.sub(r"https://\1", new_line)
+            new_code = code_part
+            # 1. Match --index-url http:// or --index-url=http:// or -i http://
+            if any(opt in code_part.lower() for opt in ("--index-url", "--extra-index-url", "-i")):
+                new_code = INDEX_OPTION_PATTERN.sub(r"\1https://", new_code)
 
+            # 2. Match plain http:// for known PyPI domains in configuration
+            new_code = PLAIN_HTTP_PYPI_PATTERN.sub(r"https://\1", new_code)
+
+            new_line = new_code + comment_part
             if new_line != line:
                 new_lines.append(new_line)
                 changes.append(
@@ -113,7 +118,7 @@ class InsecureIndexFixer(BaseFixer):
             diff=diff,
             description="Upgrade insecure HTTP package index URL to secure HTTPS",
             generator="plex.repair.insecure_index",
-            generator_version="1.0.0",
+            generator_version="2.0.0",
             confidence="derived",
             risk="low",
             rollback_diff=rollback_diff,

@@ -9,6 +9,7 @@ from typing import Any
 from plex.fix.base import BaseFixer, FixChange
 from plex.repair.diffutil import unified_diff
 from plex.repair.models import PatchCandidate
+from plex.repair.sourceedit import SourceEditor
 
 FLASK_MIDDLEWARE_SNIPPET = """
 @app.after_request
@@ -29,12 +30,32 @@ async def _add_security_headers(request, call_next):
     return response
 """
 
+EXISTING_SECURITY_INDICATORS = {
+    "X-Content-Type-Options",
+    "_add_security_headers",
+    "Talisman",
+    "SecureHeaders",
+    "SecurityHeadersMiddleware",
+}
+
+
+def _is_test_or_dev_file(file_path: str) -> bool:
+    """Return True if file_path appears to be a test suite or development fixture."""
+    if not file_path:
+        return False
+    parts = file_path.lower().replace("\\", "/").split("/")
+    if any(p in {"tests", "test", "testing", "fixtures"} for p in parts):
+        return True
+    fname = parts[-1]
+    return fname.startswith("test_") or fname.endswith("_test.py") or fname == "conftest.py"
+
 
 class SecurityHeadersFixer(BaseFixer):
     """AST fixer that injects defensive HTTP security headers middleware into Flask and FastAPI apps (CWE-693)."""
 
     rule_id = "cfg.insecure-headers"
     name = "security_headers"
+    auto_apply = False
 
     def fix(self, source: str, file_path: str = "") -> tuple[str, list[FixChange]]:
         try:
@@ -42,17 +63,16 @@ class SecurityHeadersFixer(BaseFixer):
         except SyntaxError:
             return source, []
 
-        # If security headers or hook already defined, skip
-        if "X-Content-Type-Options" in source or "_add_security_headers" in source:
+        if _is_test_or_dev_file(file_path):
             return source, []
 
-        lines = source.splitlines(keepends=True)
-        if not lines:
+        # If security headers or hook already defined, skip
+        if any(indicator in source for indicator in EXISTING_SECURITY_INDICATORS):
             return source, []
 
         app_var_name: str | None = None
         app_framework: str | None = None
-        target_lineno: int | None = None
+        target_node: ast.Assign | None = None
 
         for node in ast.walk(tree):
             if isinstance(node, ast.Assign):
@@ -70,12 +90,12 @@ class SecurityHeadersFixer(BaseFixer):
                             if isinstance(target, ast.Name):
                                 app_var_name = target.id
                                 app_framework = call_name
-                                target_lineno = node.end_lineno or node.lineno
+                                target_node = node
                                 break
                     if app_var_name:
                         break
 
-        if not app_var_name or not target_lineno or not app_framework:
+        if not app_var_name or not target_node or not app_framework:
             return source, []
 
         snippet = (
@@ -87,14 +107,28 @@ class SecurityHeadersFixer(BaseFixer):
         if app_var_name != "app":
             snippet = snippet.replace("@app.", f"@{app_var_name}.")
 
-        insertion_index = target_lineno
-        modified_lines = list(lines)
-        modified_lines.insert(insertion_index, snippet.lstrip("\n"))
+        indent = " " * target_node.col_offset
+        indented_lines = []
+        for line in snippet.strip("\n").splitlines():
+            if line.strip():
+                indented_lines.append(indent + line)
+            else:
+                indented_lines.append("")
+        formatted_snippet = "\n\n" + "\n".join(indented_lines) + "\n"
 
-        new_source = "".join(modified_lines)
+        editor = SourceEditor(source)
+        end_lineno = target_node.end_lineno or target_node.lineno
+        if end_lineno < len(editor._line_starts) - 1:
+            pos = editor.offset(end_lineno + 1, 0)
+        else:
+            pos = len(source)
+
+        editor.insert(pos, formatted_snippet)
+
         try:
+            new_source = editor.result()
             ast.parse(new_source)
-        except SyntaxError:
+        except (ValueError, SyntaxError):
             return source, []
 
         change = FixChange(
@@ -103,9 +137,9 @@ class SecurityHeadersFixer(BaseFixer):
                 f"Inject security headers middleware for {app_framework} to enforce "
                 "X-Content-Type-Options, X-Frame-Options, and Content-Security-Policy (CWE-693)"
             ),
-            lineno=target_lineno + 1,
+            lineno=end_lineno + 1,
             before="",
-            after=snippet,
+            after=formatted_snippet.strip("\n"),
         )
 
         return new_source, [change]

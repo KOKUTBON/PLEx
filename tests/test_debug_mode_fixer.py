@@ -116,3 +116,31 @@ def test_remediation_coordinator_verifies_debug_mode_fix(tmp_path: Path) -> None
     assert plan.repairs[0].status == "inconclusive"
     assert not plan.has_failures
     assert plan.applicable_repairs == ()
+
+
+def test_debug_mode_fixer_skips_test_files() -> None:
+    src = "app.run(debug=True)\nDEBUG = True\n"
+    fixer = DebugModeFixer()
+    for test_path in ["tests/test_app.py", "app_test.py", "test_views.py", "tests/conftest.py"]:
+        fixed, changes = fixer.fix(src, test_path)
+        assert fixed == src
+        assert len(changes) == 0
+
+
+def test_debug_mode_preserves_comments_and_quotes() -> None:
+    src = (
+        '# Global settings\n'
+        'app.config["DEBUG"] = True  # inline comment\n'
+        'app.run(\n'
+        '    host="0.0.0.0",  # listen on all interfaces\n'
+        '    debug=True,  # toggle debug\n'
+        ')\n'
+    )
+    fixer = DebugModeFixer()
+    fixed, changes = fixer.fix(src, "app.py")
+    assert '# Global settings' in fixed
+    assert 'app.config["DEBUG"] = False  # inline comment' in fixed
+    assert 'host="0.0.0.0",  # listen on all interfaces' in fixed
+    assert 'debug=False,  # toggle debug' in fixed
+    assert len(changes) == 2
+

@@ -75,6 +75,44 @@ def test_insecure_cookie_propose_patch():
     assert "samesite='lax'" in cand.diff
 
 
+def test_insecure_cookie_fixer_abstains_on_kwargs_unpacking() -> None:
+    fixer = InsecureCookieFixer()
+    source = (
+        "def set_auth(response, token, cookie_options):\n"
+        "    response.set_cookie('sessionid', token, **cookie_options)\n"
+    )
+    fixed, changes = fixer.fix(source)
+    assert fixed == source
+    assert len(changes) == 0
+
+
+def test_insecure_cookie_fixer_preserves_comments_and_formatting() -> None:
+    fixer = InsecureCookieFixer()
+    source = (
+        "def set_auth(response, token):\n"
+        "    response.set_cookie(\n"
+        "        'sessionid',  # cookie key\n"
+        "        token,  # auth token\n"
+        "        secure=False,  # currently plaintext\n"
+        "    )\n"
+    )
+    fixed, changes = fixer.fix(source)
+    assert len(changes) == 1
+    assert "# cookie key" in fixed
+    assert "# auth token" in fixed
+    assert "# currently plaintext" in fixed
+    assert "secure=True" in fixed
+    assert "httponly=True" in fixed
+    assert "samesite='lax'" in fixed
+    tree = compile(fixed, "<string>", "exec")
+    assert tree is not None
+
+
+def test_insecure_cookie_fixer_contract_proposal_only() -> None:
+    fixer = InsecureCookieFixer()
+    assert fixer.auto_apply is False
+
+
 # ==============================================================================
 # 2. SensitiveLogRedactFixer Unit Tests
 # ==============================================================================
@@ -292,3 +330,46 @@ def test_sensitive_log_redact_repair_end_to_end(tmp_path: Path):
     rescan_task = AnalysisTask(repo_root=repo)
     rescan_outcome = run_providers(rescan_task, [XBoundaryProvider()])
     assert not any(f.rule_id == "xbnd.sensitive-data-leak" for f in rescan_outcome.findings)
+
+
+def test_sensitive_log_redact_fixer_abstains_on_ui_dialogs_and_arbitrary_errors() -> None:
+    fixer = SensitiveLogRedactFixer()
+    source = (
+        "class MyValidator:\n"
+        "    def validate(self, password, dialog, parser):\n"
+        "        self.error('Invalid: ' + password)\n"
+        "        dialog.warning('Password expired: ' + password)\n"
+        "        parser.error('Missing password argument')\n"
+    )
+    fixed, changes = fixer.fix(source)
+    assert fixed == source
+    assert len(changes) == 0
+
+
+def test_sensitive_log_redact_fixer_preserves_comments_and_formatting() -> None:
+    fixer = SensitiveLogRedactFixer()
+    source = (
+        "import logging\n"
+        "\n"
+        "def auth(username, password):\n"
+        "    logging.info(\n"
+        "        'Auth user %s',  # log format\n"
+        "        username,\n"
+        "        # user password argument\n"
+        "        password,  # inline password comment\n"
+        "    )\n"
+    )
+    fixed, changes = fixer.fix(source)
+    assert len(changes) == 1
+    assert "# log format" in fixed
+    assert "# user password argument" in fixed
+    assert "# inline password comment" in fixed
+    assert "redact_secret(password)" in fixed
+    tree = compile(fixed, "<string>", "exec")
+    assert tree is not None
+
+
+def test_sensitive_log_redact_fixer_contract_proposal_only() -> None:
+    fixer = SensitiveLogRedactFixer()
+    assert fixer.auto_apply is False
+

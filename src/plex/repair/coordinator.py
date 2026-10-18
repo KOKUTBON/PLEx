@@ -24,12 +24,22 @@ from plex.repair.docker_tag_pin import DockerTagPinFixer
 from plex.repair.docker_user import DockerUserFixer
 from plex.repair.insecure_cookie import InsecureCookieFixer
 from plex.repair.insecure_index import InsecureIndexFixer
+from plex.repair.jsts import (
+    JsCodeEvalFixer,
+    JsCommandArrayFixer,
+    JsNoSQLInjectionFixer,
+    JsOpenRedirectFixer,
+    JsPathBoundaryFixer,
+    JsSQLParameterizeFixer,
+)
 from plex.repair.mass_assignment import MassAssignmentFixer
+from plex.repair.missing_authorization import MissingAuthorizationFixer
 from plex.repair.models import PatchCandidate, RepairRecord
 from plex.repair.nosql_injection import NoSQLInjectionFixer
 from plex.repair.open_redirect import OpenRedirectFixer
 from plex.repair.path_boundary import PathBoundaryFixer
 from plex.repair.plaintext_secret import PlaintextSecretFixer
+from plex.repair.reliability_fixes import AsyncBlockingCallFixer, UnlockedAcquireFixer
 from plex.repair.runner import RepairVerificationRunner
 from plex.repair.safe_deserialization import SafeDeserializationFixer
 from plex.repair.security_headers import SecurityHeadersFixer
@@ -39,6 +49,7 @@ from plex.repair.ssrf_validate import SSRFUrlValidateFixer
 from plex.repair.ssti import SSTIFixer
 from plex.repair.tenant_boundary import TenantBoundaryFixer
 from plex.repair.tls_verify import TLSVerifyFixer
+from plex.repair.unclosed_resource import UnclosedResourceFixer
 from plex.repair.weak_crypto import WeakCryptoFixer
 from plex.repair.xss import XSSFixer
 from plex.repair.xxe import XXEFixer
@@ -58,6 +69,7 @@ class RemediationPlan:
     findings: tuple[AnalysisFinding, ...] = ()
     routes: tuple[RouteEndpoint, ...] = ()
     active_findings: tuple[AnalysisFinding, ...] = ()
+    artifact_findings: tuple[AnalysisFinding, ...] = ()
     candidates: tuple[PatchCandidate, ...] = ()
     repairs: tuple[RepairRecord, ...] = ()
     graph: ProjectGraph = field(default_factory=ProjectGraph)
@@ -84,6 +96,64 @@ class RemediationPlan:
         return any(r.status == "failed" for r in self.repairs)
 
 
+class PerformanceFixerAdapter:
+    """Adapter bridging deterministic PLEx Performance AST fixers to the Repair contract."""
+
+    auto_apply: bool = True
+
+    def __init__(self, fixer: Any) -> None:
+        self._fixer = fixer
+        self.rule_id: str = getattr(fixer, "rule_id", "")
+
+    def propose_patch(
+        self,
+        source: str,
+        target_file: str,
+        finding_ids: tuple[str, ...] = (),
+    ) -> PatchCandidate | None:
+        import difflib
+        import hashlib
+
+        if not target_file.endswith(".py"):
+            return None
+        fixed_src, changes = self._fixer.fix(source, file_path=target_file)
+        if not changes or fixed_src == source:
+            return None
+        diff = "".join(
+            difflib.unified_diff(
+                source.splitlines(keepends=True),
+                fixed_src.splitlines(keepends=True),
+                fromfile=f"a/{target_file}",
+                tofile=f"b/{target_file}",
+            )
+        )
+        rollback_diff = "".join(
+            difflib.unified_diff(
+                fixed_src.splitlines(keepends=True),
+                source.splitlines(keepends=True),
+                fromfile=f"b/{target_file}",
+                tofile=f"a/{target_file}",
+            )
+        )
+        src_digest = f"sha256:{hashlib.sha256(source.encode('utf-8')).hexdigest()}"
+        return PatchCandidate.create(
+            finding_ids=finding_ids,
+            rule_id=self.rule_id,
+            engine="performance",
+            source_digest=src_digest,
+            target_file=target_file,
+            diff=diff,
+            description=changes[0].description,
+            preconditions=(
+                "Python AST parses cleanly",
+                f"Target pattern matches deterministic performance rule '{self.rule_id}'",
+            ),
+            generator=f"plex.fix.{self._fixer.__class__.__name__}",
+            rollback_diff=rollback_diff,
+            metadata={"changes_count": len(changes)},
+        )
+
+
 class RemediationCoordinator:
     """Coordinates end-to-end static detection, route linking, active verification, and repair."""
 
@@ -100,6 +170,7 @@ class RemediationCoordinator:
             InsecureCookieFixer(),
             SensitiveLogRedactFixer(),
             TenantBoundaryFixer(),
+            MissingAuthorizationFixer(),
             TLSVerifyFixer(),
             PlaintextSecretFixer(),
             SafeDeserializationFixer(),
@@ -122,6 +193,15 @@ class RemediationCoordinator:
             CSRFFixer(),
             NoSQLInjectionFixer(),
             XSSFixer(),
+            JsSQLParameterizeFixer(),
+            JsCommandArrayFixer(),
+            JsPathBoundaryFixer(),
+            JsOpenRedirectFixer(),
+            JsNoSQLInjectionFixer(),
+            JsCodeEvalFixer(),
+            UnclosedResourceFixer(),
+            AsyncBlockingCallFixer(),
+            UnlockedAcquireFixer(),
         ]
 
     def plan_and_verify(
@@ -129,18 +209,32 @@ class RemediationCoordinator:
         repo_root: Path,
         target_url: str | None = None,
         authz_file: Path | None = None,
+        artifact_path: Path | None = None,
         test_command: list[str] | None = None,
         check_performance: bool = True,
         active_checker: Callable[[Path], bool] | None = None,
+        include_performance: bool = False,
+        benchmark_command: list[str] | None = None,
+        rebuild_command: list[str] | None = None,
+        include_reliability: bool = False,
     ) -> RemediationPlan:
-        """Execute Section 3 workflow: detect, link routes, validate, repair, and verify."""
+        """Execute Section 3 workflow: detect, link routes, validate, inspect, repair, and verify."""
         resolved_root = repo_root.resolve()
         correlator = GraphCorrelator(resolved_root)
 
-        # 1. Static security and configuration analysis (xBOUNDARY + SupplyChain)
+        # 1. Static security, configuration, and optional performance/reliability analysis
         task = AnalysisTask(repo_root=resolved_root)
-        outcome = run_providers(task, [XBoundaryProvider(), SupplyChainProvider()])
-        static_findings = outcome.findings
+        providers: list[Any] = [XBoundaryProvider(), SupplyChainProvider()]
+        if include_performance:
+            from plex.providers import PerformanceProvider
+
+            providers.append(PerformanceProvider())
+        if include_reliability:
+            from plex.reliability import ReliabilityProvider
+
+            providers.append(ReliabilityProvider())
+        outcome = run_providers(task, providers)
+        static_findings = list(outcome.findings)
 
         # 2. Discover routes from AST
         routes = discover_routes(resolved_root)
@@ -150,7 +244,7 @@ class RemediationCoordinator:
         # Correlate findings to routes and add to graph
         for finding in static_findings:
             correlated_route = correlate_finding_to_route(finding.file, finding.lineno or 1, routes)
-            correlator.add_finding(finding, producer="xboundary", route=correlated_route)
+            correlator.add_finding(finding, producer=finding.engine or "xboundary", route=correlated_route)
 
         # 3. Optional active validation via PLEx Validate
         active_findings: list[AnalysisFinding] = []
@@ -173,21 +267,69 @@ class RemediationCoordinator:
                         if sf_route:
                             correlator.correlate_active_finding(sf, af, sf_route)
 
-        # 4. Propose repairs using registered fixers
-        for fixer in self.fixers:
+        # 4. Optional compiled artifact inspection via PLEx Inspect
+        artifact_findings: list[AnalysisFinding] = []
+        if artifact_path and artifact_path.exists():
+            from plex.inspect.archive import parse_archive
+            from plex.inspect.elf import parse_elf
+            from plex.inspect.engine import InspectEngine
+            from plex.inspect.intake import intake_artifact
+            from plex.inspect.macho import parse_macho
+            from plex.inspect.pe import parse_pe
+
+            insp_engine = InspectEngine()
+            insp_report = insp_engine.inspect(artifact_path, source_root=resolved_root)
+            artifact_findings = insp_report.findings_unified
+
+            try:
+                data, sha256, fmt = intake_artifact(artifact_path)
+                descriptor = None
+                if fmt == "elf":
+                    descriptor = parse_elf(data, str(artifact_path), sha256)
+                elif fmt == "macho":
+                    descriptor = parse_macho(data, str(artifact_path), sha256)
+                elif fmt == "pe":
+                    descriptor = parse_pe(data, str(artifact_path), sha256)
+                elif fmt == "archive":
+                    descriptor = parse_archive(data, str(artifact_path), sha256)
+
+                if descriptor:
+                    anode = correlator.add_artifact(descriptor)
+                    for af in artifact_findings:
+                        correlator.add_artifact_finding(af, anode)
+            except Exception as e:
+                log.debug("Artifact registration skipped: %s", e)
+
+        # 5. Propose repairs using registered fixers (plus performance fixers if requested)
+        active_fixers = list(self.fixers)
+        if include_performance:
+            from plex.fix.engine import DEFAULT_FIXERS
+
+            active_fixers.extend(PerformanceFixerAdapter(f) for f in DEFAULT_FIXERS)
+
+        for fixer in active_fixers:
             prepare = getattr(fixer, "prepare", None)
             if callable(prepare):
                 prepare(resolved_root)
         candidates: list[PatchCandidate] = []
         auto_applicable: set[str] = set()
-        for finding in static_findings:
+        all_findings = list(static_findings) + list(artifact_findings)
+        for finding in all_findings:
             fpath = resolved_root / finding.file
-            if not fpath.exists():
+            try:
+                src = fpath.read_text(encoding="utf-8")
+            except (UnicodeDecodeError, OSError):
                 continue
-            src = fpath.read_text(encoding="utf-8")
-            for fixer in self.fixers:
-                if getattr(fixer, "rule_id", None) and fixer.rule_id != finding.rule_id:
-                    continue
+            for fixer in active_fixers:
+                fixer_rule = getattr(fixer, "rule_id", None)
+                if fixer_rule and fixer_rule != finding.rule_id:
+                    # Also allow performance fixers when finding is plex.hotspot
+                    if not (
+                        include_performance
+                        and finding.rule_id == "plex.hotspot"
+                        and isinstance(fixer, PerformanceFixerAdapter)
+                    ):
+                        continue
                 candidate = fixer.propose_patch(
                     source=src,
                     target_file=finding.file,
@@ -212,8 +354,9 @@ class RemediationCoordinator:
         for candidate in candidates:
             correlator.add_patch_candidate(candidate)
 
-        # 5. Multi-engine verification of candidates
+        # 6. Multi-engine verification of candidates
         repairs: list[RepairRecord] = []
+        finding_repair_map: dict[str, RepairRecord] = {}
         for candidate in candidates:
             repair = self.verifier.verify(
                 candidate=candidate,
@@ -222,14 +365,34 @@ class RemediationCoordinator:
                 check_performance=check_performance,
                 active_checker=active_checker,
                 correlator=correlator,
+                benchmark_command=benchmark_command,
+                rebuild_command=rebuild_command,
+                artifact_path=artifact_path,
             )
             repairs.append(repair)
+            for fid in candidate.finding_ids:
+                finding_repair_map[fid] = repair
+
+        # Attach repair_status to findings while keeping finding.status strictly separate (Section 4.3)
+        updated_findings: list[AnalysisFinding] = []
+        for f in static_findings:
+            rep = finding_repair_map.get(f.id)
+            if rep is not None:
+                updated_findings.append(
+                    replace(
+                        f,
+                        repair_status=rep.status,
+                    )
+                )
+            else:
+                updated_findings.append(f)
 
         return RemediationPlan(
             repo_root=str(resolved_root),
-            findings=tuple(static_findings),
+            findings=tuple(updated_findings),
             routes=tuple(routes),
             active_findings=tuple(active_findings),
+            artifact_findings=tuple(artifact_findings),
             candidates=tuple(candidates),
             repairs=tuple(repairs),
             graph=correlator.graph,

@@ -23,11 +23,26 @@ DEP_SPEC_PATTERN = re.compile(
 )
 
 
+def _parse_version_tuple(v: str) -> tuple[int, ...]:
+    nums: list[int] = []
+    for part in re.split(r"[.\-_]", v):
+        try:
+            nums.append(int(part))
+        except ValueError:
+            break
+    return tuple(nums)
+
+
 class DependencyUpgradeFixer(BaseFixer):
-    """Supply chain fixer that upgrades vulnerable dependency packages to secure fixed versions (CWE-1395)."""
+    """Supply chain fixer that upgrades vulnerable dependency packages to secure fixed versions (CWE-1395).
+
+    This fixer is proposal-only (``auto_apply = False``) because upgrading dependencies can
+    introduce breaking API changes, deprecations, or major dependency conflicts.
+    """
 
     rule_id = "dep.vulnerable-version"
     name = "dependency_upgrade"
+    auto_apply = False
 
     def __init__(self, fixed_targets: dict[str, str] | None = None) -> None:
         self.fixed_targets = fixed_targets or {}
@@ -73,6 +88,7 @@ class DependencyUpgradeFixer(BaseFixer):
 
             pkg_name = match.group(1).strip()
             pkg_lower = pkg_name.lower()
+            spec = (match.group(2) or "").strip()
 
             # If specific target package requested, filter for it
             if target_package and pkg_lower != target_package.lower():
@@ -95,6 +111,13 @@ class DependencyUpgradeFixer(BaseFixer):
             if not target_version:
                 new_lines.append(line)
                 continue
+
+            # Never downgrade an installed version (e.g. urllib3==2.1.0 should not be downgraded to 1.26.5)
+            if spec.startswith("=="):
+                current_ver = spec.lstrip("=").strip()
+                if current_ver and _parse_version_tuple(current_ver) >= _parse_version_tuple(target_version):
+                    new_lines.append(line)
+                    continue
 
             new_pkg_spec = f"{pkg_name}=={target_version}"
             ending = "\n" if line.endswith("\n") else ""
@@ -175,6 +198,9 @@ class DependencyUpgradeFixer(BaseFixer):
 
         source_digest = f"sha256:{hashlib.sha256(source.encode('utf-8')).hexdigest()}"
 
+        meta_out = {"auto_apply": False, "reason": "Requires verifying compatibility with application dependencies"}
+        meta_out.update(meta)
+
         return PatchCandidate.create(
             finding_ids=finding_ids,
             rule_id=self.rule_id,
@@ -182,11 +208,11 @@ class DependencyUpgradeFixer(BaseFixer):
             source_digest=source_digest,
             target_file=target_file,
             diff=diff,
-            description="Upgrade vulnerable package dependency to secure fixed version",
+            description="Upgrade vulnerable dependency to fixed secure version",
             generator="plex.repair.dependency_upgrade",
             generator_version="1.0.0",
-            confidence="derived",
-            risk="low",
+            confidence="inferred",
+            risk="high",
             rollback_diff=rollback_diff,
-            metadata=meta,
+            metadata=meta_out,
         )

@@ -7,6 +7,7 @@ import time
 from collections import Counter
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import TypedDict, cast
 
@@ -987,7 +988,7 @@ def _build_report(
     stats = _build_stats(out, regressions)
     report = PLExReport(
         schema_version=SCHEMA_VERSION,
-        generated_at=__import__("datetime").datetime.utcnow().isoformat() + "Z",
+        generated_at=datetime.now(timezone.utc).isoformat(),
         repo_root=str(repo_root),
         changed_only=changed_only,
         base_ref=base_ref,

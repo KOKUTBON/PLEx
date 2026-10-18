@@ -9,9 +9,10 @@ from typing import Any
 from plex.fix.base import BaseFixer, FixChange
 from plex.repair.diffutil import unified_diff
 from plex.repair.models import PatchCandidate
+from plex.repair.sourceedit import SourceEditor
 from plex.security.dataflow import is_sensitive_name
 
-LOGGING_METHODS = {
+LOGGING_METHODS = frozenset({
     "debug",
     "info",
     "warning",
@@ -21,11 +22,26 @@ LOGGING_METHODS = {
     "fatal",
     "exception",
     "log",
-}
+})
 
-STDOUT_METHODS = {"write", "writelines"}
+STDOUT_METHODS = frozenset({"write", "writelines"})
 
-SANITIZER_FUNCS = {
+PROVEN_LOGGER_NAMES = frozenset({
+    "logging",
+    "logger",
+    "_logger",
+    "log",
+    "_log",
+})
+
+PROVEN_LOGGER_ATTRS = frozenset({
+    "logger",
+    "_logger",
+    "log",
+    "_log",
+})
+
+SANITIZER_FUNCS = frozenset({
     "mask",
     "redact",
     "obfuscate",
@@ -41,10 +57,10 @@ SANITIZER_FUNCS = {
     "len",
     "bool",
     "redact_secret",
-}
+})
 
 REDACT_HELPER_CODE = (
-    "\n\ndef redact_secret(val: object) -> str:\n"
+    "def redact_secret(val: object) -> str:\n"
     '    """Mask sensitive data to prevent credential exposure in logs (CWE-532)."""\n'
     '    return "[REDACTED]"\n'
 )
@@ -104,39 +120,55 @@ def _is_sensitive_expr(node: ast.expr, sensitive_vars: set[str]) -> bool:
 
 
 def _is_logging_sink(node: ast.Call) -> bool:
-    """Identify if call node represents a logging or console output sink."""
-    func_name = ""
-    if isinstance(node.func, ast.Name):
-        func_name = node.func.id
-        if func_name in {"print", "builtins.print"}:
-            return True
-    elif isinstance(node.func, ast.Attribute):
-        func_name = node.func.attr
-        if func_name in LOGGING_METHODS:
-            base_str = ast.unparse(node.func.value).lower()
-            if any(tok in base_str for tok in ("logger", "log", "logging", "_log", "app.logger", "self", "cls")):
-                return True
-        elif func_name in STDOUT_METHODS:
-            base_str = ast.unparse(node.func.value).lower()
-            if any(tok in base_str for tok in ("sys.stdout", "sys.stderr", "stdout", "stderr")):
-                return True
+    """Identify if call node represents a proven logging or console output sink.
+
+    Avoids matching UI dialogs, parsers, or arbitrary classes with error/warning methods
+    (e.g., dialog.warning(), parser.error(), self.error()).
+    """
+    func = node.func
+    if isinstance(func, ast.Name):
+        return func.id in {"print", "builtins.print"}
+
+    if isinstance(func, ast.Attribute):
+        method_name = func.attr
+        receiver = func.value
+
+        if method_name in LOGGING_METHODS:
+            if isinstance(receiver, ast.Name):
+                return receiver.id in PROVEN_LOGGER_NAMES
+
+            if isinstance(receiver, ast.Attribute):
+                return receiver.attr in PROVEN_LOGGER_ATTRS
+
+            if isinstance(receiver, ast.Call):
+                # e.g., logging.getLogger(__name__).info(...)
+                if isinstance(receiver.func, ast.Attribute) and receiver.func.attr == "getLogger":
+                    return True
+
+        elif method_name in STDOUT_METHODS:
+            if isinstance(receiver, ast.Attribute):
+                if (
+                    isinstance(receiver.value, ast.Name)
+                    and receiver.value.id == "sys"
+                    and receiver.attr in {"stdout", "stderr"}
+                ):
+                    return True
+            elif isinstance(receiver, ast.Name):
+                return receiver.id in {"stdout", "stderr"}
+
     return False
 
 
-def _wrap_with_redact(expr: ast.expr) -> ast.Call:
-    """Wrap sensitive expression in redact_secret(expr)."""
-    return ast.Call(
-        func=ast.Name(id="redact_secret", ctx=ast.Load()),
-        args=[expr],
-        keywords=[],
-    )
-
-
 class SensitiveLogRedactFixer(BaseFixer):
-    """AST fixer that wraps sensitive data in logging and print sinks with redact_secret()."""
+    """AST fixer that wraps sensitive data in logging and print sinks with redact_secret().
+
+    This fixer is proposal-only (``auto_apply = False``) because masking sensitive logging
+    requires reviewing variable semantics and downstream log ingestion pipelines.
+    """
 
     rule_id = "xbnd.sensitive-data-leak"
     name = "sensitive_log_redact"
+    auto_apply = False
 
     def fix(self, source: str, file_path: str = "") -> tuple[str, list[FixChange]]:
         try:
@@ -144,9 +176,8 @@ class SensitiveLogRedactFixer(BaseFixer):
         except SyntaxError:
             return source, []
 
-        lines = source.splitlines(keepends=True)
+        editor = SourceEditor(source)
         changes: list[FixChange] = []
-        replacements: list[tuple[int, int, int, int, str, str]] = []
 
         # 1. Discover sensitive variable assignments across functions
         sensitive_vars: set[str] = set()
@@ -165,7 +196,7 @@ class SensitiveLogRedactFixer(BaseFixer):
                         elif _is_sensitive_expr(node.value, sensitive_vars):
                             sensitive_vars.add(target.id)
 
-        # 2. Inspect logging and output sinks
+        # 2. Inspect proven logging and output sinks
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
                 continue
@@ -173,97 +204,57 @@ class SensitiveLogRedactFixer(BaseFixer):
             if not _is_logging_sink(node):
                 continue
 
-            modified = False
-            new_args: list[ast.expr] = []
-
             for call_arg in node.args:
                 if isinstance(call_arg, ast.JoinedStr):
-                    # Inspect f-string values
-                    new_values: list[ast.expr] = []
-                    fstring_modified = False
                     for val in call_arg.values:
                         if (
                             isinstance(val, ast.FormattedValue)
                             and _is_sensitive_expr(val.value, sensitive_vars)
                             and not _is_already_sanitized(val.value)
                         ):
-                            new_values.append(
-                                ast.FormattedValue(
-                                    value=_wrap_with_redact(val.value),
-                                    conversion=val.conversion,
-                                    format_spec=val.format_spec,
+                            old_expr_text = editor.segment(val.value)
+                            new_expr_text = f"redact_secret({old_expr_text})"
+                            editor.replace(val.value, new_expr_text)
+                            changes.append(
+                                FixChange(
+                                    rule_id=self.rule_id,
+                                    description="Redact sensitive credential in logging/output sink with redact_secret()",
+                                    lineno=val.value.lineno,
+                                    before=old_expr_text,
+                                    after=new_expr_text,
                                 )
                             )
-                            fstring_modified = True
-                        else:
-                            new_values.append(val)
-                    if fstring_modified:
-                        new_args.append(ast.JoinedStr(values=new_values))
-                        modified = True
-                    else:
-                        new_args.append(call_arg)
                 elif _is_sensitive_expr(call_arg, sensitive_vars) and not _is_already_sanitized(call_arg):
-                    new_args.append(_wrap_with_redact(call_arg))
-                    modified = True
-                else:
-                    new_args.append(call_arg)
+                    old_arg_text = editor.segment(call_arg)
+                    new_arg_text = f"redact_secret({old_arg_text})"
+                    editor.replace(call_arg, new_arg_text)
+                    changes.append(
+                        FixChange(
+                            rule_id=self.rule_id,
+                            description="Redact sensitive credential in logging/output sink with redact_secret()",
+                            lineno=call_arg.lineno,
+                            before=old_arg_text,
+                            after=new_arg_text,
+                        )
+                    )
 
-            new_keywords: list[ast.keyword] = []
             for kw in node.keywords:
                 if _is_sensitive_expr(kw.value, sensitive_vars) and not _is_already_sanitized(kw.value):
-                    new_keywords.append(ast.keyword(arg=kw.arg, value=_wrap_with_redact(kw.value)))
-                    modified = True
-                else:
-                    new_keywords.append(kw)
+                    old_kw_text = editor.segment(kw.value)
+                    new_kw_text = f"redact_secret({old_kw_text})"
+                    editor.replace(kw.value, new_kw_text)
+                    changes.append(
+                        FixChange(
+                            rule_id=self.rule_id,
+                            description="Redact sensitive credential in logging/output sink with redact_secret()",
+                            lineno=kw.value.lineno,
+                            before=old_kw_text,
+                            after=new_kw_text,
+                        )
+                    )
 
-            if not modified:
-                continue
-
-            new_call = ast.Call(
-                func=node.func,
-                args=new_args,
-                keywords=new_keywords,
-            )
-
-            new_code = ast.unparse(new_call)
-
-            start_line = node.lineno
-            end_line = node.end_lineno or node.lineno
-            start_col = node.col_offset
-            end_col = node.end_col_offset or len(lines[end_line - 1])
-
-            if start_line == end_line:
-                old_code = lines[start_line - 1][start_col:end_col]
-            else:
-                old_code = "".join(lines[start_line - 1 : end_line])
-
-            if old_code.strip() != new_code.strip():
-                replacements.append((start_line, end_line, start_col, end_col, old_code, new_code))
-
-        if not replacements:
+        if not changes:
             return source, []
-
-        replacements.sort(key=lambda r: (r[0], r[2]), reverse=True)
-        modified_lines = list(lines)
-
-        for s_line, e_line, s_col, e_col, old_code, new_code in replacements:
-            if s_line == e_line:
-                line = modified_lines[s_line - 1]
-                modified_lines[s_line - 1] = line[:s_col] + new_code + line[e_col:]
-            else:
-                first_part = modified_lines[s_line - 1][:s_col]
-                last_part = modified_lines[e_line - 1][e_col:]
-                modified_lines[s_line - 1 : e_line] = [first_part + new_code + last_part]
-
-            changes.append(
-                FixChange(
-                    rule_id=self.rule_id,
-                    description="Redact sensitive credential in logging/output sink with redact_secret()",
-                    lineno=s_line,
-                    before=old_code,
-                    after=new_code,
-                )
-            )
 
         # Check if redact_secret helper is already defined
         has_redact_helper = any(
@@ -272,26 +263,13 @@ class SensitiveLogRedactFixer(BaseFixer):
         )
 
         if not has_redact_helper:
-            # Find insertion point after module docstring and top-level imports
-            insert_idx = 0
-            for node in tree.body:
-                if (
-                    isinstance(node, ast.Expr)
-                    and isinstance(node.value, ast.Constant)
-                    and isinstance(node.value.value, str)
-                ):
-                    insert_idx = max(insert_idx, node.end_lineno or node.lineno)
-                elif isinstance(node, (ast.Import, ast.ImportFrom)):
-                    insert_idx = max(insert_idx, node.end_lineno or node.lineno)
-                else:
-                    break
+            editor.insert_top_level(tree, REDACT_HELPER_CODE.strip(), blank_lines=2)
 
-            if insert_idx < len(modified_lines):
-                modified_lines.insert(insert_idx, REDACT_HELPER_CODE)
-            else:
-                modified_lines.append(REDACT_HELPER_CODE)
+        try:
+            new_source = editor.result()
+        except ValueError:
+            return source, []
 
-        new_source = "".join(modified_lines)
         return new_source, changes
 
     def propose_patch(
@@ -328,6 +306,10 @@ class SensitiveLogRedactFixer(BaseFixer):
 
         source_digest = f"sha256:{hashlib.sha256(source.encode('utf-8')).hexdigest()}"
 
+        meta = {"auto_apply": False, "reason": "Sensitive log redaction requires verification of logging pipeline"}
+        if metadata:
+            meta.update(metadata)
+
         return PatchCandidate.create(
             finding_ids=finding_ids,
             rule_id=self.rule_id,
@@ -338,8 +320,8 @@ class SensitiveLogRedactFixer(BaseFixer):
             description="Mask sensitive data in logging sink with redact_secret() helper to prevent exposure",
             generator="plex.repair.sensitive_log_redact",
             generator_version="1.0.0",
-            confidence="derived",
-            risk="low",
+            confidence="inferred",
+            risk="medium",
             rollback_diff=rollback_diff,
-            metadata=metadata or {},
+            metadata=meta,
         )

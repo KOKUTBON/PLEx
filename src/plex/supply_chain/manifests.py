@@ -134,3 +134,127 @@ def parse_pipfile_lock(content: str, file_path: str) -> list[DependencyRecord]:
                 )
 
     return deps
+
+
+def parse_package_lock_json(content: str, file_path: str) -> list[DependencyRecord]:
+    """Parse npm package-lock.json (v1, v2, and v3) into pinned DependencyRecords."""
+    deps: list[DependencyRecord] = []
+    try:
+        data = json.loads(content)
+    except json.JSONDecodeError:
+        return deps
+    if not isinstance(data, dict):
+        return deps
+
+    seen: set[tuple[str, str]] = set()
+    lines = content.splitlines()
+
+    def _find_pkg_line(pkg_name: str) -> int:
+        token = f'"{pkg_name}"'
+        node_mod_token = f'node_modules/{pkg_name}"'
+        for idx, line in enumerate(lines, start=1):
+            if node_mod_token in line or token in line:
+                return idx
+        return 1
+
+    # npm v2/v3: "packages" dictionary keyed by "" (root) or "node_modules/<pkg>"
+    packages = data.get("packages")
+    if isinstance(packages, dict):
+        for pkg_key, info in packages.items():
+            if not pkg_key or not isinstance(info, dict):
+                continue
+            pkg_name = pkg_key.split("node_modules/")[-1].strip("/")
+            version = str(info.get("version", "")).strip()
+            if not pkg_name or not version:
+                continue
+            dedup_key = (pkg_name.lower(), version)
+            if dedup_key in seen:
+                continue
+            seen.add(dedup_key)
+            integrity = str(info.get("integrity", "")).strip()
+            hashes = (integrity,) if integrity else ()
+            resolved_url = info.get("resolved")
+            deps.append(
+                DependencyRecord(
+                    name=pkg_name.lower(),
+                    specifier=f"=={version}",
+                    file=file_path,
+                    lineno=_find_pkg_line(pkg_name),
+                    is_pinned=True,
+                    resolved_version=version,
+                    hashes=hashes,
+                    index_url=str(resolved_url) if isinstance(resolved_url, str) else None,
+                )
+            )
+
+    # npm v1 fallback (or additional entries in "dependencies")
+    dependencies = data.get("dependencies")
+    if isinstance(dependencies, dict):
+        for pkg_name, info in dependencies.items():
+            if not isinstance(info, dict):
+                continue
+            version = str(info.get("version", "")).strip()
+            if not pkg_name or not version:
+                continue
+            dedup_key = (pkg_name.lower(), version)
+            if dedup_key in seen:
+                continue
+            seen.add(dedup_key)
+            integrity = str(info.get("integrity", "")).strip()
+            hashes = (integrity,) if integrity else ()
+            resolved_url = info.get("resolved")
+            deps.append(
+                DependencyRecord(
+                    name=pkg_name.lower(),
+                    specifier=f"=={version}",
+                    file=file_path,
+                    lineno=_find_pkg_line(pkg_name),
+                    is_pinned=True,
+                    resolved_version=version,
+                    hashes=hashes,
+                    index_url=str(resolved_url) if isinstance(resolved_url, str) else None,
+                )
+            )
+
+    return deps
+
+
+def parse_package_json(content: str, file_path: str) -> list[DependencyRecord]:
+    """Parse npm package.json dependencies and devDependencies into DependencyRecords."""
+    deps: list[DependencyRecord] = []
+    try:
+        data = json.loads(content)
+    except json.JSONDecodeError:
+        return deps
+    if not isinstance(data, dict):
+        return deps
+
+    lines = content.splitlines()
+
+    def _find_line(pkg_name: str) -> int:
+        token = f'"{pkg_name}"'
+        for idx, line in enumerate(lines, start=1):
+            if token in line:
+                return idx
+        return 1
+
+    for section_key in ("dependencies", "devDependencies"):
+        sec = data.get(section_key)
+        if not isinstance(sec, dict):
+            continue
+        for pkg_name, raw_spec in sec.items():
+            if not isinstance(raw_spec, str):
+                continue
+            spec = raw_spec.strip()
+            is_exact = bool(re.match(r"^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$", spec))
+            deps.append(
+                DependencyRecord(
+                    name=pkg_name.lower(),
+                    specifier=f"=={spec}" if is_exact else spec,
+                    file=file_path,
+                    lineno=_find_line(pkg_name),
+                    is_pinned=is_exact,
+                    resolved_version=spec if is_exact else None,
+                )
+            )
+    return deps

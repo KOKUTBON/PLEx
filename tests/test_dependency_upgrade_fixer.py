@@ -95,3 +95,19 @@ def test_dependency_upgrade_fixer_propose_patch_none_when_no_changes() -> None:
     fixer = DependencyUpgradeFixer()
     patch = fixer.propose_patch(src, "requirements.txt")
     assert patch is None
+
+
+def test_dependency_upgrade_fixer_never_downgrades_higher_versions() -> None:
+    fixer = DependencyUpgradeFixer()
+    # requests==2.32.0 is already higher than fixed version 2.31.0
+    # urllib3==2.1.0 is already higher than fixed version 1.26.5
+    src = "requests==2.32.0\nurllib3==2.1.0\n"
+    fixed, changes = fixer.fix(src, "requirements.txt")
+    assert fixed == src
+    assert len(changes) == 0
+
+
+def test_dependency_upgrade_fixer_contract_proposal_only() -> None:
+    fixer = DependencyUpgradeFixer()
+    assert fixer.auto_apply is False
+

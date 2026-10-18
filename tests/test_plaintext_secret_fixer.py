@@ -139,3 +139,36 @@ def test_propose_patch_candidate_noop_returns_none() -> None:
         target_file=".env",
     )
     assert candidate is None
+
+
+def test_non_secret_identifiers_ignored() -> None:
+    fixer = PlaintextSecretFixer()
+    source = """PRIMARY_KEY = "customer_uuid"
+FOREIGN_KEY = "order_reference_id"
+SORT_KEY = "timestamp_millis"
+"""
+    fixed, changes = fixer.fix(source, "models.py")
+    assert fixed == source
+    assert len(changes) == 0
+
+
+def test_test_and_dev_files_skipped() -> None:
+    fixer = PlaintextSecretFixer()
+    py_source = 'API_KEY = "dummy_mock_secret_12345"\n'
+    fixed, changes = fixer.fix(py_source, "tests/test_api.py")
+    assert fixed == py_source
+    assert len(changes) == 0
+
+    env_source = "SECRET_KEY=dev_placeholder_key_12345\n"
+    fixed_env, changes_env = fixer.fix(env_source, ".env.example")
+    assert fixed_env == env_source
+    assert len(changes_env) == 0
+
+
+def test_inline_comments_preserved() -> None:
+    fixer = PlaintextSecretFixer()
+    source = 'SECRET_KEY = "real_production_secret_key"  # pragma: allowlist secret\n'
+    fixed, changes = fixer.fix(source, "config.py")
+    assert 'SECRET_KEY = os.getenv("SECRET_KEY", "")  # pragma: allowlist secret' in fixed
+    assert len(changes) >= 1
+

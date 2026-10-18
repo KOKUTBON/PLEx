@@ -9,7 +9,36 @@ from typing import Any
 from plex.fix.base import BaseFixer, FixChange
 from plex.repair.diffutil import unified_diff
 from plex.repair.models import PatchCandidate
-from plex.security.csrf import CSRF_DISABLE_VARS, _is_csrf_exempt_decorator
+from plex.repair.sourceedit import SourceEditor
+from plex.security.csrf import CSRF_DISABLE_VARS
+
+
+def _is_test_or_dev_file(file_path: str) -> bool:
+    """Return True if file_path appears to be a test suite or development fixture."""
+    if not file_path:
+        return False
+    parts = file_path.lower().replace("\\", "/").split("/")
+    if any(p in {"tests", "test", "testing", "fixtures"} for p in parts):
+        return True
+    fname = parts[-1]
+    return fname.startswith("test_") or fname.endswith("_test.py") or fname == "conftest.py"
+
+
+def _is_csrf_exempt_decorator(dec_node: ast.AST) -> bool:
+    """Return True if decorator matches csrf_exempt or csrf.exempt."""
+    if isinstance(dec_node, ast.Name):
+        return dec_node.id in {"csrf_exempt", "exempt"}
+    if isinstance(dec_node, ast.Attribute):
+        if dec_node.attr == "csrf_exempt":
+            return True
+        if dec_node.attr == "exempt":
+            # Check receiver: csrf.exempt or views.decorators.csrf.exempt
+            receiver = ast.unparse(dec_node.value).lower()
+            return "csrf" in receiver
+        return False
+    if isinstance(dec_node, ast.Call):
+        return _is_csrf_exempt_decorator(dec_node.func)
+    return False
 
 
 class CSRFFixer(BaseFixer):
@@ -17,6 +46,7 @@ class CSRFFixer(BaseFixer):
 
     rule_id = "cfg.csrf-disabled"
     name = "csrf_protection"
+    auto_apply = False
 
     def fix(self, source: str, file_path: str = "") -> tuple[str, list[FixChange]]:
         try:
@@ -24,65 +54,75 @@ class CSRFFixer(BaseFixer):
         except SyntaxError:
             return source, []
 
-        lines = source.splitlines(keepends=True)
+        # Skip test fixtures: test suites intentionally disable CSRF to test internal handlers.
+        if _is_test_or_dev_file(file_path):
+            return source, []
+
+        editor = SourceEditor(source)
         changes: list[FixChange] = []
-        replacements: list[tuple[int, int, int, int, str, str]] = []
 
         for node in ast.walk(tree):
             # 1. Detect and remove @csrf_exempt decorators
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 for dec in node.decorator_list:
                     if _is_csrf_exempt_decorator(dec):
-                        start_line = dec.lineno
-                        end_line = dec.end_lineno or dec.lineno
-                        old_code = "".join(lines[start_line - 1 : end_line])
-                        # Delete the decorator line entirely
-                        replacements.append((start_line, end_line, 0, len(lines[end_line - 1]), old_code, ""))
+                        s_line = dec.lineno
+                        e_line = dec.end_lineno or dec.lineno
+                        start_offset = editor.offset(s_line, 0)
+                        if e_line < len(editor._line_starts) - 1:
+                            end_offset = editor.offset(e_line + 1, 0)
+                        else:
+                            end_offset = len(source)
+
+                        old_code = source[start_offset:end_offset]
+                        editor._edits.append((start_offset, end_offset, ""))
+                        changes.append(
+                            FixChange(
+                                rule_id=self.rule_id,
+                                description=(
+                                    f"Remove CSRF exemption decorator '@{ast.unparse(dec)}' "
+                                    f"on '{node.name}' (CWE-352)"
+                                ),
+                                lineno=s_line,
+                                before=old_code.strip(),
+                                after="",
+                            )
+                        )
 
             # 2. Detect and enable WTF_CSRF_ENABLED = True
             elif isinstance(node, ast.Assign):
                 if isinstance(node.value, ast.Constant) and node.value.value is False:
+                    is_csrf_target = False
+                    target_name = ""
                     for target in node.targets:
                         target_str = ast.unparse(target)
                         if any(var in target_str for var in CSRF_DISABLE_VARS):
-                            val_node = node.value
-                            s_line = val_node.lineno
-                            e_line = val_node.end_lineno or val_node.lineno
-                            s_col = val_node.col_offset
-                            e_col = val_node.end_col_offset or (s_col + 5)
-                            old_code = lines[s_line - 1][s_col:e_col]
-                            replacements.append((s_line, e_line, s_col, e_col, old_code, "True"))
+                            is_csrf_target = True
+                            target_name = target_str
+                            break
 
-        if not replacements:
+                    if is_csrf_target:
+                        old_code = editor.segment(node.value)
+                        editor.replace(node.value, "True")
+                        changes.append(
+                            FixChange(
+                                rule_id=self.rule_id,
+                                description=f"Enable CSRF configuration for {target_name} (CWE-352)",
+                                lineno=node.value.lineno,
+                                before=old_code,
+                                after="True",
+                            )
+                        )
+
+        if not changes:
             return source, []
 
-        replacements.sort(key=lambda r: (r[0], r[2]), reverse=True)
-        modified_lines = list(lines)
+        try:
+            new_source = editor.result()
+            ast.parse(new_source)
+        except (ValueError, SyntaxError):
+            return source, []
 
-        for s_line, e_line, s_col, e_col, old_code, new_code in replacements:
-            if new_code == "":
-                # Deleting whole line(s)
-                for line_idx in range(s_line - 1, e_line):
-                    modified_lines[line_idx] = ""
-            elif s_line == e_line:
-                line = modified_lines[s_line - 1]
-                modified_lines[s_line - 1] = line[:s_col] + new_code + line[e_col:]
-            else:
-                first_part = modified_lines[s_line - 1][:s_col]
-                last_part = modified_lines[e_line - 1][e_col:]
-                modified_lines[s_line - 1 : e_line] = [first_part + new_code + last_part]
-
-            changes.append(
-                FixChange(
-                    rule_id=self.rule_id,
-                    description="Restore CSRF protection by removing exemption or enabling CSRF configuration (CWE-352)",
-                    lineno=s_line,
-                    before=old_code,
-                    after=new_code,
-                )
-            )
-
-        new_source = "".join(modified_lines)
         return new_source, changes
 
     def propose_patch(

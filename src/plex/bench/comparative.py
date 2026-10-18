@@ -7,9 +7,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from plex.providers import AnalysisTask, XBoundaryProvider, run_providers
+from plex.providers import AnalysisTask, SupplyChainProvider, XBoundaryProvider, run_providers
+from plex.repair.coordinator import RemediationCoordinator
 from plex.repair.runner import RepairVerificationRunner
-from plex.repair.sql_parameterize import SQLParameterizeFixer
 
 
 @dataclass(frozen=True)
@@ -20,6 +20,7 @@ class BenchmarkCase:
     expected_rule: str | None = None
     should_detect: bool = True
     expect_repairable: bool = False
+    test_cmd: str | None = None
 
 
 @dataclass(frozen=True)
@@ -31,6 +32,7 @@ class BenchmarkManifest:
     min_precision: float = 0.95
     min_recall: float = 0.90
     require_zero_regressions: bool = True
+    corpus_dir: str | None = None
     cases: tuple[BenchmarkCase, ...] = ()
 
     @classmethod
@@ -42,6 +44,7 @@ class BenchmarkManifest:
                 expected_rule=c.get("expected_rule"),
                 should_detect=c.get("should_detect", True),
                 expect_repairable=c.get("expect_repairable", False),
+                test_cmd=c.get("test_cmd"),
             )
             for c in raw_cases
         )
@@ -51,6 +54,7 @@ class BenchmarkManifest:
             min_precision=data.get("min_precision", 0.95),
             min_recall=data.get("min_recall", 0.90),
             require_zero_regressions=data.get("require_zero_regressions", True),
+            corpus_dir=data.get("corpus_dir"),
             cases=cases,
         )
 
@@ -107,12 +111,165 @@ class ComparativeMetrics:
         }
 
 
+@dataclass(frozen=True)
+class ExternalBaselineRecord:
+    """Pinned comparative evaluation baseline for an external analyzer or tool."""
+
+    tool_name: str
+    tool_version: str
+    manifest_name: str
+    target_rule: str
+    precision: float
+    recall: float
+    f1_score: float
+    duration_ms: float = 0.0
+    repairs_verified: int = 0
+    notes: tuple[str, ...] = ()
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> ExternalBaselineRecord:
+        return cls(
+            tool_name=str(data["tool_name"]),
+            tool_version=str(data["tool_version"]),
+            manifest_name=str(data["manifest_name"]),
+            target_rule=str(data["target_rule"]),
+            precision=float(data["precision"]),
+            recall=float(data["recall"]),
+            f1_score=float(data["f1_score"]),
+            duration_ms=float(data.get("duration_ms", 0.0)),
+            repairs_verified=int(data.get("repairs_verified", 0)),
+            notes=tuple(str(n) for n in data.get("notes", ())),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "tool_name": self.tool_name,
+            "tool_version": self.tool_version,
+            "manifest_name": self.manifest_name,
+            "target_rule": self.target_rule,
+            "precision": round(self.precision, 4),
+            "recall": round(self.recall, 4),
+            "f1_score": round(self.f1_score, 4),
+            "duration_ms": round(self.duration_ms, 2),
+            "repairs_verified": self.repairs_verified,
+            "notes": list(self.notes),
+        }
+
+
+@dataclass(frozen=True)
+class BaselineComparisonDelta:
+    """Structured comparative delta between PLEx and a pinned external baseline."""
+
+    manifest_name: str
+    target_rule: str
+    baseline_tool: str
+    baseline_version: str
+    precision_delta: float
+    recall_delta: float
+    f1_delta: float
+    duration_delta_ms: float
+    repairs_verified_delta: int
+    where_plex_leads: tuple[str, ...] = ()
+    where_baseline_leads: tuple[str, ...] = ()
+    parity_metrics: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "manifest_name": self.manifest_name,
+            "target_rule": self.target_rule,
+            "baseline_tool": self.baseline_tool,
+            "baseline_version": self.baseline_version,
+            "deltas": {
+                "precision": round(self.precision_delta, 4),
+                "recall": round(self.recall_delta, 4),
+                "f1_score": round(self.f1_delta, 4),
+                "duration_ms": round(self.duration_delta_ms, 2),
+                "repairs_verified": self.repairs_verified_delta,
+            },
+            "where_plex_leads": list(self.where_plex_leads),
+            "where_baseline_leads": list(self.where_baseline_leads),
+            "parity_metrics": list(self.parity_metrics),
+        }
+
+
+def compare_against_pinned_baseline(
+    metrics: ComparativeMetrics,
+    baseline: ExternalBaselineRecord,
+) -> BaselineComparisonDelta:
+    """Compare a PLEx ComparativeMetrics result against a pinned external baseline honestly."""
+    p_delta = round(metrics.precision - baseline.precision, 4)
+    r_delta = round(metrics.recall - baseline.recall, 4)
+    f1_delta = round(metrics.f1_score - baseline.f1_score, 4)
+    dur_delta = round(metrics.duration_ms - baseline.duration_ms, 2)
+    rep_delta = metrics.repairs_verified - baseline.repairs_verified
+
+    plex_leads: list[str] = []
+    base_leads: list[str] = []
+    parity: list[str] = []
+
+    if p_delta > 1e-4:
+        plex_leads.append(f"precision (+{p_delta:.2%})")
+    elif p_delta < -1e-4:
+        base_leads.append(f"precision ({p_delta:.2%})")
+    else:
+        parity.append("precision")
+
+    if r_delta > 1e-4:
+        plex_leads.append(f"recall (+{r_delta:.2%})")
+    elif r_delta < -1e-4:
+        base_leads.append(f"recall ({r_delta:.2%})")
+    else:
+        parity.append("recall")
+
+    if f1_delta > 1e-4:
+        plex_leads.append(f"f1_score (+{f1_delta:.4f})")
+    elif f1_delta < -1e-4:
+        base_leads.append(f"f1_score ({f1_delta:.4f})")
+    else:
+        parity.append("f1_score")
+
+    if rep_delta > 0:
+        plex_leads.append(f"repairs_verified (+{rep_delta})")
+    elif rep_delta < 0:
+        base_leads.append(f"repairs_verified ({rep_delta})")
+    else:
+        parity.append("repairs_verified")
+
+    if baseline.duration_ms > 0:
+        if dur_delta < -1.0:
+            plex_leads.append(f"duration_ms ({dur_delta:.1f}ms faster)")
+        elif dur_delta > 1.0:
+            base_leads.append(f"duration_ms (+{dur_delta:.1f}ms slower)")
+        else:
+            parity.append("duration_ms")
+
+    return BaselineComparisonDelta(
+        manifest_name=metrics.manifest_name,
+        target_rule=metrics.target_rule,
+        baseline_tool=baseline.tool_name,
+        baseline_version=baseline.tool_version,
+        precision_delta=p_delta,
+        recall_delta=r_delta,
+        f1_delta=f1_delta,
+        duration_delta_ms=dur_delta,
+        repairs_verified_delta=rep_delta,
+        where_plex_leads=tuple(plex_leads),
+        where_baseline_leads=tuple(base_leads),
+        parity_metrics=tuple(parity),
+    )
+
+
 def run_comparative_benchmark(
     corpus_root: Path,
     manifest: BenchmarkManifest,
 ) -> ComparativeMetrics:
     """Execute evaluation on a declared held-out benchmark corpus."""
     root = corpus_root.resolve()
+    if manifest.corpus_dir:
+        cand_root = (corpus_root / manifest.corpus_dir).resolve()
+        if cand_root.exists():
+            root = cand_root
+
     t0 = time.monotonic()
 
     tp = 0
@@ -125,8 +282,15 @@ def run_comparative_benchmark(
     repairs_inconclusive = 0
     repairs_abstained = 0
 
-    fixer = SQLParameterizeFixer()
-    fixer.prepare(root)
+    coordinator = RemediationCoordinator()
+    matching_fixers = [
+        f for f in coordinator.fixers if getattr(f, "rule_id", None) == manifest.target_rule
+    ]
+    for fixer_item in matching_fixers:
+        prepare = getattr(fixer_item, "prepare", None)
+        if callable(prepare):
+            prepare(root)
+
     runner = RepairVerificationRunner()
 
     for case in manifest.cases:
@@ -134,10 +298,23 @@ def run_comparative_benchmark(
         if not target_path.exists():
             continue
 
-        # Run static analysis
-        task = AnalysisTask(repo_root=target_path.parent)
-        outcome = run_providers(task, [XBoundaryProvider()])
-        detected_rules = {f.rule_id for f in outcome.findings if Path(f.file).name == target_path.name}
+        # Run analysis depending on rule family
+        if manifest.target_rule.startswith("bin."):
+            from plex.inspect.engine import InspectEngine
+
+            insp_engine = InspectEngine()
+            insp_report = insp_engine.inspect(target_path)
+            detected_rules = {f.rule_id for f in insp_report.findings_unified}
+        elif manifest.target_rule.startswith(("rel.", "arch.")):
+            from plex.reliability import ReliabilityProvider
+
+            task = AnalysisTask(repo_root=target_path.parent)
+            outcome = run_providers(task, [ReliabilityProvider()])
+            detected_rules = {f.rule_id for f in outcome.findings if Path(f.file).name == target_path.name}
+        else:
+            task = AnalysisTask(repo_root=target_path.parent)
+            outcome = run_providers(task, [XBoundaryProvider(), SupplyChainProvider()])
+            detected_rules = {f.rule_id for f in outcome.findings if Path(f.file).name == target_path.name}
 
         target_detected = manifest.target_rule in detected_rules
 
@@ -153,16 +330,30 @@ def run_comparative_benchmark(
                 tn += 1
 
         # Evaluate repair if case is repairable
-        if case.expect_repairable and target_detected:
+        if case.expect_repairable and target_detected and matching_fixers:
             repairs_attempted += 1
-            src = target_path.read_text(encoding="utf-8")
-            cand = fixer.propose_patch(
-                source=src,
-                target_file=case.file,
-                finding_ids=("find:bench",),
-            )
+            try:
+                src = target_path.read_text(encoding="utf-8")
+            except (UnicodeDecodeError, OSError):
+                src = ""
+            cand = None
+            if src:
+                for fixer_item in matching_fixers:
+                    cand = fixer_item.propose_patch(
+                        source=src,
+                        target_file=target_path.name,
+                        finding_ids=("find:bench",),
+                    )
+                    if cand is not None:
+                        break
             if cand:
-                repair = runner.verify(candidate=cand, repo_root=target_path.parent, check_performance=True)
+                test_command = case.test_cmd.split() if case.test_cmd else None
+                repair = runner.verify(
+                    candidate=cand,
+                    repo_root=target_path.parent,
+                    test_command=test_command,
+                    check_performance=True,
+                )
                 if repair.status == "verified":
                     repairs_verified += 1
                 elif repair.status == "inconclusive":

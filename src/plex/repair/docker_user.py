@@ -9,7 +9,7 @@ from plex.fix.base import BaseFixer, FixChange
 from plex.repair.diffutil import unified_diff
 from plex.repair.models import PatchCandidate
 
-DOCKER_INSTRUCTIONS = {
+DOCKER_INSTRUCTIONS = frozenset({
     "FROM",
     "RUN",
     "CMD",
@@ -28,14 +28,20 @@ DOCKER_INSTRUCTIONS = {
     "STOPSIGNAL",
     "HEALTHCHECK",
     "SHELL",
-}
+})
 
 
 class DockerUserFixer(BaseFixer):
-    """Container hardening fixer that injects an unprivileged USER directive before entrypoint or cmd."""
+    """Container hardening fixer that injects an unprivileged USER directive before entrypoint or cmd.
+
+    This fixer is proposal-only (``auto_apply = False``) because switching to a non-root user
+    requires that the specified user exists in the image and possesses appropriate filesystem
+    permissions for working directories and runtime sockets.
+    """
 
     rule_id = "cfg.docker-root-user"
     name = "docker_user"
+    auto_apply = False
 
     def __init__(self, default_user: str = "nonroot") -> None:
         self.default_user = default_user
@@ -67,12 +73,24 @@ class DockerUserFixer(BaseFixer):
         if has_user_directive or not has_from_instruction:
             return source, []
 
-        # Find the insertion point in the final stage (after last FROM)
+        # Find the insertion point in the final stage (after last FROM),
+        # being careful not to insert inside multi-line continuation blocks.
         insert_idx = -1
+        in_continuation = False
         for idx in range(last_from_idx + 1, len(lines)):
             stripped = lines[idx].strip()
             if not stripped or stripped.startswith("#"):
                 continue
+
+            if in_continuation:
+                if not stripped.endswith("\\"):
+                    in_continuation = False
+                continue
+
+            if stripped.endswith("\\"):
+                in_continuation = True
+                continue
+
             first_token = stripped.split()[0].upper()
             if first_token in ("ENTRYPOINT", "CMD"):
                 insert_idx = idx
@@ -142,6 +160,10 @@ class DockerUserFixer(BaseFixer):
 
         source_digest = f"sha256:{hashlib.sha256(source.encode('utf-8')).hexdigest()}"
 
+        meta = {"auto_apply": False, "reason": "Requires verifying user exists in container image"}
+        if metadata:
+            meta.update(metadata)
+
         return PatchCandidate.create(
             finding_ids=finding_ids,
             rule_id=self.rule_id,
@@ -152,9 +174,9 @@ class DockerUserFixer(BaseFixer):
             description=f"Add 'USER {self.default_user}' directive before container entrypoint to prevent root execution",
             generator="plex.repair.docker_user",
             generator_version="1.0.0",
-            confidence="derived",
-            risk="low",
+            confidence="inferred",
+            risk="medium",
             rollback_diff=rollback_diff,
             preconditions=("Dockerfile lacks non-root USER instruction",),
-            metadata=metadata or {},
+            metadata=meta,
         )

@@ -9,26 +9,77 @@ from typing import Any
 from plex.fix.base import BaseFixer, FixChange
 from plex.repair.diffutil import unified_diff
 from plex.repair.models import PatchCandidate
+from plex.repair.sourceedit import SourceEditor
+from plex.repair.taint import module_bindings
 
-XML_IMPORT_REPLACEMENTS = [
-    ("import xml.etree.ElementTree as ET", "import defusedxml.ElementTree as ET"),
-    ("import xml.etree.cElementTree as ET", "import defusedxml.ElementTree as ET"),
-    ("from xml.etree import ElementTree as ET", "from defusedxml import ElementTree as ET"),
-    ("from xml.etree.ElementTree import fromstring", "from defusedxml.ElementTree import fromstring"),
-    ("from xml.etree.ElementTree import parse", "from defusedxml.ElementTree import parse"),
-    ("from xml.dom import minidom", "from defusedxml import minidom"),
-    ("import xml.dom.minidom as minidom", "import defusedxml.minidom as minidom"),
-    ("import xml.dom.minidom", "import defusedxml.minidom as minidom"),
-    ("import xml.sax as sax", "import defusedxml.sax as sax"),
-    ("from xml import sax", "from defusedxml import sax"),
-]
+XML_PARSER_SINKS = frozenset({
+    "parse",
+    "fromstring",
+    "parseString",
+    "XML",
+    "iterparse",
+    "make_parser",
+})
+
+XML_MODULE_MAP = {
+    "xml.etree.ElementTree": "defusedxml.ElementTree",
+    "xml.etree.cElementTree": "defusedxml.ElementTree",
+    "xml.dom.minidom": "defusedxml.minidom",
+    "xml.sax": "defusedxml.sax",
+    "xml.dom.pulldom": "defusedxml.pulldom",
+    "xml.dom.expatbuilder": "defusedxml.expatbuilder",
+}
+
+
+def _is_serialization_only(tree: ast.AST, aliases: dict[str, str]) -> bool:
+    """Return True if XML is used, but exclusively for non-parsing (serialization/creation)."""
+    xml_bound_modules: set[str] = set()
+    xml_bound_funcs: set[str] = set()
+
+    for bound, qualname in aliases.items():
+        for xml_mod in XML_MODULE_MAP:
+            if qualname == xml_mod:
+                xml_bound_modules.add(bound)
+            elif qualname.startswith(f"{xml_mod}."):
+                attr = qualname[len(xml_mod) + 1 :]
+                if attr in XML_PARSER_SINKS:
+                    xml_bound_funcs.add(bound)
+
+    has_xml_call = False
+    has_parser_sink = False
+
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        if isinstance(func, ast.Attribute):
+            val_text = (
+                ast.unparse(func.value)
+                if isinstance(func.value, ast.Attribute)
+                else (func.value.id if isinstance(func.value, ast.Name) else "")
+            )
+            if val_text in xml_bound_modules or val_text in XML_MODULE_MAP:
+                has_xml_call = True
+                if func.attr in XML_PARSER_SINKS:
+                    has_parser_sink = True
+        elif isinstance(func, ast.Name):
+            if func.id in xml_bound_funcs:
+                has_xml_call = True
+                has_parser_sink = True
+
+    return has_xml_call and not has_parser_sink
 
 
 class XXEFixer(BaseFixer):
-    """AST and lexical fixer that migrates unsafe xml parsers to defusedxml (CWE-611)."""
+    """AST and lexical fixer that migrates unsafe XML parsers to defusedxml (CWE-611).
+
+    This fixer is proposal-only (``auto_apply = False``) because defusedxml is a
+    third-party dependency that must be declared in the target project requirements.
+    """
 
     rule_id = "xbnd.xxe"
     name = "xxe"
+    auto_apply = False
 
     def fix(self, source: str, file_path: str = "") -> tuple[str, list[FixChange]]:
         try:
@@ -36,77 +87,94 @@ class XXEFixer(BaseFixer):
         except SyntaxError:
             return source, []
 
-        lines = source.splitlines(keepends=True)
-        changes: list[FixChange] = []
-        replacements: list[tuple[int, int, int, int, str, str]] = []
+        aliases, _ = module_bindings(tree)
 
-        # 1. Check for import statements to replace
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Import):
-                for alias in node.names:
-                    if alias.name.startswith("xml.etree") or alias.name.startswith("xml.dom") or alias.name == "xml.sax":
-                        orig_text = lines[node.lineno - 1]
-                        mod_text = orig_text.replace("xml.etree.ElementTree", "defusedxml.ElementTree")
-                        mod_text = mod_text.replace("xml.etree.cElementTree", "defusedxml.ElementTree")
-                        mod_text = mod_text.replace("xml.dom.minidom", "defusedxml.minidom")
-                        mod_text = mod_text.replace("xml.sax", "defusedxml.sax")
-                        if mod_text != orig_text:
-                            replacements.append(
-                                (node.lineno, node.end_lineno or node.lineno, 0, len(orig_text), orig_text, mod_text)
-                            )
-            elif isinstance(node, ast.ImportFrom):
-                if node.module and (node.module.startswith("xml.etree") or node.module.startswith("xml.dom") or node.module == "xml.sax"):
-                    orig_text = lines[node.lineno - 1]
-                    mod_text = orig_text.replace("xml.etree.ElementTree", "defusedxml.ElementTree")
-                    mod_text = mod_text.replace("xml.etree", "defusedxml")
-                    mod_text = mod_text.replace("xml.dom", "defusedxml")
-                    mod_text = mod_text.replace("xml", "defusedxml")
-                    if mod_text != orig_text:
-                        replacements.append(
-                            (node.lineno, node.end_lineno or node.lineno, 0, len(orig_text), orig_text, mod_text)
-                        )
-
-        # 2. Check for direct xml.etree.ElementTree calls
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
-                func_str = ast.unparse(node.func)
-                if func_str.startswith("xml.etree.ElementTree."):
-                    start_line = node.lineno
-                    end_line = node.end_lineno or node.lineno
-                    orig_call = ast.unparse(node)
-                    new_call = orig_call.replace("xml.etree.ElementTree.", "defusedxml.ElementTree.")
-                    if new_call != orig_call:
-                        # Check if defusedxml is already imported
-                        replacements.append(
-                            (start_line, end_line, node.col_offset, node.end_col_offset or len(lines[end_line - 1]), orig_call, new_call)
-                        )
-
-        if not replacements:
+        # Abstain on serialization-only / element construction code without parsing sinks.
+        if _is_serialization_only(tree, aliases):
             return source, []
 
-        replacements.sort(key=lambda r: (r[0], r[2]), reverse=True)
-        modified_lines = list(lines)
+        editor = SourceEditor(source)
+        changes: list[FixChange] = []
 
-        for s_line, e_line, s_col, e_col, old_code, new_code in replacements:
-            if s_line == e_line:
-                line = modified_lines[s_line - 1]
-                modified_lines[s_line - 1] = line[:s_col] + new_code + line[e_col:]
-            else:
-                first_part = modified_lines[s_line - 1][:s_col]
-                last_part = modified_lines[e_line - 1][e_col:]
-                modified_lines[s_line - 1 : e_line] = [first_part + new_code + last_part]
+        # 1. Migrate Import nodes
+        for node in tree.body:
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    target_mod = XML_MODULE_MAP.get(alias.name)
+                    if target_mod:
+                        old_code = editor.segment(alias)
+                        new_code = f"{target_mod} as {alias.asname}" if alias.asname else target_mod
+                        editor.replace(alias, new_code)
+                        changes.append(
+                            FixChange(
+                                rule_id=self.rule_id,
+                                description=f"Migrate '{alias.name}' import to '{target_mod}' (CWE-611)",
+                                lineno=alias.lineno,
+                                before=old_code,
+                                after=new_code,
+                            )
+                        )
 
-            changes.append(
-                FixChange(
-                    rule_id=self.rule_id,
-                    description="Replace standard library XML parser with defusedxml (CWE-611)",
-                    lineno=s_line,
-                    before=old_code,
-                    after=new_code,
-                )
-            )
+            elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
+                new_module: str | None = None
+                if node.module in XML_MODULE_MAP:
+                    new_module = XML_MODULE_MAP[node.module]
+                elif node.module == "xml.etree" and any(
+                    a.name in {"ElementTree", "cElementTree"} for a in node.names
+                ):
+                    new_module = "defusedxml"
+                elif node.module == "xml.dom" and any(a.name == "minidom" for a in node.names):
+                    new_module = "defusedxml"
+                elif node.module == "xml" and any(a.name == "sax" for a in node.names):
+                    new_module = "defusedxml"
 
-        new_source = "".join(modified_lines)
+                if new_module is not None:
+                    stmt_start = editor.offset(node.lineno, node.col_offset)
+                    stmt_text = editor.source[stmt_start:]
+                    from_idx = stmt_text.find("from")
+                    if from_idx != -1:
+                        mod_idx = stmt_text.find(node.module, from_idx + 4)
+                        if mod_idx != -1:
+                            start_pos = stmt_start + mod_idx
+                            end_pos = start_pos + len(node.module)
+                            editor._edits.append((start_pos, end_pos, new_module))
+                            changes.append(
+                                FixChange(
+                                    rule_id=self.rule_id,
+                                    description=f"Migrate 'from {node.module}' to 'from {new_module}' (CWE-611)",
+                                    lineno=node.lineno,
+                                    before=f"from {node.module}",
+                                    after=f"from {new_module}",
+                                )
+                            )
+
+        # 2. Direct calls with fully-qualified module names, e.g. xml.etree.ElementTree.fromstring(...)
+        for sub in ast.walk(tree):
+            if isinstance(sub, ast.Call) and isinstance(sub.func, ast.Attribute):
+                if sub.func.attr in XML_PARSER_SINKS:
+                    prefix = ast.unparse(sub.func.value)
+                    target_prefix = XML_MODULE_MAP.get(prefix)
+                    if target_prefix:
+                        old_seg = editor.segment(sub.func.value)
+                        editor.replace(sub.func.value, target_prefix)
+                        changes.append(
+                            FixChange(
+                                rule_id=self.rule_id,
+                                description=f"Update XML call receiver from '{prefix}' to '{target_prefix}' (CWE-611)",
+                                lineno=sub.lineno,
+                                before=old_seg,
+                                after=target_prefix,
+                            )
+                        )
+
+        if not changes:
+            return source, []
+
+        try:
+            new_source = editor.result()
+        except ValueError:
+            return source, []
+
         return new_source, changes
 
     def propose_patch(
@@ -150,11 +218,11 @@ class XXEFixer(BaseFixer):
             source_digest=source_digest,
             target_file=target_file,
             diff=diff,
-            description="Migrate unsafe XML parsers to defusedxml to prevent XML External Entity (XXE) attacks (CWE-611).",
+            description="Migrate unsafe XML parsers to defusedxml (CWE-611; requires defusedxml in dependencies)",
             generator="plex.repair.xxe",
-            generator_version="1.0.0",
+            generator_version="2.0.0",
             confidence="derived",
-            risk="low",
+            risk="medium",
             rollback_diff=rollback_diff,
             metadata=metadata or {},
         )

@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PLEx security policy v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version"
+  ],
+  "minProperties": 2,
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 2
+    },
+    "sources": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[A-Za-z_][A-Za-z0-9_]*(?![\\s\\S])"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/patternList"
+      }
+    },
+    "sanitizers": {
+      "$ref": "#/$defs/familyCatalog"
+    },
+    "sinks": {
+      "$ref": "#/$defs/familyCatalog"
+    },
+    "data_classes": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[A-Za-z_][A-Za-z0-9_]*(?![\\s\\S])"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/patternList"
+      }
+    },
+    "tenant_boundaries": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "fields": {
+          "$ref": "#/$defs/patternList"
+        },
+        "guards": {
+          "$ref": "#/$defs/patternList"
+        }
+      }
+    },
+    "authorization_invariants": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "protected_decorators": {
+          "$ref": "#/$defs/patternList"
+        },
+        "required_guards": {
+          "$ref": "#/$defs/patternList"
+        }
+      }
+    },
+    "approved_destinations": {
+      "type": "array",
+      "maxItems": 256,
+      "items": {
+        "type": "string",
+        "pattern": "^(?:\\*\\.)?[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*(?::[0-9]{1,5})?(?![\\s\\S])"
+      }
+    }
+  },
+  "$defs": {
+    "patternList": {
+      "type": "array",
+      "maxItems": 256,
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z_][A-Za-z0-9_]*(?:\\.(?:[A-Za-z_][A-Za-z0-9_]*|\\*))*(?![\\s\\S])"
+      }
+    },
+    "familyCatalog": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sql": { "$ref": "#/$defs/patternList" },
+        "command": { "$ref": "#/$defs/patternList" },
+        "path": { "$ref": "#/$defs/patternList" },
+        "eval": { "$ref": "#/$defs/patternList" },
+        "deserialization": { "$ref": "#/$defs/patternList" },
+        "ssrf": { "$ref": "#/$defs/patternList" },
+        "data_leak": { "$ref": "#/$defs/patternList" },
+        "log": { "$ref": "#/$defs/patternList" },
+        "xss": { "$ref": "#/$defs/patternList" },
+        "ssti": { "$ref": "#/$defs/patternList" },
+        "nosql": { "$ref": "#/$defs/patternList" },
+        "redirect": { "$ref": "#/$defs/patternList" },
+        "xxe": { "$ref": "#/$defs/patternList" }
+      }
+    }
+  }
+}

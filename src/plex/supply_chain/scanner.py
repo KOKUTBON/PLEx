@@ -16,8 +16,13 @@ from .config_rules import (
     evaluate_env_file,
     evaluate_tls_code,
 )
-from .manifests import parse_pipfile_lock, parse_poetry_lock, parse_requirements_txt
-from .models import AdvisoryRecord, DependencyRecord
+from .manifests import (
+    parse_package_lock_json,
+    parse_pipfile_lock,
+    parse_poetry_lock,
+    parse_requirements_txt,
+)
+from .models import AdvisoryFeed, AdvisoryRecord, DependencyRecord
 from .reachability import ReachabilityAnalyzer
 
 VALID_SEVERITIES: set[str] = {"critical", "high", "medium", "low", "info"}
@@ -29,7 +34,7 @@ def _normalize_severity(sev: str, default: Severity = "medium") -> Severity:
         return cast(Severity, s)
     return default
 
-# Built-in offline security advisories for core Python ecosystem
+# Built-in offline security advisories for Python and npm ecosystems
 BUILTIN_ADVISORIES: list[AdvisoryRecord] = [
     AdvisoryRecord(
         cve_id="CVE-2023-45803",
@@ -98,7 +103,40 @@ BUILTIN_ADVISORIES: list[AdvisoryRecord] = [
             "split_first",
         ),
     ),
+    AdvisoryRecord(
+        cve_id="CVE-2021-23337",
+        package="lodash",
+        affected_specifier="<4.17.21",
+        fixed_version="4.17.21",
+        severity="high",
+        description="Lodash command injection via template function.",
+        vulnerable_symbols=(
+            "lodash.template",
+            "_.template",
+            "template",
+        ),
+    ),
+    AdvisoryRecord(
+        cve_id="CVE-2024-29041",
+        package="express",
+        affected_specifier="<4.19.2",
+        fixed_version="4.19.2",
+        severity="medium",
+        description="Express.js open redirect bypass via malformed URL encoding.",
+        vulnerable_symbols=(
+            "res.redirect",
+            "redirect",
+        ),
+    ),
 ]
+
+BUILTIN_FEED = AdvisoryFeed(
+    feed_id="builtin-offline",
+    updated_at="2026-10-15T00:00:00Z",
+    freshness_max_age_days=180,
+    source_url="https://github.com/KOKUTBON/PLEx/advisories",
+    advisories=BUILTIN_ADVISORIES,
+)
 
 
 def _version_tuple(v: str) -> tuple[int, ...]:
@@ -112,22 +150,70 @@ def _version_tuple(v: str) -> tuple[int, ...]:
     return tuple(parts)
 
 
-def _is_affected(version: str, specifier: str) -> bool:
-    """Check if a concrete version satisfies an affected specifier (e.g. '< 1.26.18')."""
-    if specifier.startswith("<"):
-        target_v = specifier[1:].strip()
-        return _version_tuple(version) < _version_tuple(target_v)
-    elif specifier.startswith("<="):
-        target_v = specifier[2:].strip()
-        return _version_tuple(version) <= _version_tuple(target_v)
+def _compare_version(v1: tuple[int, ...], op: str, v2: tuple[int, ...]) -> bool:
+    if op == "<":
+        return v1 < v2
+    elif op == "<=":
+        return v1 <= v2
+    elif op == ">":
+        return v1 > v2
+    elif op == ">=":
+        return v1 >= v2
+    elif op == "==":
+        return v1 == v2
+    elif op == "!=":
+        return v1 != v2
     return False
+
+
+def _match_single_specifier(version: str, spec: str) -> bool:
+    spec = spec.strip()
+    if not spec:
+        return False
+    op = ""
+    for candidate_op in ("<=", ">=", "==", "!=", "<", ">"):
+        if spec.startswith(candidate_op):
+            op = candidate_op
+            break
+    if not op:
+        return _version_tuple(version) == _version_tuple(spec)
+    target_v = spec[len(op):].strip()
+    return _compare_version(_version_tuple(version), op, _version_tuple(target_v))
+
+
+def _is_affected(version: str, specifier: str) -> bool:
+    """Check if a concrete version satisfies an affected specifier (e.g. '< 1.26.18', '>=1.0, <2.0')."""
+    if not specifier or not version:
+        return False
+    clauses = [c.strip() for c in specifier.split(",") if c.strip()]
+    if not clauses:
+        return False
+    return all(_match_single_specifier(version, clause) for clause in clauses)
 
 
 class SupplyChainScanner:
     """Evaluates dependencies, package lockfiles, and configuration files."""
 
-    def __init__(self, advisories: list[AdvisoryRecord] | None = None) -> None:
-        self.advisories = advisories or BUILTIN_ADVISORIES
+    def __init__(
+        self,
+        feed: AdvisoryFeed | None = None,
+        advisories: list[AdvisoryRecord] | None = None,
+    ) -> None:
+        if feed is not None:
+            self.feed = feed
+            self.advisories = feed.advisories
+        elif advisories is not None:
+            from datetime import datetime, timezone
+
+            self.feed = AdvisoryFeed(
+                feed_id="custom",
+                updated_at=datetime.now(timezone.utc).isoformat(),
+                advisories=advisories,
+            )
+            self.advisories = advisories
+        else:
+            self.feed = BUILTIN_FEED
+            self.advisories = BUILTIN_FEED.advisories
 
     def scan(self, repo_root: Path, graph_correlator: Any | None = None) -> list[AnalysisFinding]:
         root = repo_root.resolve()
@@ -163,6 +249,14 @@ class SupplyChainScanner:
                     try:
                         content = fpath.read_text(encoding="utf-8")
                         findings.extend(self._scan_pipfile(content, rel_path, analyzer, graph_correlator))
+                    except Exception:
+                        continue
+
+                # 3b. npm package-lock.json lockfiles
+                elif fname == "package-lock.json":
+                    try:
+                        content = fpath.read_text(encoding="utf-8")
+                        findings.extend(self._scan_package_lock(content, rel_path, analyzer, graph_correlator))
                     except Exception:
                         continue
 
@@ -292,6 +386,40 @@ class SupplyChainScanner:
                 findings.extend(self._match_advisories(dep, analyzer, graph_correlator))
         return findings
 
+    def _scan_package_lock(
+        self,
+        content: str,
+        file_path: str,
+        analyzer: ReachabilityAnalyzer | None = None,
+        graph_correlator: Any | None = None,
+    ) -> list[AnalysisFinding]:
+        findings: list[AnalysisFinding] = []
+        deps = parse_package_lock_json(content, file_path)
+        for dep in deps:
+            if dep.index_url and dep.index_url.startswith("http://"):
+                fid = hashlib.sha256(f"dep.insecure-index:{file_path}:{dep.lineno}:{dep.index_url}".encode()).hexdigest()[:16]
+                findings.append(
+                    AnalysisFinding(
+                        id=f"dep.{fid}",
+                        engine="supply_chain",
+                        category="security",
+                        rule_id="dep.insecure-index",
+                        severity="high",
+                        title=f"Insecure plaintext HTTP package registry URL: {dep.index_url}",
+                        status="verified",
+                        confidence="observed",
+                        file=file_path,
+                        lineno=dep.lineno,
+                        cwe=["CWE-319"],
+                        message="Package lockfile resolves tarball over unencrypted HTTP, exposing builds to package tampering.",
+                        remediation=["Use secure HTTPS registry URL (https://)."],
+                        evidence=[self._evidence_ref("insecure_index", dep.index_url)],
+                    )
+                )
+            if dep.resolved_version:
+                findings.extend(self._match_advisories(dep, analyzer, graph_correlator))
+        return findings
+
     def _match_advisories(
         self,
         dep: DependencyRecord,
@@ -314,6 +442,8 @@ class SupplyChainScanner:
                     "cve": adv.cve_id,
                     "fixed_version": adv.fixed_version,
                     "reachability": reach_status,
+                    "feed_id": self.feed.feed_id,
+                    "feed_fresh": not self.feed.is_stale(),
                 }
                 if reach_res and reach_res.call_sites:
                     meta["call_sites"] = [

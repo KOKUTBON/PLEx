@@ -19,16 +19,26 @@ def cmd_remediate(args: argparse.Namespace) -> int:
 
     authz_path = Path(args.authorize).resolve() if getattr(args, "authorize", None) else None
     target_url = getattr(args, "target_url", None)
+    artifact_path = Path(args.artifact).resolve() if getattr(args, "artifact", None) else None
     test_cmd = args.test_cmd.split() if getattr(args, "test_cmd", None) else None
+    bench_cmd = args.benchmark_cmd.split() if getattr(args, "benchmark_cmd", None) else None
+    rebuild_cmd = args.rebuild_cmd.split() if getattr(args, "rebuild_cmd", None) else None
     check_perf = not getattr(args, "no_perf_check", False)
+    inc_perf = bool(getattr(args, "include_performance", False))
+    inc_rel = bool(getattr(args, "include_reliability", False))
 
     coordinator = RemediationCoordinator()
     plan = coordinator.plan_and_verify(
         repo_root=repo_root,
         target_url=target_url,
         authz_file=authz_path,
+        artifact_path=artifact_path,
         test_command=test_cmd,
         check_performance=check_perf,
+        include_performance=inc_perf,
+        benchmark_command=bench_cmd,
+        rebuild_command=rebuild_cmd,
+        include_reliability=inc_rel,
     )
 
     if getattr(args, "out_graph", None):
@@ -36,9 +46,13 @@ def cmd_remediate(args: argparse.Namespace) -> int:
         out_g_path.write_text(json.dumps(plan.graph.to_dict(), indent=2), encoding="utf-8")
 
     if args.json:
+        import dataclasses
+
         result_payload = {
             "repo_root": plan.repo_root,
             "findings_count": len(plan.findings),
+            "artifact_findings_count": len(plan.artifact_findings),
+            "artifact_findings": [dataclasses.asdict(f) for f in plan.artifact_findings],
             "routes_count": len(plan.routes),
             "candidates_count": len(plan.candidates),
             "is_verified": plan.is_verified,
@@ -58,6 +72,8 @@ def cmd_remediate(args: argparse.Namespace) -> int:
     print(
         f"PLEx Remediation: {len(plan.findings)} finding(s) detected, {len(plan.routes)} route(s) mapped."
     )
+    if plan.artifact_findings:
+        print(f"  Artifact inspection: {len(plan.artifact_findings)} binary artifact finding(s).")
     if plan.active_findings:
         print(f"  Active validation: {len(plan.active_findings)} reproduced endpoint finding(s).")
 
@@ -111,6 +127,11 @@ def add_remediate_commands(sub: Any) -> None:
         help="Optional running application endpoint URL for active validation",
     )
     p.add_argument(
+        "--artifact",
+        default=None,
+        help="Optional path to compiled binary artifact for native inspection and source correlation",
+    )
+    p.add_argument(
         "--authorize",
         default=None,
         help="Path to AUTHORIZATION.md file required for active target validation",
@@ -144,5 +165,25 @@ def add_remediate_commands(sub: Any) -> None:
         "--no-perf-check",
         action="store_true",
         help="Skip PLEx Performance regression checks during verification",
+    )
+    p.add_argument(
+        "--include-performance",
+        action="store_true",
+        help="Include PLEx Performance findings and deterministic AST fixers in remediation",
+    )
+    p.add_argument(
+        "--include-reliability",
+        action="store_true",
+        help="Include PLEx Reliability & Architecture findings and proposal-only lifecycle/concurrency fixers in remediation",
+    )
+    p.add_argument(
+        "--benchmark-cmd",
+        default=None,
+        help="Optional command to execute repeated before/after timing trials during verification",
+    )
+    p.add_argument(
+        "--rebuild-cmd",
+        default=None,
+        help="Optional command to rebuild the binary artifact and verify structural/security changes",
     )
     p.set_defaults(func=cmd_remediate)

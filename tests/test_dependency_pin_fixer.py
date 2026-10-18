@@ -111,3 +111,19 @@ def test_dependency_pin_propose_patch_none_when_empty_or_pinned() -> None:
     fixer = DependencyPinFixer()
     patch = fixer.propose_patch(src, "requirements.txt")
     assert patch is None
+
+
+def test_dependency_pin_fixer_does_not_convert_less_than_or_not_equal() -> None:
+    fixer = DependencyPinFixer()
+    # numpy<2 should use default recommended pin (1.26.4), not convert to forbidden 2
+    src = "numpy<2\n"
+    fixed, changes = fixer.fix(src, "requirements.txt")
+    assert "numpy==1.26.4\n" == fixed
+    assert "numpy==2" not in fixed
+    assert len(changes) == 1
+
+
+def test_dependency_pin_fixer_contract_proposal_only() -> None:
+    fixer = DependencyPinFixer()
+    assert fixer.auto_apply is False
+

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "kokutbon-plex"
-version = "0.1.0"
+version = "2.0.0-alpha.1"
 description = "PLEx — Automated Complexity & Performance Regression Guard"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -43,7 +43,7 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://kokutbon.github.io/PLEx/"
+Homepage = "https://github.com/KOKUTBON/PLEx"
 Source = "https://github.com/KOKUTBON/PLEx"
 Documentation = "https://github.com/KOKUTBON/PLEx/tree/main/docs"
 Issues = "https://github.com/KOKUTBON/PLEx/issues"
@@ -62,8 +62,6 @@ dev = [
   "pytest>=8.0",
   # Real Jinja rendering in the fix.ssti semantic fixtures.
   "jinja2>=3.1",
-  # Exercise redirect repairs against a real framework response.
-  "starlette>=0.27",
   "pytest-cov>=5.0",
   "mypy>=1.8",
   "ruff>=0.5",

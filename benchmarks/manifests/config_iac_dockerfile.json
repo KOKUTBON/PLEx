@@ -1,0 +1,23 @@
+{
+  "name": "config_iac_dockerfile_bench",
+  "target_rule": "cfg.docker-root-user",
+  "min_precision": 0.95,
+  "min_recall": 0.90,
+  "require_zero_regressions": true,
+  "corpus_dir": "../corpora/config_iac",
+  "cases": [
+    {
+      "file": "Dockerfile.vuln",
+      "expected_rule": "cfg.docker-root-user",
+      "should_detect": true,
+      "expect_repairable": true,
+      "test_cmd": "python3 -m pytest test_dockerfile.py -q"
+    },
+    {
+      "file": "Dockerfile.safe",
+      "expected_rule": "cfg.docker-root-user",
+      "should_detect": false,
+      "expect_repairable": false
+    }
+  ]
+}

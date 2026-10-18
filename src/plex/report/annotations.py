@@ -32,4 +32,12 @@ def to_github_annotations(report: PLExReport, top_n: int = 10) -> str:
         )
         lines.append(f"::{level} file={f.file},line={f.lineno},title={title}::{message}")
 
+    non_perf = [uf for uf in report.findings_unified if uf.engine != "performance"]
+    for uf in non_perf[:top_n]:
+        level = github_annotation_level(uf.severity)
+        title = _escape_github_command(f"PLEx {uf.rule_id}")
+        message = _escape_github_command(uf.message or uf.title)
+        line_no = uf.lineno or 1
+        lines.append(f"::{level} file={uf.file},line={line_no},title={title}::{message}")
+
     return "\n".join(lines)

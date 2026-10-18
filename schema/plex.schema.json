@@ -81,6 +81,13 @@
         "partial",
         "failed"
       ]
+    },
+    "repairs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true
+      }
     }
   },
   "$defs": {
@@ -733,6 +740,24 @@
         "engine_meta": {
           "type": "object",
           "additionalProperties": {}
+        },
+        "repair_status": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "proposed",
+                "applied-in-workspace",
+                "verified",
+                "failed",
+                "inconclusive",
+                "reverted"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       }
     },

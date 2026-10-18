@@ -7,6 +7,8 @@ from pathlib import Path
 root = Path(__file__).resolve().parents[2]
 required = [
     "README.md",
+    "SOURCE_PUBLICATION.md",
+    "PUBLICATION_VALIDATION.md",
     "THIRD_PARTY_INVENTORY.json",
     "LICENSE",
     "CONTRIBUTING.md",

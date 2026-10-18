@@ -113,3 +113,28 @@ def test_propose_patch_candidate() -> None:
     assert "hashlib.sha256" in candidate.diff
     assert candidate.rollback_diff != ""
     assert candidate.source_digest.startswith("sha256:")
+
+
+def test_weak_crypto_fixer_preserves_comments_and_formatting() -> None:
+    fixer = WeakCryptoFixer()
+    source = (
+        "import hashlib\n"
+        "\n"
+        "h = hashlib.md5(\n"
+        "    # payload comment\n"
+        "    b'payload data',\n"
+        ").hexdigest()\n"
+    )
+    fixed, changes = fixer.fix(source, "hash.py")
+    assert len(changes) == 1
+    assert "# payload comment" in fixed
+    assert "b'payload data'" in fixed
+    assert "hashlib.sha256" in fixed
+    import ast
+    ast.parse(fixed)
+
+
+def test_weak_crypto_fixer_contract_proposal_only() -> None:
+    fixer = WeakCryptoFixer()
+    assert fixer.auto_apply is False
+

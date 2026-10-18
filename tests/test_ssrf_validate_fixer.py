@@ -88,3 +88,53 @@ def query(endpoint):
     assert "requests.get(_validate_url(endpoint))" in candidate.diff
     assert candidate.rollback_diff != ""
     assert candidate.source_digest.startswith("sha256:")
+
+
+def test_injected_validate_url_blocks_private_ips_and_metadata() -> None:
+    fixer = SSRFUrlValidateFixer()
+    source = "import requests\ndef fetch(u):\n    return requests.get(u)\n"
+    fixed, _ = fixer.fix(source)
+
+    ns: dict = {}
+    exec(fixed, ns)
+    validate = ns["_validate_url"]
+
+    # Public URLs succeed
+    assert validate("https://example.com/api") == "https://example.com/api"
+
+    # Private and loopback IPs are blocked (previously swallowed ValueError)
+    import pytest
+    for bad in [
+        "http://127.0.0.1/admin",
+        "http://localhost:8080",
+        "http://10.0.0.1/internal",
+        "http://192.168.1.1/",
+        "http://172.16.0.1/",
+        "http://169.254.169.254/latest/meta-data/",
+        "ftp://example.com",
+    ]:
+        with pytest.raises(ValueError):
+            validate(bad)
+
+    # Non-string object does not crash with AttributeError
+    obj = object()
+    assert validate(obj) is obj
+
+
+def test_preserves_multiline_call_formatting_and_comments() -> None:
+    fixer = SSRFUrlValidateFixer()
+    source = '''import requests
+
+def fetch(u):
+    # Important comment
+    return requests.get(
+        u,  # target url
+        timeout=5,
+    )
+'''
+    fixed, changes = fixer.fix(source)
+    assert "# Important comment" in fixed
+    assert "# target url" in fixed
+    assert "timeout=5" in fixed
+    assert "requests.get(\n        _validate_url(u)," in fixed
+

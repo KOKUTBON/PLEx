@@ -9,6 +9,18 @@ from typing import Any
 from plex.fix.base import BaseFixer, FixChange
 from plex.repair.diffutil import unified_diff
 from plex.repair.models import PatchCandidate
+from plex.repair.sourceedit import SourceEditor
+
+
+def _is_test_or_dev_file(file_path: str) -> bool:
+    """Return True if file_path appears to be a test suite or development fixture."""
+    if not file_path:
+        return False
+    parts = file_path.lower().replace("\\", "/").split("/")
+    if any(p in {"tests", "test", "testing", "fixtures"} for p in parts):
+        return True
+    fname = parts[-1]
+    return fname.startswith("test_") or fname.endswith("_test.py") or fname == "conftest.py"
 
 
 class DebugModeFixer(BaseFixer):
@@ -16,6 +28,7 @@ class DebugModeFixer(BaseFixer):
 
     rule_id = "cfg.debug-enabled"
     name = "debug_mode"
+    auto_apply = False
 
     def fix(self, source: str, file_path: str = "") -> tuple[str, list[FixChange]]:
         try:
@@ -23,9 +36,12 @@ class DebugModeFixer(BaseFixer):
         except SyntaxError:
             return source, []
 
-        lines = source.splitlines(keepends=True)
+        # Skip test files: test suites intentionally enable debug mode to exercise debug behavior.
+        if _is_test_or_dev_file(file_path):
+            return source, []
+
+        editor = SourceEditor(source)
         changes: list[FixChange] = []
-        replacements: list[tuple[int, int, int, int, str, str]] = []
 
         for node in ast.walk(tree):
             # 1. Calls with debug=True (e.g., app.run(..., debug=True), FastAPI(debug=True))
@@ -36,29 +52,16 @@ class DebugModeFixer(BaseFixer):
                         and isinstance(kw.value, ast.Constant)
                         and kw.value.value is True
                     ):
-                        new_kw = ast.keyword(arg="debug", value=ast.Constant(value=False))
-                        new_keywords = [new_kw if k.arg == "debug" else k for k in node.keywords]
-                        new_call = ast.Call(
-                            func=node.func,
-                            args=list(node.args),
-                            keywords=new_keywords,
-                        )
-                        ast.copy_location(new_call, node)
-                        ast.fix_missing_locations(new_call)
-                        new_code = ast.unparse(new_call)
-
-                        start_line = node.lineno
-                        end_line = node.end_lineno or node.lineno
-                        start_col = node.col_offset
-                        end_col = node.end_col_offset or len(lines[end_line - 1])
-
-                        if start_line == end_line:
-                            old_code = lines[start_line - 1][start_col:end_col]
-                        else:
-                            old_code = "".join(lines[start_line - 1 : end_line])
-
-                        replacements.append(
-                            (start_line, end_line, start_col, end_col, old_code, new_code)
+                        old_code = editor.segment(kw.value)
+                        editor.replace(kw.value, "False")
+                        changes.append(
+                            FixChange(
+                                rule_id=self.rule_id,
+                                description="Disable debug mode keyword argument (CWE-489)",
+                                lineno=kw.value.lineno,
+                                before=f"debug={old_code}",
+                                after="debug=False",
+                            )
                         )
 
             # 2. Assignments: DEBUG = True, app.debug = True, app.config["DEBUG"] = True
@@ -80,54 +83,26 @@ class DebugModeFixer(BaseFixer):
                         is_debug_target = True
 
                 if is_debug_target:
-                    new_assign = ast.Assign(
-                        targets=list(node.targets),
-                        value=ast.Constant(value=False),
-                    )
-                    ast.copy_location(new_assign, node)
-                    ast.fix_missing_locations(new_assign)
-                    new_code = ast.unparse(new_assign)
-
-                    start_line = node.lineno
-                    end_line = node.end_lineno or node.lineno
-                    start_col = node.col_offset
-                    end_col = node.end_col_offset or len(lines[end_line - 1])
-
-                    if start_line == end_line:
-                        old_code = lines[start_line - 1][start_col:end_col]
-                    else:
-                        old_code = "".join(lines[start_line - 1 : end_line])
-
-                    replacements.append(
-                        (start_line, end_line, start_col, end_col, old_code, new_code)
+                    old_code = editor.segment(node.value)
+                    editor.replace(node.value, "False")
+                    changes.append(
+                        FixChange(
+                            rule_id=self.rule_id,
+                            description="Disable debug assignment (CWE-489)",
+                            lineno=node.value.lineno,
+                            before=old_code,
+                            after="False",
+                        )
                     )
 
-        if not replacements:
+        if not changes:
             return source, []
 
-        replacements.sort(key=lambda r: (r[0], r[2]), reverse=True)
-        modified_lines = list(lines)
+        try:
+            new_source = editor.result()
+        except ValueError:
+            return source, []
 
-        for s_line, e_line, s_col, e_col, old_code, new_code in replacements:
-            if s_line == e_line:
-                line = modified_lines[s_line - 1]
-                modified_lines[s_line - 1] = line[:s_col] + new_code + line[e_col:]
-            else:
-                first_part = modified_lines[s_line - 1][:s_col]
-                last_part = modified_lines[e_line - 1][e_col:]
-                modified_lines[s_line - 1 : e_line] = [first_part + new_code + last_part]
-
-            changes.append(
-                FixChange(
-                    rule_id=self.rule_id,
-                    description="Disable application debug mode in production configuration (CWE-489 / CWE-215)",
-                    lineno=s_line,
-                    before=old_code,
-                    after=new_code,
-                )
-            )
-
-        new_source = "".join(modified_lines)
         return new_source, changes
 
     def propose_patch(
@@ -171,9 +146,9 @@ class DebugModeFixer(BaseFixer):
             source_digest=source_digest,
             target_file=target_file,
             diff=diff,
-            description="Disable active debug mode (DEBUG = False / debug=False) to prevent interactive debugger and stack trace exposure (CWE-489 / CWE-215).",
+            description="Disable production debug mode in configuration and application entrypoints (CWE-489).",
             generator="plex.repair.debug_mode",
-            generator_version="1.0.0",
+            generator_version="2.0.0",
             confidence="derived",
             risk="low",
             rollback_diff=rollback_diff,

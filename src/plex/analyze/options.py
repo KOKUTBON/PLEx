@@ -13,7 +13,7 @@ def add_analyze_args(a: argparse.ArgumentParser) -> None:
     a.add_argument(
         "--checks",
         default=None,
-        help="Comma-separated analysis engines to run: performance, security (default: performance)",
+        help="Comma-separated analysis engines to run: performance, security, supply_chain, reliability, all (default: performance)",
     )
     a.add_argument(
         "--security-policy",
@@ -25,6 +25,11 @@ def add_analyze_args(a: argparse.ArgumentParser) -> None:
         type=int,
         default=200,
         help="Maximum Python files to analyze for security (default: 200)",
+    )
+    a.add_argument(
+        "--advisory-feed",
+        default=None,
+        help="Optional path to custom vulnerability advisory feed file (JSON or OSV format) for supply chain checks",
     )
     a.add_argument(
         "--legacy-schema",
@@ -80,6 +85,19 @@ def add_analyze_args(a: argparse.ArgumentParser) -> None:
         help="Render minimal static HTML report instead of modern interactive dashboard",
     )
     a.add_argument("--sarif", dest="sarif_path", default=None, help="Write SARIF report to path")
+    a.add_argument(
+        "--graph",
+        dest="graph_path",
+        default=None,
+        help="Write populated ProjectGraph JSON model to path",
+    )
+    a.add_argument(
+        "--evidence-store",
+        dest="evidence_store_path",
+        default=None,
+        help="Persist redacted finding evidence into content-addressed store directory and attach plex-evidence:// URIs",
+    )
+
     a.add_argument(
         "--annotations",
         dest="annotations_path",

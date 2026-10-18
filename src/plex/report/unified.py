@@ -9,6 +9,14 @@ from typing import Any, Literal
 
 Category = Literal["performance", "security", "privacy", "binary", "quality"]
 Status = Literal["suspected", "verified", "inconclusive", "false_positive"]
+RepairStatusLiteral = Literal[
+    "proposed",
+    "applied-in-workspace",
+    "verified",
+    "failed",
+    "inconclusive",
+    "reverted",
+]
 Confidence = Literal["observed", "derived", "inferred"]
 Severity = Literal["info", "low", "medium", "high", "critical"]
 Isolation = Literal["none", "process", "container", "virtual-machine"]
@@ -56,6 +64,7 @@ class AnalysisFinding:
     correlates_with: list[str] = field(default_factory=list)
     verification: dict[str, Any] = field(default_factory=dict)
     engine_meta: dict[str, Any] = field(default_factory=dict)
+    repair_status: RepairStatusLiteral | None = None
 
     def __post_init__(self) -> None:
         if self.cvss is not None and not 0 <= self.cvss <= 10:

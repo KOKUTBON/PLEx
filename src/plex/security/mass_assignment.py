@@ -38,22 +38,68 @@ TAINT_SOURCES = (
 __all__ = ["MASS_ASSIGNMENT_LIMITATIONS", "MassAssignmentRule"]
 
 
-def _is_tainted_unpacking(val_node: ast.AST, tainted_vars: set[str]) -> bool:
+UNTRUSTED_PARAM_NAMES = frozenset({
+    "data",
+    "payload",
+    "body",
+    "form",
+    "values",
+    "params",
+    "json_data",
+    "post_data",
+    "request_data",
+    "req_data",
+    "user_input",
+})
+
+REQUEST_ATTRS = frozenset({"json", "form", "POST", "GET", "data", "values"})
+REQUEST_NAMES = frozenset({"request", "req"})
+
+
+def _is_untrusted_source(node: ast.AST, tainted_vars: set[str]) -> bool:
     """Return True if dictionary unpacking value comes from request or untrusted parameters."""
-    unparsed = ast.unparse(val_node)
+    if isinstance(node, ast.DictComp):
+        return False
 
-    # If it already contains dictionary comprehension with key filter ('if k in' or 'if key in'), consider it safe
-    if isinstance(val_node, ast.DictComp):
-        if "if k in" in unparsed or "if key in" in unparsed or "in ALLOWED" in unparsed:
-            return False
+    unparsed = ast.unparse(node)
+    if "if k in" in unparsed or "if key in" in unparsed or "in ALLOWED" in unparsed:
+        return False
 
-    if any(src in unparsed for src in TAINT_SOURCES):
-        return True
+    if isinstance(node, ast.Name):
+        if node.id in tainted_vars or node.id.lower() in UNTRUSTED_PARAM_NAMES:
+            return True
+        if node.id.lower().endswith(("_data", "_payload", "_body", "_json")):
+            return True
+        return False
 
-    if isinstance(val_node, ast.Name) and val_node.id in tainted_vars:
-        return True
+    if isinstance(node, ast.Attribute):
+        if node.attr in REQUEST_ATTRS:
+            if isinstance(node.value, ast.Name) and node.value.id in REQUEST_NAMES:
+                return True
+            if isinstance(node.value, ast.Attribute) and node.value.attr in REQUEST_NAMES:
+                return True
+        return False
+
+    if isinstance(node, ast.Call):
+        if isinstance(node.func, ast.Attribute) and node.func.attr in {"get_json", "json"}:
+            if isinstance(node.func.value, ast.Name) and node.func.value.id in REQUEST_NAMES:
+                return True
+            if isinstance(node.func.value, ast.Attribute) and node.func.value.attr in REQUEST_NAMES:
+                return True
+        return False
+
+    if isinstance(node, ast.Subscript):
+        return _is_untrusted_source(node.value, tainted_vars)
+
+    for child in ast.walk(node):
+        if child is not node and _is_untrusted_source(child, tainted_vars):
+            return True
 
     return False
+
+
+# Backward compatibility
+_is_tainted_unpacking = _is_untrusted_source
 
 
 class MassAssignmentRule(Rule):
@@ -82,12 +128,14 @@ class MassAssignmentRule(Rule):
 
                 # Identify tainted variables in function scope
                 tainted_vars: set[str] = {
-                    arg.arg for arg in fn_node.args.args if any(t in arg.arg for t in ("data", "payload", "body"))
+                    arg.arg
+                    for arg in fn_node.args.args
+                    if arg.arg.lower() in UNTRUSTED_PARAM_NAMES
+                    or arg.arg.lower().endswith(("_data", "_payload", "_body", "_json"))
                 }
                 for stmt in ast.walk(fn_node):
                     if isinstance(stmt, ast.Assign):
-                        unparsed_val = ast.unparse(stmt.value)
-                        if any(src in unparsed_val for src in TAINT_SOURCES):
+                        if _is_untrusted_source(stmt.value, tainted_vars):
                             for target in stmt.targets:
                                 if isinstance(target, ast.Name):
                                     tainted_vars.add(target.id)

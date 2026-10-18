@@ -113,7 +113,9 @@ def to_comment_markdown(report: PLExReport, top_n: int = 10) -> str:
                 lines.append(f"| {loc} | {reason} | {ticket} |")
         return "\n".join(lines)
 
-    if not report.findings:
+    non_perf_unified = [f for f in report.findings_unified if f.engine != "performance"]
+
+    if not report.findings and not non_perf_unified:
         lines.append("_No findings._")
         if report.suppressions:
             lines.append("")
@@ -128,46 +130,62 @@ def to_comment_markdown(report: PLExReport, top_n: int = 10) -> str:
                 lines.append(f"| {loc} | {reason} | {ticket} |")
         return "\n".join(lines)
 
-    lines.append("**Top hotspots**")
-    lines.append("")
-    has_dynamic = any(f.dynamic for f in report.findings[:top_n])
-    if has_dynamic:
-        lines.append("| Severity | Risk | Dynamic | Location |")
-        lines.append("|---|---:|---|---|")
-    else:
-        lines.append("| Severity | Risk | Location |")
-        lines.append("|---|---:|---|")
-    for f in report.findings[:top_n]:
-        loc = f"{f.file}:{f.lineno} `{f.qualname}`"
-        if f.rule_id in FIXABLE_RULES:
-            loc += " ⚡ _[auto-fix]_"
+    if report.findings:
+        lines.append("**Top hotspots**")
+        lines.append("")
+        has_dynamic = any(f.dynamic for f in report.findings[:top_n])
         if has_dynamic:
-            finding_dynamic = f.dynamic
-            if finding_dynamic:
-                dyn = f"{finding_dynamic.status} ({finding_dynamic.label})"
-            else:
-                dyn = "n/a"
-            lines.append(f"| {f.severity} | {f.risk_score:.3f} | {dyn} | {loc} |")
+            lines.append("| Severity | Risk | Dynamic | Location |")
+            lines.append("|---|---:|---|---|")
         else:
-            lines.append(f"| {f.severity} | {f.risk_score:.3f} | {loc} |")
-    if len(report.findings) > top_n:
-        lines.append("")
-        lines.append(f"_+{len(report.findings) - top_n} more findings_")
-
-    finding_suggestions = [(f, f.suggestions) for f in report.findings[:top_n] if f.suggestions]
-    if finding_suggestions:
-        lines.append("")
-        lines.append("**Fix ideas**")
-        lines.append("")
-        for f, items in finding_suggestions:
+            lines.append("| Severity | Risk | Location |")
+            lines.append("|---|---:|---|")
+        for f in report.findings[:top_n]:
             loc = f"{f.file}:{f.lineno} `{f.qualname}`"
-            joined = "; ".join(items)
-            fix_suffix = (
-                " _(run `plex fix` to remediate automatically)_"
-                if f.rule_id in FIXABLE_RULES
-                else ""
-            )
-            lines.append(f"- {loc}: {joined}{fix_suffix}")
+            if f.rule_id in FIXABLE_RULES:
+                loc += " ⚡ _[auto-fix]_"
+            if has_dynamic:
+                finding_dynamic = f.dynamic
+                if finding_dynamic:
+                    dyn = f"{finding_dynamic.status} ({finding_dynamic.label})"
+                else:
+                    dyn = "n/a"
+                lines.append(f"| {f.severity} | {f.risk_score:.3f} | {dyn} | {loc} |")
+            else:
+                lines.append(f"| {f.severity} | {f.risk_score:.3f} | {loc} |")
+        if len(report.findings) > top_n:
+            lines.append("")
+            lines.append(f"_+{len(report.findings) - top_n} more findings_")
+
+        finding_suggestions = [(f, f.suggestions) for f in report.findings[:top_n] if f.suggestions]
+        if finding_suggestions:
+            lines.append("")
+            lines.append("**Fix ideas**")
+            lines.append("")
+            for f, items in finding_suggestions:
+                loc = f"{f.file}:{f.lineno} `{f.qualname}`"
+                joined = "; ".join(items)
+                fix_suffix = (
+                    " _(run `plex fix` to remediate automatically)_"
+                    if f.rule_id in FIXABLE_RULES
+                    else ""
+                )
+                lines.append(f"- {loc}: {joined}{fix_suffix}")
+
+    if non_perf_unified:
+        if report.findings:
+            lines.append("")
+        lines.append("**Security, supply-chain & reliability findings**")
+        lines.append("")
+        lines.append("| Severity | Engine | Rule | Location | Description |")
+        lines.append("|---|---|---|---|---|")
+        for uf in non_perf_unified[:top_n]:
+            loc = f"{uf.file}:{uf.lineno}" if uf.file else "n/a"
+            desc = uf.message or uf.title
+            lines.append(f"| {uf.severity} | {uf.engine} | {uf.rule_id} | {loc} | {desc} |")
+        if len(non_perf_unified) > top_n:
+            lines.append("")
+            lines.append(f"_+{len(non_perf_unified) - top_n} more unified findings_")
 
     if report.suppressions:
         lines.append("")

@@ -160,3 +160,108 @@ def test_cohesive_remediation_pipeline(tmp_path: Path, capsys):
     data = json.loads(out_json.read_text(encoding="utf-8"))
     assert not any(f["rule_id"] == "xbnd.sql-injection" for f in data["findings_unified"])
 
+
+def test_cohesive_remediation_with_artifact(tmp_path: Path, capsys):
+    repo = _setup_cohesive_project(tmp_path / "repo")
+    bin_path = tmp_path / "service.elf"
+    bin_path.write_bytes(build_synthetic_elf64(is_pie=False, nx=False, relro="none"))
+
+    out_graph = tmp_path / "project_graph.json"
+
+    code = main([
+        "remediate",
+        str(repo),
+        "--artifact",
+        str(bin_path),
+        "--out-graph",
+        str(out_graph),
+        "--json",
+    ])
+    assert code == 0
+    assert out_graph.exists()
+
+    captured = capsys.readouterr().out
+    plan_data = json.loads(captured)
+    assert plan_data["artifact_findings_count"] >= 1
+    assert any(f["rule_id"] == "bin.weak-hardening" for f in plan_data["artifact_findings"])
+
+    graph_data = json.loads(out_graph.read_text(encoding="utf-8"))
+    node_kinds = {n["kind"] for n in graph_data["nodes"].values()}
+    assert "artifact" in node_kinds
+    assert "file" in node_kinds
+
+
+def test_cohesive_validate_command(tmp_path: Path, capsys):
+    repo = _setup_cohesive_project(tmp_path / "repo")
+    auth_file = repo / "AUTHORIZATION.md"
+
+    spec = {
+        "openapi": "3.0.0",
+        "info": {"title": "App API", "version": "1.0.0"},
+        "paths": {
+            "/api/users": {
+                "get": {
+                    "summary": "Get users",
+                    "parameters": [{"name": "id", "in": "query", "schema": {"type": "string"}}],
+                    "responses": {"200": {"description": "OK"}},
+                }
+            }
+        },
+    }
+    spec_file = repo / "openapi.json"
+    spec_file.write_text(json.dumps(spec), encoding="utf-8")
+    out_json = tmp_path / "validate.json"
+
+    code = main([
+        "validate",
+        "--target",
+        "http://127.0.0.1:8080",
+        "--authorize",
+        str(auth_file),
+        "--repo",
+        str(repo),
+        "--spec",
+        str(spec_file),
+        "--format",
+        "json",
+        "-o",
+        str(out_json),
+    ])
+    assert code == 0
+    assert out_json.exists()
+    res = json.loads(out_json.read_text(encoding="utf-8"))
+    assert str(res["schema_version"]).lstrip("v") == "8"
+
+
+def test_cohesive_agent_command(tmp_path: Path, capsys):
+    repo = _setup_cohesive_project(tmp_path / "repo")
+    out_json = tmp_path / "trajectory.json"
+    code = main([
+        "agent",
+        str(repo),
+        "--goal",
+        "Investigate SQL injection in app.py",
+        "--provider",
+        "mock",
+        "-o",
+        str(out_json),
+    ])
+    assert code == 0
+    assert out_json.exists()
+    traj = json.loads(out_json.read_text(encoding="utf-8"))
+    assert "status" in traj
+    assert "steps" in traj
+    assert len(traj["steps"]) >= 1
+
+
+
+def test_cohesive_benchmark_comparative_command(capsys):
+    manifest_dir = Path(__file__).resolve().parent.parent / "benchmarks" / "manifests"
+    assert manifest_dir.exists()
+    code = main(["benchmark", "--comparative", str(manifest_dir)])
+    assert code == 0
+    captured = capsys.readouterr().out
+    assert "Comparative Benchmark Report" in captured
+    assert "Status: PASS" in captured
+
+

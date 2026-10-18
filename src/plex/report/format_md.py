@@ -139,14 +139,35 @@ def to_markdown(report: PLExReport, top_n: int = 10) -> str:
             lines.append(f"_+{len(report.suppressions) - top_n} more suppressions_")
         lines.append("")
 
-    security_findings = [f for f in report.findings_unified if f.category == "security"]
+    security_findings = [
+        f
+        for f in report.findings_unified
+        if f.engine == "xboundary" or (f.category == "security" and f.engine != "supply_chain")
+    ]
+    supply_chain_findings = [
+        f for f in report.findings_unified if f.engine == "supply_chain"
+    ]
+    reliability_findings = [
+        f for f in report.findings_unified if f.engine == "reliability" or f.category == "quality"
+    ]
     has_security_engine = any(e.engine == "xboundary" for e in report.engines)
+    has_supply_chain_engine = any(e.engine == "supply_chain" for e in report.engines)
+    has_reliability_engine = any(e.engine == "reliability" for e in report.engines)
+    has_non_perf = bool(
+        has_security_engine
+        or security_findings
+        or has_supply_chain_engine
+        or supply_chain_findings
+        or has_reliability_engine
+        or reliability_findings
+        or report.repairs
+    )
 
-    if not report.findings and not (has_security_engine or security_findings):
+    if not report.findings and not has_non_perf:
         lines.append("✅ No findings (or no analyzable functions found).")
         return "\n".join(lines)
 
-    if not report.findings and (has_security_engine or security_findings):
+    if not report.findings and has_non_perf:
         lines.append("✅ No performance findings (or no analyzable functions found).")
     else:
         lines.append("## Top hotspots (heuristic)")
@@ -202,6 +223,56 @@ def to_markdown(report: PLExReport, top_n: int = 10) -> str:
                 lines.append(f"_+{len(security_findings) - top_n} more security findings_")
         else:
             lines.append("✅ No security findings detected.")
+        lines.append("")
+
+    if has_supply_chain_engine or supply_chain_findings:
+        lines.append("")
+        lines.append("## Supply chain & configuration findings")
+        lines.append("")
+        if supply_chain_findings:
+            lines.append("| Severity | Rule | Location | Description |")
+            lines.append("|---|---|---|---|")
+            for sc in supply_chain_findings[:top_n]:
+                loc = f"{sc.file}:{sc.lineno}" if sc.file else "n/a"
+                desc = sc.message or sc.title
+                lines.append(f"| {sc.severity} | {sc.rule_id} | {loc} | {desc} |")
+            if len(supply_chain_findings) > top_n:
+                lines.append("")
+                lines.append(f"_+{len(supply_chain_findings) - top_n} more supply chain findings_")
+        else:
+            lines.append("✅ No supply chain or configuration findings detected.")
+        lines.append("")
+
+    if has_reliability_engine or reliability_findings:
+        lines.append("")
+        lines.append("## Reliability & architecture findings")
+        lines.append("")
+        if reliability_findings:
+            lines.append("| Severity | Rule | Location | Description |")
+            lines.append("|---|---|---|---|")
+            for rel in reliability_findings[:top_n]:
+                loc = f"{rel.file}:{rel.lineno}" if rel.file else "n/a"
+                desc = rel.message or rel.title
+                lines.append(f"| {rel.severity} | {rel.rule_id} | {loc} | {desc} |")
+            if len(reliability_findings) > top_n:
+                lines.append("")
+                lines.append(f"_+{len(reliability_findings) - top_n} more reliability findings_")
+        else:
+            lines.append("✅ No reliability or architecture findings detected.")
+        lines.append("")
+
+    if report.repairs:
+        lines.append("")
+        lines.append("## Repairs & verification")
+        lines.append("")
+        lines.append("| Candidate | Rule | Status |")
+        lines.append("|---|---|---|")
+        for rep in report.repairs[:top_n]:
+            cand = rep.get("candidate", {}) if isinstance(rep, dict) else {}
+            cid = cand.get("id", "n/a") if isinstance(cand, dict) else "n/a"
+            rid = cand.get("rule_id", "n/a") if isinstance(cand, dict) else "n/a"
+            rstatus = rep.get("status", "n/a") if isinstance(rep, dict) else "n/a"
+            lines.append(f"| {cid} | {rid} | {rstatus} |")
         lines.append("")
 
     lines.append(

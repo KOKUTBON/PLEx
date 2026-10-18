@@ -71,3 +71,26 @@ def test_propose_patch_candidate_insecure_index() -> None:
     assert candidate.engine == "supply_chain"
     assert "--index-url https://pypi.org/simple" in candidate.diff
     assert candidate.rollback_diff != ""
+
+
+def test_fix_equals_syntax() -> None:
+    # Reproduced defect: previously failed to match '=' in --index-url=http://
+    fixer = InsecureIndexFixer()
+    source = "--index-url=http://pypi.org/simple\n--extra-index-url=http://custom.repo/simple\n"
+    fixed, changes = fixer.fix(source, "requirements.txt")
+    assert "--index-url=https://pypi.org/simple" in fixed
+    assert "--extra-index-url=https://custom.repo/simple" in fixed
+    assert len(changes) == 2
+
+
+def test_does_not_modify_comment_urls() -> None:
+    # Reproduced defect: previously comments with http:// were rewritten.
+    fixer = InsecureIndexFixer()
+    source = (
+        "# Reference: http://pypi.python.org/simple\n"
+        "flask==3.0.0 # mirrors at http://pypi.org\n"
+    )
+    fixed, changes = fixer.fix(source, "requirements.txt")
+    assert fixed == source
+    assert len(changes) == 0
+

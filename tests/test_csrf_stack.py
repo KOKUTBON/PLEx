@@ -88,6 +88,42 @@ def test_csrf_fixer_enables_wtf_csrf_config() -> None:
     ast.parse(fixed)
 
 
+def test_csrf_fixer_preserves_class_indentation_and_comments() -> None:
+    src = (
+        "class WebhookHandler:\n"
+        "    # Important hook\n"
+        "    @csrf_exempt\n"
+        "    def receive(self, req):\n"
+        "        # process payload\n"
+        "        return True\n"
+    )
+    fixer = CSRFFixer()
+    fixed, changes = fixer.fix(src, "handlers/webhook.py")
+
+    assert "@csrf_exempt" not in fixed
+    assert "class WebhookHandler:" in fixed
+    assert "    # Important hook\n    def receive(self, req):" in fixed
+    assert "        # process payload" in fixed
+    assert len(changes) == 1
+    ast.parse(fixed)
+
+
+def test_csrf_fixer_skips_test_files() -> None:
+    src = "@csrf_exempt\ndef test_internal(): pass\n"
+    fixer = CSRFFixer()
+    fixed, changes = fixer.fix(src, "tests/test_api.py")
+    assert fixed == src
+    assert len(changes) == 0
+
+
+def test_csrf_fixer_ignores_unrelated_exempt_decorator() -> None:
+    src = "@cache.exempt\ndef get_stats(): pass\n"
+    fixer = CSRFFixer()
+    fixed, changes = fixer.fix(src, "views.py")
+    assert fixed == src
+    assert len(changes) == 0
+
+
 def test_csrf_fixer_propose_patch() -> None:
     src = (
         "@csrf_exempt\n"

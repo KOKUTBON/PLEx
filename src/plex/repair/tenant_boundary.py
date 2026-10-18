@@ -9,6 +9,7 @@ from typing import Any
 from plex.fix.base import BaseFixer, FixChange
 from plex.repair.diffutil import unified_diff
 from plex.repair.models import PatchCandidate
+from plex.repair.sourceedit import SourceEditor
 from plex.security.broken_tenant_isolation import (
     _get_client_id_params,
     _has_tenant_guard,
@@ -19,48 +20,101 @@ from plex.security.broken_tenant_isolation import (
 )
 
 
-def _detect_tenant_expr(tree: ast.Module, fn: ast.FunctionDef | ast.AsyncFunctionDef) -> ast.expr:
-    """Detect available tenant context expression in current scope."""
-    fn_args = {a.arg for a in fn.args.args + fn.args.kwonlyargs}
-    if "request" in fn_args or "req" in fn_args:
-        req_name = "request" if "request" in fn_args else "req"
-        return ast.Attribute(
-            value=ast.Attribute(
-                value=ast.Name(id=req_name, ctx=ast.Load()),
-                attr="user",
-                ctx=ast.Load(),
-            ),
-            attr="tenant_id",
-            ctx=ast.Load(),
-        )
+def _detect_tenant_expr(tree: ast.Module, fn: ast.FunctionDef | ast.AsyncFunctionDef) -> str | None:
+    """Detect available tenant context expression in current scope.
 
-    has_g = False
+    Returns None if no tenant context (request, g, current_user, user) is declared,
+    preventing injection of undeclared variable names that cause NameError at runtime.
+    """
+    fn_args = {a.arg for a in fn.args.args + fn.args.kwonlyargs + fn.args.posonlyargs}
+    if "request" in fn_args:
+        return "request.user.tenant_id"
+    if "req" in fn_args:
+        return "req.user.tenant_id"
+    if "current_user" in fn_args:
+        return "current_user.tenant_id"
+    if "user" in fn_args:
+        return "user.tenant_id"
+    if "auth_user" in fn_args:
+        return "auth_user.tenant_id"
+
+    # Check module-level imports and assignments
+    imported_names: set[str] = set()
     for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom) and node.module == "flask":
-            if any(alias.name == "g" for alias in node.names):
-                has_g = True
-        elif isinstance(node, ast.Name) and node.id == "g":
-            has_g = True
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                imported_names.add(alias.asname or alias.name)
+        elif isinstance(node, ast.ImportFrom):
+            for alias in node.names:
+                imported_names.add(alias.asname or alias.name)
+        elif isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    imported_names.add(target.id)
 
-    if has_g:
-        return ast.Attribute(
-            value=ast.Name(id="g", ctx=ast.Load()),
-            attr="tenant_id",
-            ctx=ast.Load(),
-        )
+    if "g" in imported_names:
+        return "g.tenant_id"
+    if "current_user" in imported_names:
+        return "current_user.tenant_id"
+    if "request" in imported_names:
+        return "request.user.tenant_id"
+    if "session" in imported_names:
+        return "session['tenant_id']"
 
-    return ast.Attribute(
-        value=ast.Name(id="current_user", ctx=ast.Load()),
-        attr="tenant_id",
-        ctx=ast.Load(),
-    )
+    return None
+
+
+def _append_call_arg(old_call_text: str, new_arg_str: str) -> str:
+    """Append an argument or keyword argument to a call expression, preserving comments and formatting."""
+    if not old_call_text.endswith(")"):
+        return old_call_text
+
+    body = old_call_text[:-1]
+    if "\n" in body:
+        last_newline = body.rfind("\n")
+        closing_indent = body[last_newline + 1 :]
+        content_lines = body[:last_newline].splitlines()
+
+        # Find the last non-empty line before the closing line
+        idx = len(content_lines) - 1
+        while idx >= 0 and not content_lines[idx].strip():
+            idx -= 1
+
+        if idx >= 0:
+            last_line = content_lines[idx]
+            arg_indent = " " * (len(last_line) - len(last_line.lstrip()))
+            if "#" in last_line:
+                code_part, comment_part = last_line.split("#", 1)
+                code_part = code_part.rstrip()
+                if not code_part.endswith(","):
+                    code_part += ","
+                content_lines[idx] = f"{code_part}  #{comment_part}"
+            elif not last_line.rstrip().endswith(","):
+                content_lines[idx] = last_line.rstrip() + ","
+
+            return "\n".join(content_lines) + f"\n{arg_indent}{new_arg_str},\n{closing_indent})"
+
+        return f"{body}{new_arg_str})"
+    else:
+        body_stripped = body.rstrip()
+        if body_stripped.endswith(","):
+            return f"{body_stripped} {new_arg_str})"
+        elif body_stripped.endswith("("):
+            return f"{body_stripped}{new_arg_str})"
+        else:
+            return f"{body_stripped}, {new_arg_str})"
 
 
 class TenantBoundaryFixer(BaseFixer):
-    """AST fixer that scopes unauthenticated or cross-tenant database queries with tenant context."""
+    """AST fixer that scopes unauthenticated or cross-tenant database queries with tenant context.
+
+    This fixer is proposal-only (``auto_apply = False``) because tenant isolation architecture
+    requires application-specific tenancy models, database schemas, and authentication context.
+    """
 
     rule_id = "xbnd.broken-tenant-isolation"
     name = "tenant_boundary"
+    auto_apply = False
 
     def fix(self, source: str, file_path: str = "") -> tuple[str, list[FixChange]]:
         try:
@@ -68,9 +122,8 @@ class TenantBoundaryFixer(BaseFixer):
         except SyntaxError:
             return source, []
 
-        lines = source.splitlines(keepends=True)
+        editor = SourceEditor(source)
         changes: list[FixChange] = []
-        replacements: list[tuple[int, int, int, int, str, str]] = []
 
         for node in ast.walk(tree):
             if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -87,6 +140,9 @@ class TenantBoundaryFixer(BaseFixer):
                 continue
 
             tenant_expr = _detect_tenant_expr(tree, node)
+            if tenant_expr is None:
+                # Abstain rather than injecting undeclared current_user, which causes NameError
+                continue
 
             for child in ast.walk(node):
                 if not isinstance(child, ast.Call):
@@ -100,114 +156,55 @@ class TenantBoundaryFixer(BaseFixer):
                 if not used_id or _query_has_tenant_scope(child):
                     continue
 
-                new_call: ast.Call | None = None
+                old_call_code = editor.segment(child)
+                new_call_code: str | None = None
 
                 if method == "filter_by":
-                    new_kw = ast.keyword(arg="tenant_id", value=tenant_expr)
-                    new_call = ast.Call(
-                        func=child.func,
-                        args=list(child.args),
-                        keywords=[*child.keywords, new_kw],
-                    )
+                    new_call_code = _append_call_arg(old_call_code, f"tenant_id={tenant_expr}")
 
                 elif method in ("filter", "where"):
-                    model_ast: ast.expr = ast.Name(id=model_name, ctx=ast.Load())
+                    model_str = model_name
                     for arg in child.args:
                         if isinstance(arg, ast.Compare) and isinstance(arg.left, ast.Attribute):
-                            model_ast = arg.left.value
+                            model_str = editor.segment(arg.left.value)
                             break
-
-                    new_compare = ast.Compare(
-                        left=ast.Attribute(value=model_ast, attr="tenant_id", ctx=ast.Load()),
-                        ops=[ast.Eq()],
-                        comparators=[tenant_expr],
-                    )
-                    new_call = ast.Call(
-                        func=child.func,
-                        args=[*child.args, new_compare],
-                        keywords=list(child.keywords),
-                    )
+                    new_call_code = _append_call_arg(old_call_code, f"{model_str}.tenant_id == {tenant_expr}")
 
                 elif method in ("get_object_or_404", "get_object_or_none"):
-                    new_kw = ast.keyword(arg="tenant_id", value=tenant_expr)
-                    new_call = ast.Call(
-                        func=child.func,
-                        args=list(child.args),
-                        keywords=[*child.keywords, new_kw],
-                    )
+                    new_call_code = _append_call_arg(old_call_code, f"tenant_id={tenant_expr}")
 
                 elif method == "get":
                     if isinstance(child.func, ast.Attribute):
                         receiver = child.func.value
-                        receiver_str = ast.unparse(receiver)
+                        receiver_str = editor.segment(receiver)
                         if receiver_str.endswith(".query"):
-                            # Transform Model.query.get(id) -> Model.query.filter_by(id=id, tenant_id=...).first()
-                            new_filter_by = ast.Call(
-                                func=ast.Attribute(value=receiver, attr="filter_by", ctx=ast.Load()),
-                                args=[],
-                                keywords=[
-                                    ast.keyword(arg="id", value=child.args[0] if child.args else ast.Name(id=used_id, ctx=ast.Load())),
-                                    ast.keyword(arg="tenant_id", value=tenant_expr),
-                                ],
-                            )
-                            new_call = ast.Call(
-                                func=ast.Attribute(value=new_filter_by, attr="first", ctx=ast.Load()),
-                                args=[],
-                                keywords=[],
-                            )
+                            arg_str = editor.segment(child.args[0]) if child.args else used_id
+                            new_call_code = f"{receiver_str}.filter_by(id={arg_str}, tenant_id={tenant_expr}).first()"
                         elif receiver_str.endswith(".objects"):
-                            # Transform Model.objects.get(id=id, tenant_id=...)
-                            new_kw = ast.keyword(arg="tenant_id", value=tenant_expr)
-                            new_call = ast.Call(
-                                func=child.func,
-                                args=list(child.args),
-                                keywords=[*child.keywords, new_kw],
-                            )
+                            new_call_code = _append_call_arg(old_call_code, f"tenant_id={tenant_expr}")
 
-                if new_call is None:
+                if new_call_code is None or new_call_code == old_call_code:
                     continue
 
-                new_code = ast.unparse(new_call)
+                editor.replace(child, new_call_code)
+                changes.append(
+                    FixChange(
+                        rule_id=self.rule_id,
+                        description="Scope database query with tenant_id to enforce tenant isolation (CWE-639)",
+                        lineno=child.lineno,
+                        before=old_call_code,
+                        after=new_call_code,
+                    )
+                )
 
-                start_line = child.lineno
-                end_line = child.end_lineno or child.lineno
-                start_col = child.col_offset
-                end_col = child.end_col_offset or len(lines[end_line - 1])
-
-                if start_line == end_line:
-                    old_code = lines[start_line - 1][start_col:end_col]
-                else:
-                    old_code = "".join(lines[start_line - 1 : end_line])
-
-                if old_code.strip() != new_code.strip():
-                    replacements.append((start_line, end_line, start_col, end_col, old_code, new_code))
-
-        if not replacements:
+        if not changes:
             return source, []
 
-        replacements.sort(key=lambda r: (r[0], r[2]), reverse=True)
-        modified_lines = list(lines)
+        try:
+            new_source = editor.result()
+        except ValueError:
+            return source, []
 
-        for s_line, e_line, s_col, e_col, old_code, new_code in replacements:
-            if s_line == e_line:
-                line = modified_lines[s_line - 1]
-                modified_lines[s_line - 1] = line[:s_col] + new_code + line[e_col:]
-            else:
-                first_part = modified_lines[s_line - 1][:s_col]
-                last_part = modified_lines[e_line - 1][e_col:]
-                modified_lines[s_line - 1 : e_line] = [first_part + new_code + last_part]
-
-            changes.append(
-                FixChange(
-                    rule_id=self.rule_id,
-                    description="Scope database query with tenant_id to enforce tenant isolation (CWE-639)",
-                    lineno=s_line,
-                    before=old_code,
-                    after=new_code,
-                )
-            )
-
-        new_source = "".join(modified_lines)
         return new_source, changes
 
     def propose_patch(
@@ -244,6 +241,10 @@ class TenantBoundaryFixer(BaseFixer):
 
         source_digest = f"sha256:{hashlib.sha256(source.encode('utf-8')).hexdigest()}"
 
+        meta = {"auto_apply": False, "reason": "Tenant isolation requires verified tenant context and schema"}
+        if metadata:
+            meta.update(metadata)
+
         return PatchCandidate.create(
             finding_ids=finding_ids,
             rule_id=self.rule_id,
@@ -254,8 +255,8 @@ class TenantBoundaryFixer(BaseFixer):
             description="Enforce tenant boundary isolation on database query with tenant scoping",
             generator="plex.repair.tenant_boundary",
             generator_version="1.0.0",
-            confidence="derived",
-            risk="low",
+            confidence="inferred",
+            risk="medium",
             rollback_diff=rollback_diff,
-            metadata=metadata or {},
+            metadata=meta,
         )

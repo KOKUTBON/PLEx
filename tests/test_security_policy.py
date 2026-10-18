@@ -197,3 +197,99 @@ def test_custom_keyword_sink_and_report_provenance(tmp_path):
     assert restored == result
     digest = result.findings_unified[0].engine_meta["policy_digest"]
     assert digest in json.dumps(to_sarif(restored))
+
+
+def test_published_v2_schema_and_v1_migration(tmp_path):
+    from plex.security.policy import migrate_policy_v1_to_v2
+
+    schema = json.loads(
+        (Path(__file__).resolve().parents[1] / "schema/security-policy-v2.schema.json").read_text()
+    )
+    jsonschema.Draft202012Validator.check_schema(schema)
+
+    v1_policy = {
+        "version": 1,
+        "sources": {"http": ["gateway.incoming"]},
+        "sanitizers": {"sql": ["db.bind"]},
+        "sinks": {"sql": ["db.exec"]},
+    }
+    v2_policy = migrate_policy_v1_to_v2(v1_policy)
+    assert v2_policy["version"] == 2
+    jsonschema.validate(v2_policy, schema)
+
+    full_v2 = {
+        "version": 2,
+        "sources": {"http": ["gateway.incoming"]},
+        "sanitizers": {"sql": ["db.bind"], "command": ["shell.quote_safe"], "log": ["audit.redact"]},
+        "sinks": {"sql": ["db.exec"], "command": ["runner.exec_cmd"], "log": ["audit.emit"]},
+        "data_classes": {"pii": ["medical_record", "customer.tax_id"]},
+        "tenant_boundaries": {"fields": ["realm_id"], "guards": ["enforce_realm"]},
+        "authorization_invariants": {
+            "protected_decorators": ["admin_endpoint"],
+            "required_guards": ["verify_admin_token"],
+        },
+        "approved_destinations": ["api.partner.example.com", "*.internal.example.org:8443"],
+    }
+    jsonschema.validate(full_v2, schema)
+    (tmp_path / ".plex").mkdir(exist_ok=True)
+    (tmp_path / ".plex" / "security.yml").write_text(yaml.safe_dump(full_v2))
+    loaded = load_policy(tmp_path)
+    assert loaded.version == 2
+    assert "runner.exec_cmd" in loaded.sinks_for("command")
+    assert "audit.emit" in loaded.sinks_for("data_leak")
+    assert loaded.is_classified_sensitive("user.medical_record")
+    assert loaded.is_approved_destination("https://api.partner.example.com/v1/items")
+    assert loaded.is_approved_destination("https://svc.internal.example.org:8443/health")
+    assert not loaded.is_approved_destination("https://evil.example.com/steal")
+
+
+def test_v2_multi_family_sinks_sanitizers_and_data_classes(tmp_path):
+    source = (
+        "def handle(medical_record):\n"
+        "    runner.exec_cmd(input())\n"
+        "    runner.exec_cmd(shell_clean(input()))\n"
+        "    audit.emit(medical_record)\n"
+        "    audit.emit(redact_pii(medical_record))\n"
+    )
+    policy = {
+        "version": 2,
+        "sinks": {"command": ["runner.exec_cmd"], "log": ["audit.emit"]},
+        "sanitizers": {"command": ["shell_clean"], "log": ["redact_pii"]},
+        "data_classes": {"health": ["medical_record"]},
+    }
+    result = report(tmp_path, source, policy)
+    assert result.scan_status == "complete"
+    by_rule = {(f.rule_id, f.lineno) for f in result.findings_unified}
+    assert ("xbnd.command-injection", 2) in by_rule
+    assert ("xbnd.command-injection", 3) not in by_rule
+    assert ("xbnd.sensitive-data-leak", 4) in by_rule
+    assert ("xbnd.sensitive-data-leak", 5) not in by_rule
+
+
+def test_v2_tenant_boundaries_and_approved_destinations(tmp_path):
+    source = (
+        "import requests\n"
+        "@app.get('/items')\n"
+        "def get_scoped(item_id):\n"
+        "    return Item.query.filter_by(id=item_id, realm_id=g.realm_id)\n"
+        "@app.get('/unscoped')\n"
+        "def get_unscoped(item_id):\n"
+        "    return Item.query.filter_by(id=item_id)\n"
+        "def call_partner():\n"
+        "    path = input()\n"
+        "    requests.get(f'https://api.approved.example.com/v1/{path}')\n"
+        "    requests.get(f'https://untrusted.example.com/v1/{path}')\n"
+    )
+    policy = {
+        "version": 2,
+        "tenant_boundaries": {"fields": ["realm_id"], "guards": ["require_realm"]},
+        "approved_destinations": ["api.approved.example.com"],
+    }
+    result = report(tmp_path, source, policy)
+    assert result.scan_status == "complete"
+    by_rule = {(f.rule_id, f.lineno) for f in result.findings_unified}
+    assert ("xbnd.broken-tenant-isolation", 4) not in by_rule
+    assert ("xbnd.broken-tenant-isolation", 7) in by_rule
+    assert ("xbnd.ssrf", 10) not in by_rule
+    assert ("xbnd.ssrf", 11) in by_rule
+

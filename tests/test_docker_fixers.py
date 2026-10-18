@@ -256,7 +256,7 @@ def test_docker_tag_pin_skips_scratch_and_digest_and_stage_names() -> None:
 def test_docker_fixers_contract() -> None:
     user_fixer = DockerUserFixer()
     tag_fixer = DockerTagPinFixer()
-    # DockerUserFixer auto-applies when a user is declared or in standard base image
+    # Both fixers auto-apply when preconditions are verified (declared user or project runtime metadata)
     assert user_fixer.auto_apply is True
-    assert tag_fixer.auto_apply is False
+    assert tag_fixer.auto_apply is True
 

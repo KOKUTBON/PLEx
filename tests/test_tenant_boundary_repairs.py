@@ -9,6 +9,7 @@ import py_compile
 from pathlib import Path
 
 from plex.providers import AnalysisTask, XBoundaryProvider, run_providers
+from plex.repair import apply_unified_diff
 from plex.repair.coordinator import RemediationCoordinator
 from plex.repair.tenant_boundary import TenantBoundaryFixer
 
@@ -154,11 +155,16 @@ def test_tenant_boundary_repair_end_to_end(tmp_path: Path):
     plan = coordinator.plan_and_verify(repo_root=repo)
     assert len(plan.candidates) == 1
     assert plan.candidates[0].rule_id == "xbnd.broken-tenant-isolation"
-    assert plan.is_verified is True
+    assert plan.repairs[0].status == "inconclusive"
+    assert not plan.has_failures
 
-    # Apply verified repair
-    modified = coordinator.apply_plan(plan)
-    assert modified == ["app.py"]
+    # Proposal-only fixer: never written automatically; apply the reviewed diff by hand.
+    assert coordinator.apply_plan(plan) == []
+    app_file = repo / "app.py"
+    app_file.write_text(
+        apply_unified_diff(app_file.read_text(encoding="utf-8"), plan.candidates[0].diff),
+        encoding="utf-8",
+    )
 
     # Verify syntax compiles cleanly
     py_compile.compile(str(repo / "app.py"), doraise=True)

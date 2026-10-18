@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import ast
-import difflib
 import hashlib
 from typing import Any
 
 from plex.fix.base import BaseFixer, FixChange
+from plex.repair.diffutil import unified_diff
 from plex.repair.models import PatchCandidate
 
 VALIDATE_URL_HELPER = """def _validate_url(target_url: str) -> str:
@@ -183,7 +183,7 @@ class SSRFUrlValidateFixer(BaseFixer):
         fixed_lines = fixed_source.splitlines(keepends=True)
 
         diff = "".join(
-            difflib.unified_diff(
+            unified_diff(
                 orig_lines,
                 fixed_lines,
                 fromfile=f"a/{target_file}",
@@ -191,7 +191,7 @@ class SSRFUrlValidateFixer(BaseFixer):
             )
         )
         rollback_diff = "".join(
-            difflib.unified_diff(
+            unified_diff(
                 fixed_lines,
                 orig_lines,
                 fromfile=f"b/{target_file}",

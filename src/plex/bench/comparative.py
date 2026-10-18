@@ -75,6 +75,8 @@ class ComparativeMetrics:
     duration_ms: float
     passed_thresholds: bool
     threshold_failures: tuple[str, ...] = ()
+    repairs_inconclusive: int = 0
+    repairs_abstained: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -96,6 +98,8 @@ class ComparativeMetrics:
                 "attempted": self.repairs_attempted,
                 "verified": self.repairs_verified,
                 "regressions": self.regressions_count,
+                "inconclusive": self.repairs_inconclusive,
+                "abstained": self.repairs_abstained,
             },
             "duration_ms": round(self.duration_ms, 2),
             "passed_thresholds": self.passed_thresholds,
@@ -118,8 +122,11 @@ def run_comparative_benchmark(
     repairs_attempted = 0
     repairs_verified = 0
     regressions_count = 0
+    repairs_inconclusive = 0
+    repairs_abstained = 0
 
     fixer = SQLParameterizeFixer()
+    fixer.prepare(root)
     runner = RepairVerificationRunner()
 
     for case in manifest.cases:
@@ -158,10 +165,12 @@ def run_comparative_benchmark(
                 repair = runner.verify(candidate=cand, repo_root=target_path.parent, check_performance=True)
                 if repair.status == "verified":
                     repairs_verified += 1
+                elif repair.status == "inconclusive":
+                    repairs_inconclusive += 1
                 else:
                     regressions_count += 1
             else:
-                regressions_count += 1
+                repairs_abstained += 1
 
     duration = (time.monotonic() - t0) * 1000.0
 
@@ -201,6 +210,8 @@ def run_comparative_benchmark(
         repairs_attempted=repairs_attempted,
         repairs_verified=repairs_verified,
         regressions_count=regressions_count,
+        repairs_inconclusive=repairs_inconclusive,
+        repairs_abstained=repairs_abstained,
         duration_ms=duration,
         passed_thresholds=passed_thresholds,
         threshold_failures=tuple(threshold_failures),

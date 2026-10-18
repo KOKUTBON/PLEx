@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +18,7 @@ from plex.repair.csrf import CSRFFixer
 from plex.repair.debug_mode import DebugModeFixer
 from plex.repair.dependency_pin import DependencyPinFixer
 from plex.repair.dependency_upgrade import DependencyUpgradeFixer
+from plex.repair.diffutil import PatchApplyError, apply_unified_diff
 from plex.repair.docker_sudo import DockerSudoFixer
 from plex.repair.docker_tag_pin import DockerTagPinFixer
 from plex.repair.docker_user import DockerUserFixer
@@ -29,7 +30,7 @@ from plex.repair.nosql_injection import NoSQLInjectionFixer
 from plex.repair.open_redirect import OpenRedirectFixer
 from plex.repair.path_boundary import PathBoundaryFixer
 from plex.repair.plaintext_secret import PlaintextSecretFixer
-from plex.repair.runner import RepairVerificationRunner, apply_unified_diff
+from plex.repair.runner import RepairVerificationRunner
 from plex.repair.safe_deserialization import SafeDeserializationFixer
 from plex.repair.security_headers import SecurityHeadersFixer
 from plex.repair.sensitive_log_redact import SensitiveLogRedactFixer
@@ -60,11 +61,27 @@ class RemediationPlan:
     candidates: tuple[PatchCandidate, ...] = ()
     repairs: tuple[RepairRecord, ...] = ()
     graph: ProjectGraph = field(default_factory=ProjectGraph)
+    # Candidate IDs whose fixer meets its repair evidence contract and may be written
+    # without manual review. Everything else is a proposal to review and apply by hand.
+    auto_applicable: frozenset[str] = frozenset()
 
     @property
     def is_verified(self) -> bool:
         """True if all proposed repair records passed all verification checks."""
         return bool(self.repairs) and all(r.status == "verified" for r in self.repairs)
+
+    @property
+    def applicable_repairs(self) -> tuple[RepairRecord, ...]:
+        """Verified repairs from auto-applicable fixers."""
+        return tuple(
+            r
+            for r in self.repairs
+            if r.status == "verified" and r.candidate.id in self.auto_applicable
+        )
+
+    @property
+    def has_failures(self) -> bool:
+        return any(r.status == "failed" for r in self.repairs)
 
 
 class RemediationCoordinator:
@@ -157,7 +174,12 @@ class RemediationCoordinator:
                             correlator.correlate_active_finding(sf, af, sf_route)
 
         # 4. Propose repairs using registered fixers
+        for fixer in self.fixers:
+            prepare = getattr(fixer, "prepare", None)
+            if callable(prepare):
+                prepare(resolved_root)
         candidates: list[PatchCandidate] = []
+        auto_applicable: set[str] = set()
         for finding in static_findings:
             fpath = resolved_root / finding.file
             if not fpath.exists():
@@ -172,9 +194,23 @@ class RemediationCoordinator:
                     finding_ids=(finding.id,),
                 )
                 if candidate:
-                    candidates.append(candidate)
-                    correlator.add_patch_candidate(candidate)
+                    # Fixers rewrite the whole file, so several findings can yield the same
+                    # patch; keep one candidate and attach every finding to it.
+                    existing = next((c for c in candidates if c.id == candidate.id), None)
+                    if existing is not None:
+                        merged = replace(
+                            existing,
+                            finding_ids=existing.finding_ids
+                            + tuple(f for f in candidate.finding_ids if f not in existing.finding_ids),
+                        )
+                        candidates[candidates.index(existing)] = merged
+                    else:
+                        candidates.append(candidate)
+                        if getattr(fixer, "auto_apply", False):
+                            auto_applicable.add(candidate.id)
                     break
+        for candidate in candidates:
+            correlator.add_patch_candidate(candidate)
 
         # 5. Multi-engine verification of candidates
         repairs: list[RepairRecord] = []
@@ -197,25 +233,30 @@ class RemediationCoordinator:
             candidates=tuple(candidates),
             repairs=tuple(repairs),
             graph=correlator.graph,
+            auto_applicable=frozenset(auto_applicable),
         )
 
     def apply_plan(self, plan: RemediationPlan) -> list[str]:
-        """Apply verified patch candidates directly to repository files."""
-        if not plan.is_verified:
-            raise ValueError("Cannot apply unverified remediation plan")
+        """Apply verified repairs from auto-applicable fixers to repository files.
 
+        Proposals from other fixers, and repairs that are failed or inconclusive, are never
+        written. A diff that no longer matches the file (for example because another patch
+        already changed it) is skipped rather than forced.
+        """
         modified_files: list[str] = []
         root = Path(plan.repo_root)
 
-        for repair in plan.repairs:
-            if repair.status != "verified":
-                continue
+        for repair in plan.applicable_repairs:
             target_path = root / repair.candidate.target_file
             if not target_path.exists():
                 continue
 
             orig = target_path.read_text(encoding="utf-8")
-            patched = apply_unified_diff(orig, repair.candidate.diff)
+            try:
+                patched = apply_unified_diff(orig, repair.candidate.diff)
+            except PatchApplyError as exc:
+                log.warning("Skipping %s: %s", repair.candidate.id, exc)
+                continue
             target_path.write_text(patched, encoding="utf-8")
             modified_files.append(repair.candidate.target_file)
 

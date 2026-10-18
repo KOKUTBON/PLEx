@@ -114,3 +114,19 @@ targetRules = ["generic-api-key"]
 paths = ['''^tests/test_wave3_security_rules\.py$''']
 regexTarget = "secret"
 regexes = ['''^sk-live-12345678$''']
+
+[[allowlists]]
+description = "Known synthetic fixture or detection marker"
+condition = "AND"
+targetRules = ["generic-api-key"]
+paths = ['''^tests/test_agent\.py$''']
+regexTarget = "secret"
+regexes = ['''^sk-1234567890abcdef$''']
+
+[[allowlists]]
+description = "Known synthetic fixture or detection marker"
+condition = "AND"
+targetRules = ["generic-api-key"]
+paths = ['''^tests/test_increments_26_27_28\.py$''']
+regexTarget = "secret"
+regexes = ['''^sk-live-998877665544332211$''']

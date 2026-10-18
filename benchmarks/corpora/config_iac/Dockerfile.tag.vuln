@@ -1,0 +1,5 @@
+FROM python:latest
+USER nonroot
+WORKDIR /app
+COPY . /app
+CMD ["python", "app.py"]

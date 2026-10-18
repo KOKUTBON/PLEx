@@ -47,7 +47,7 @@ flowchart TD
 
 ## Accuracy & Comparative Validation Harness
 
-PLEx includes a native comparative benchmark harness (`plex benchmark --comparative <dir> [--baseline <file>]`) for measuring detection accuracy and repair fidelity against held-out ground-truth corpora. 19 production benchmark manifests are maintained under `benchmarks/manifests/` evaluating Python, JavaScript/TypeScript, supply chain, Dockerfile IaC, and compiled binary inspection against pinned external baselines (`benchmarks/baselines/pinned_external_baselines.json`).
+PLEx includes a native comparative benchmark harness (`plex benchmark --comparative <dir> [--baseline <file>]`) for measuring detection accuracy and repair fidelity against held-out ground-truth corpora. 25 production benchmark manifests are maintained under `benchmarks/manifests/` evaluating Python, JavaScript/TypeScript, supply chain, Dockerfile IaC, and compiled binary inspection against pinned external baselines (`benchmarks/baselines/pinned_external_baselines.json`).
 
 ### Evaluation Metrics & Confusion Matrix
 

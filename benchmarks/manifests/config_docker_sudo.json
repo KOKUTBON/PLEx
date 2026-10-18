@@ -1,0 +1,22 @@
+{
+  "name": "config_docker_sudo_bench",
+  "target_rule": "cfg.docker-sudo-nopasswd",
+  "min_precision": 0.95,
+  "min_recall": 0.90,
+  "require_zero_regressions": true,
+  "corpus_dir": "../corpora/config_iac",
+  "cases": [
+    {
+      "file": "Dockerfile.sudo.vuln",
+      "expected_rule": "cfg.docker-sudo-nopasswd",
+      "should_detect": true,
+      "expect_repairable": false
+    },
+    {
+      "file": "Dockerfile.sudo.safe",
+      "expected_rule": "cfg.docker-sudo-nopasswd",
+      "should_detect": false,
+      "expect_repairable": false
+    }
+  ]
+}

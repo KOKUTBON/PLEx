@@ -1,0 +1,22 @@
+{
+  "name": "config_docker_latest_tag_bench",
+  "target_rule": "cfg.docker-latest-tag",
+  "min_precision": 0.95,
+  "min_recall": 0.90,
+  "require_zero_regressions": true,
+  "corpus_dir": "../corpora/config_iac",
+  "cases": [
+    {
+      "file": "Dockerfile.tag.vuln",
+      "expected_rule": "cfg.docker-latest-tag",
+      "should_detect": true,
+      "expect_repairable": false
+    },
+    {
+      "file": "Dockerfile.tag.safe",
+      "expected_rule": "cfg.docker-latest-tag",
+      "should_detect": false,
+      "expect_repairable": false
+    }
+  ]
+}

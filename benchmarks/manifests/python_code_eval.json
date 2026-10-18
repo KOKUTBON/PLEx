@@ -1,0 +1,22 @@
+{
+  "name": "python_code_eval_bench",
+  "target_rule": "xbnd.code-eval-taint",
+  "min_precision": 0.95,
+  "min_recall": 0.90,
+  "require_zero_regressions": true,
+  "corpus_dir": "../corpora/python_injection",
+  "cases": [
+    {
+      "file": "vuln_code_eval.py",
+      "expected_rule": "xbnd.code-eval-taint",
+      "should_detect": true,
+      "expect_repairable": false
+    },
+    {
+      "file": "safe_code_eval.py",
+      "expected_rule": "xbnd.code-eval-taint",
+      "should_detect": false,
+      "expect_repairable": false
+    }
+  ]
+}

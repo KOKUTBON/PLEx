@@ -1,0 +1,23 @@
+{
+  "name": "python_unsafe_deserialization_bench",
+  "target_rule": "xbnd.unsafe-deserialization",
+  "min_precision": 0.95,
+  "min_recall": 0.90,
+  "require_zero_regressions": true,
+  "corpus_dir": "../corpora/python_injection",
+  "cases": [
+    {
+      "file": "vuln_deserialization.py",
+      "expected_rule": "xbnd.unsafe-deserialization",
+      "should_detect": true,
+      "expect_repairable": true,
+      "test_cmd": "python3 -m pytest test_deserialization.py -q"
+    },
+    {
+      "file": "safe_deserialization.py",
+      "expected_rule": "xbnd.unsafe-deserialization",
+      "should_detect": false,
+      "expect_repairable": false
+    }
+  ]
+}

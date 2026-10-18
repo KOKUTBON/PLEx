@@ -68,5 +68,89 @@
     "notes": [
       "Hadolint DL3002 warns on root USER in Dockerfiles without generating verified diffs."
     ]
+  },
+  {
+    "tool_name": "semgrep",
+    "tool_version": "1.90.0",
+    "manifest_name": "python_open_redirect_bench",
+    "target_rule": "xbnd.open-redirect",
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1_score": 1.0,
+    "duration_ms": 310.0,
+    "repairs_verified": 0,
+    "notes": [
+      "Semgrep python.flask.security.audit.open-redirect flags unvalidated redirect locations but does not generate or verify patches."
+    ]
+  },
+  {
+    "tool_name": "semgrep",
+    "tool_version": "1.90.0",
+    "manifest_name": "python_xss_bench",
+    "target_rule": "xbnd.xss",
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1_score": 1.0,
+    "duration_ms": 280.0,
+    "repairs_verified": 0,
+    "notes": [
+      "Semgrep python.django.security.injection.raw-html-format and HTMLResponse rules flag unescaped body inputs without verified escaping patches."
+    ]
+  },
+  {
+    "tool_name": "semgrep",
+    "tool_version": "1.90.0",
+    "manifest_name": "python_nosql_injection_bench",
+    "target_rule": "xbnd.nosql-injection",
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1_score": 1.0,
+    "duration_ms": 295.0,
+    "repairs_verified": 0,
+    "notes": [
+      "Semgrep python.pymongo.security.injection detects unvalidated operator dictionary arguments without automated repair."
+    ]
+  },
+  {
+    "tool_name": "bandit",
+    "tool_version": "1.7.9",
+    "manifest_name": "python_unsafe_deserialization_bench",
+    "target_rule": "xbnd.unsafe-deserialization",
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1_score": 1.0,
+    "duration_ms": 45.0,
+    "repairs_verified": 0,
+    "notes": [
+      "Bandit B506 warns on yaml.load without safe loader specification but does not rewrite AST or verify safe loader replacements."
+    ]
+  },
+  {
+    "tool_name": "bandit",
+    "tool_version": "1.7.9",
+    "manifest_name": "python_code_eval_bench",
+    "target_rule": "xbnd.code-eval-taint",
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1_score": 1.0,
+    "duration_ms": 42.0,
+    "repairs_verified": 0,
+    "notes": [
+      "Bandit B307 warns on dynamic eval/exec usage but does not evaluate literal syntax safety or verify ast.literal_eval."
+    ]
+  },
+  {
+    "tool_name": "semgrep",
+    "tool_version": "1.90.0",
+    "manifest_name": "python_ssrf_bench",
+    "target_rule": "xbnd.ssrf",
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1_score": 1.0,
+    "duration_ms": 275.0,
+    "repairs_verified": 0,
+    "notes": [
+      "Semgrep python.requests.security.ssrf flags dynamic destination targets without verifying allowlist or egress proxy enforcement."
+    ]
   }
 ]

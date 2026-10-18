@@ -21,6 +21,7 @@ from plex.security.dataflow import SQLDataflow
 from plex.security.eval_injection import EVAL_LIMITATIONS, CodeEvalInjectionRule
 from plex.security.insecure_cookie import COOKIE_LIMITATIONS, InsecureCookieRule
 from plex.security.mass_assignment import MassAssignmentRule
+from plex.security.missing_authorization import MissingAuthorizationRule
 from plex.security.nosql_injection import NoSQLInjectionRule
 from plex.security.open_redirect import OpenRedirectRule
 from plex.security.path_traversal import PATH_LIMITATIONS, PathTraversalRule
@@ -96,7 +97,15 @@ class XBoundaryProvider:
         root = task.repo_root.resolve()
         options = self._options(task.options)
         policy = load_policy(root, options.get("policy"))
-        include = options.get("include") or ["**/*.py"]
+        include = options.get("include") or [
+            "**/*.py",
+            "**/*.js",
+            "**/*.jsx",
+            "**/*.ts",
+            "**/*.tsx",
+            "**/*.mjs",
+            "**/*.cjs",
+        ]
         exclude = [*PLExConfig().exclude, *options.get("exclude", [])]
         sources: dict[str, str] = {}
         maximum = options.get("max_files", 200)
@@ -105,6 +114,7 @@ class XBoundaryProvider:
         def walk_error(error: OSError) -> None:
             limitations.append(f"Directory traversal failed ({type(error).__name__})")
 
+        supported_suffixes = (".py", ".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs")
         for directory, dirs, files in os.walk(root, followlinks=False, onerror=walk_error):
             parent = Path(directory)
             dirs[:] = sorted(
@@ -117,14 +127,14 @@ class XBoundaryProvider:
                 path = parent / name
                 relative = path.relative_to(root).as_posix()
                 if (
-                    path.suffix != ".py"
+                    not any(path.name.endswith(ext) for ext in supported_suffixes)
                     or _matches(relative, exclude)
                     or not _matches(relative, include)
                 ):
                     continue
                 selected += 1
                 if selected > maximum:
-                    limitations.append("Python file limit reached")
+                    limitations.append("Source file limit reached")
                     break
                 try:
                     if path.is_symlink():
@@ -138,67 +148,81 @@ class XBoundaryProvider:
                     limitations.append(f"Could not read {relative} ({type(exc).__name__})")
             if selected > maximum:
                 break
-        native = [
-            finding
-            for file, source in sources.items()
-            for finding in analyze_source(Path(file), source)
-        ]
-        context = RuleContext(root, sources, native, build_ir_modules(root, sources, native), {})
-        context.security_policy["catalog"] = policy
-        for file in sources:
-            if context.ast_for_path(file) is None:
-                limitations.append(f"Python syntax could not be parsed: {file}")
-        items = [
-            item
-            for rule in (
-                SQLInjectionRule(),
-                CommandInjectionRule(),
-                CodeEvalInjectionRule(),
-                PathTraversalRule(),
-                UnsafeDeserializationRule(),
-                SsrfRule(),
-                SensitiveDataLeakRule(),
-                InsecureCookieRule(),
-                WeakCryptoRule(),
-                BrokenTenantIsolationRule(),
-                OpenRedirectRule(),
-                XXERule(),
-                MassAssignmentRule(),
-                SSTIRule(),
-                NoSQLInjectionRule(),
-                XSSRule(),
-            )
-            for item in rule.apply(context)
-        ]
-        for item in items:
-            sink.emit(
-                AnalysisFinding(
-                    id=str(item.engine_meta["finding_id"]),
-                    engine="xboundary",
-                    category="security",
-                    rule_id=item.rule_id,
-                    severity=cast(Severity, item.severity),
-                    title=item.rule_name,
-                    file=item.file,
-                    lineno=item.lineno,
-                    end_lineno=item.end_lineno,
-                    qualname=item.qualname,
-                    function_id=item.function_id,
-                    cwe=item.cwe,
-                    owasp=item.owasp,
-                    message=item.message,
-                    remediation=item.suggestions,
-                    evidence=item.evidence,
-                    verification={
-                        "method": "static-bounded-project-dataflow",
-                        "status": "suspected",
-                    },
-                    engine_meta={
-                        **item.engine_meta,
-                        "suppressed_findings": len(context.suppressed_findings),
-                    },
+
+        py_sources = {k: v for k, v in sources.items() if k.endswith(".py")}
+        jsts_sources = {k: v for k, v in sources.items() if not k.endswith(".py")}
+
+        context = RuleContext(root, py_sources, [], [], {})
+        if py_sources:
+            native = [
+                finding
+                for file, source in py_sources.items()
+                for finding in analyze_source(Path(file), source)
+            ]
+            context = RuleContext(root, py_sources, native, build_ir_modules(root, py_sources, native), {})
+            context.security_policy["catalog"] = policy
+            for file in py_sources:
+                if context.ast_for_path(file) is None:
+                    limitations.append(f"Python syntax could not be parsed: {file}")
+            items = [
+                item
+                for rule in (
+                    SQLInjectionRule(),
+                    CommandInjectionRule(),
+                    CodeEvalInjectionRule(),
+                    PathTraversalRule(),
+                    UnsafeDeserializationRule(),
+                    SsrfRule(),
+                    SensitiveDataLeakRule(),
+                    InsecureCookieRule(),
+                    WeakCryptoRule(),
+                    BrokenTenantIsolationRule(),
+                    MissingAuthorizationRule(),
+                    OpenRedirectRule(),
+                    XXERule(),
+                    MassAssignmentRule(),
+                    SSTIRule(),
+                    NoSQLInjectionRule(),
+                    XSSRule(),
                 )
-            )
+                for item in rule.apply(context)
+            ]
+            for item in items:
+                sink.emit(
+                    AnalysisFinding(
+                        id=str(item.engine_meta["finding_id"]),
+                        engine="xboundary",
+                        category="security",
+                        rule_id=item.rule_id,
+                        severity=cast(Severity, item.severity),
+                        title=item.rule_name,
+                        file=item.file,
+                        lineno=item.lineno,
+                        end_lineno=item.end_lineno,
+                        qualname=item.qualname,
+                        function_id=item.function_id,
+                        cwe=item.cwe,
+                        owasp=item.owasp,
+                        message=item.message,
+                        remediation=item.suggestions,
+                        evidence=item.evidence,
+                        verification={
+                            "method": "static-bounded-project-dataflow",
+                            "status": "suspected",
+                        },
+                        engine_meta={
+                            **item.engine_meta,
+                            "suppressed_findings": len(context.suppressed_findings),
+                        },
+                    )
+                )
+
+        if jsts_sources:
+            from plex.security.jsts_taint import analyze_jsts_project
+
+            for f in analyze_jsts_project(jsts_sources):
+                sink.emit(f)
+
         for file, data in context.dataflow.items():
             if isinstance(data, SQLDataflow):
                 limitations.extend(f"{file}: {reason}" for reason in data.limitations)

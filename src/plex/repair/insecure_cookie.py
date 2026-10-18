@@ -9,18 +9,25 @@ from typing import Any
 from plex.fix.base import BaseFixer, FixChange
 from plex.repair.diffutil import unified_diff
 from plex.repair.models import PatchCandidate
+from plex.repair.sourceedit import SourceEditor
 
-COOKIE_CALLS = {
+COOKIE_CALLS = frozenset({
     "set_cookie",
     "set_signed_cookie",
-}
+})
 
 
 class InsecureCookieFixer(BaseFixer):
-    """AST fixer that hardens cookie calls with HttpOnly, Secure, and SameSite flags."""
+    """AST fixer that hardens cookie calls with HttpOnly, Secure, and SameSite flags.
+
+    This fixer is proposal-only (``auto_apply = False``) because forcing secure=True
+    breaks local development over plaintext HTTP without HTTPS reverse proxies, and SameSite
+    policies require reviewing cross-origin authentication flows.
+    """
 
     rule_id = "xbnd.insecure-cookie"
     name = "insecure_cookie"
+    auto_apply = False
 
     def fix(self, source: str, file_path: str = "") -> tuple[str, list[FixChange]]:
         try:
@@ -28,9 +35,8 @@ class InsecureCookieFixer(BaseFixer):
         except SyntaxError:
             return source, []
 
-        lines = source.splitlines(keepends=True)
+        editor = SourceEditor(source)
         changes: list[FixChange] = []
-        replacements: list[tuple[int, int, int, int, str, str]] = []
 
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
@@ -45,7 +51,10 @@ class InsecureCookieFixer(BaseFixer):
             if call_name not in COOKIE_CALLS:
                 continue
 
-            # Analyze current keywords
+            # Abstain if **kwargs unpacking is present to avoid TypeError: got multiple values for keyword argument
+            if any(kw.arg is None for kw in node.keywords):
+                continue
+
             httponly_kw: ast.keyword | None = None
             secure_kw: ast.keyword | None = None
             samesite_kw: ast.keyword | None = None
@@ -58,110 +67,72 @@ class InsecureCookieFixer(BaseFixer):
                 elif kw.arg == "samesite":
                     samesite_kw = kw
 
-            needs_httponly = False
-            needs_secure = False
-            needs_samesite = False
+            missing_flags: list[str] = []
+            call_modified = False
 
+            # 1. HttpOnly flag
             if httponly_kw is None:
-                needs_httponly = True
+                missing_flags.append("httponly=True")
+                call_modified = True
             elif isinstance(httponly_kw.value, ast.Constant) and not bool(httponly_kw.value.value):
-                needs_httponly = True
+                editor.replace(httponly_kw.value, "True")
+                call_modified = True
 
+            # 2. Secure flag
             if secure_kw is None:
-                needs_secure = True
+                missing_flags.append("secure=True")
+                call_modified = True
             elif isinstance(secure_kw.value, ast.Constant) and not bool(secure_kw.value.value):
-                needs_secure = True
+                editor.replace(secure_kw.value, "True")
+                call_modified = True
 
+            # 3. SameSite flag
             if samesite_kw is None:
-                needs_samesite = True
+                missing_flags.append("samesite='lax'")
+                call_modified = True
             elif (
                 isinstance(samesite_kw.value, ast.Constant)
                 and isinstance(samesite_kw.value.value, str)
                 and samesite_kw.value.value.lower() == "none"
             ):
-                needs_samesite = True
+                old_val = editor.segment(samesite_kw.value)
+                quote_char = old_val[0] if old_val and old_val[0] in ("'", '"') else "'"
+                new_val = f"{quote_char}lax{quote_char}"
+                editor.replace(samesite_kw.value, new_val)
+                call_modified = True
 
-            if not (needs_httponly or needs_secure or needs_samesite):
-                continue
+            # Insert missing flags after the last argument or keyword
+            if missing_flags:
+                last_item: ast.AST | None = None
+                if node.keywords:
+                    last_item = node.keywords[-1]
+                elif node.args:
+                    last_item = node.args[-1]
 
-            # Build new keywords
-            new_keywords: list[ast.keyword] = []
-            for kw in node.keywords:
-                if kw.arg in ("httponly", "http_only"):
-                    if needs_httponly:
-                        new_keywords.append(ast.keyword(arg="httponly", value=ast.Constant(value=True)))
-                        needs_httponly = False
-                    else:
-                        new_keywords.append(kw)
-                elif kw.arg == "secure":
-                    if needs_secure:
-                        new_keywords.append(ast.keyword(arg="secure", value=ast.Constant(value=True)))
-                        needs_secure = False
-                    else:
-                        new_keywords.append(kw)
-                elif kw.arg == "samesite":
-                    if needs_samesite:
-                        new_keywords.append(ast.keyword(arg="samesite", value=ast.Constant(value="lax")))
-                        needs_samesite = False
-                    else:
-                        new_keywords.append(kw)
-                else:
-                    new_keywords.append(kw)
+                if last_item is not None:
+                    _, insert_pos = editor.span(last_item)
+                    missing_text = ", " + ", ".join(missing_flags)
+                    editor.insert(insert_pos, missing_text)
 
-            if needs_httponly:
-                new_keywords.append(ast.keyword(arg="httponly", value=ast.Constant(value=True)))
-            if needs_secure:
-                new_keywords.append(ast.keyword(arg="secure", value=ast.Constant(value=True)))
-            if needs_samesite:
-                new_keywords.append(ast.keyword(arg="samesite", value=ast.Constant(value="lax")))
+            if call_modified:
+                changes.append(
+                    FixChange(
+                        rule_id=self.rule_id,
+                        description="Harden cookie with httponly=True, secure=True, and samesite='lax' flags",
+                        lineno=node.lineno,
+                        before=editor.segment(node),
+                        after=f"{editor.segment(node)} [hardened]",
+                    )
+                )
 
-            new_call = ast.Call(
-                func=node.func,
-                args=list(node.args),
-                keywords=new_keywords,
-            )
-
-            new_code = ast.unparse(new_call)
-
-            start_line = node.lineno
-            end_line = node.end_lineno or node.lineno
-            start_col = node.col_offset
-            end_col = node.end_col_offset or len(lines[end_line - 1])
-
-            if start_line == end_line:
-                old_code = lines[start_line - 1][start_col:end_col]
-            else:
-                old_code = "".join(lines[start_line - 1 : end_line])
-
-            if old_code.strip() != new_code.strip():
-                replacements.append((start_line, end_line, start_col, end_col, old_code, new_code))
-
-        if not replacements:
+        if not changes:
             return source, []
 
-        replacements.sort(key=lambda r: (r[0], r[2]), reverse=True)
-        modified_lines = list(lines)
+        try:
+            new_source = editor.result()
+        except ValueError:
+            return source, []
 
-        for s_line, e_line, s_col, e_col, old_code, new_code in replacements:
-            if s_line == e_line:
-                line = modified_lines[s_line - 1]
-                modified_lines[s_line - 1] = line[:s_col] + new_code + line[e_col:]
-            else:
-                first_part = modified_lines[s_line - 1][:s_col]
-                last_part = modified_lines[e_line - 1][e_col:]
-                modified_lines[s_line - 1 : e_line] = [first_part + new_code + last_part]
-
-            changes.append(
-                FixChange(
-                    rule_id=self.rule_id,
-                    description="Harden cookie with httponly=True, secure=True, and samesite='lax' flags",
-                    lineno=s_line,
-                    before=old_code,
-                    after=new_code,
-                )
-            )
-
-        new_source = "".join(modified_lines)
         return new_source, changes
 
     def propose_patch(
@@ -198,6 +169,10 @@ class InsecureCookieFixer(BaseFixer):
 
         source_digest = f"sha256:{hashlib.sha256(source.encode('utf-8')).hexdigest()}"
 
+        meta = {"auto_apply": False, "reason": "Cookie security flags require HTTPS and cross-origin review"}
+        if metadata:
+            meta.update(metadata)
+
         return PatchCandidate.create(
             finding_ids=finding_ids,
             rule_id=self.rule_id,
@@ -208,8 +183,8 @@ class InsecureCookieFixer(BaseFixer):
             description="Harden cookie with httponly=True, secure=True, and samesite='lax' flags",
             generator="plex.repair.insecure_cookie",
             generator_version="1.0.0",
-            confidence="derived",
-            risk="low",
+            confidence="inferred",
+            risk="medium",
             rollback_diff=rollback_diff,
-            metadata=metadata or {},
+            metadata=meta,
         )

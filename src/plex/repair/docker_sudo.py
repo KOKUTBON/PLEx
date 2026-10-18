@@ -14,10 +14,15 @@ NOPASSWD_PATTERN = re.compile(r"NOPASSWD\s*:\s*", re.IGNORECASE)
 
 
 class DockerSudoFixer(BaseFixer):
-    """Container hardening fixer that removes passwordless sudo grants (NOPASSWD) from Dockerfiles."""
+    """Container hardening fixer that removes passwordless sudo grants (NOPASSWD) from Dockerfiles.
+
+    This fixer is proposal-only (``auto_apply = False``) because removing passwordless sudo
+    can break container entrypoint scripts or build steps that execute sudo non-interactively.
+    """
 
     rule_id = "cfg.docker-sudo-nopasswd"
     name = "docker_sudo"
+    auto_apply = False
 
     def fix(self, source: str, file_path: str = "") -> tuple[str, list[FixChange]]:
         lines = source.splitlines(keepends=True)
@@ -30,6 +35,12 @@ class DockerSudoFixer(BaseFixer):
         for lineno, line in enumerate(lines, start=1):
             stripped = line.strip()
             if not stripped or stripped.startswith("#"):
+                new_lines.append(line)
+                continue
+
+            # Only inspect active execution instructions (RUN, COPY, ADD)
+            first_word = stripped.split()[0].upper()
+            if first_word not in ("RUN", "COPY", "ADD"):
                 new_lines.append(line)
                 continue
 
@@ -90,6 +101,10 @@ class DockerSudoFixer(BaseFixer):
 
         source_digest = f"sha256:{hashlib.sha256(source.encode('utf-8')).hexdigest()}"
 
+        meta = {"auto_apply": False, "reason": "Requires verifying non-interactive sudo execution in container"}
+        if metadata:
+            meta.update(metadata)
+
         return PatchCandidate.create(
             finding_ids=finding_ids,
             rule_id=self.rule_id,
@@ -100,8 +115,8 @@ class DockerSudoFixer(BaseFixer):
             description="Remove passwordless sudo escalation grant in Dockerfile",
             generator="plex.repair.docker_sudo",
             generator_version="1.0.0",
-            confidence="derived",
-            risk="low",
+            confidence="inferred",
+            risk="high",
             rollback_diff=rollback_diff,
-            metadata=metadata or {},
+            metadata=meta,
         )

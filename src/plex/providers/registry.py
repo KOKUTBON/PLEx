@@ -9,6 +9,7 @@ from dataclasses import asdict
 from importlib.metadata import EntryPoint, entry_points
 from typing import Any, cast, get_args
 
+from plex.reliability import ReliabilityProvider
 from plex.report.unified import Category, Isolation
 
 from .base import AnalysisProvider, EngineCapability
@@ -48,6 +49,7 @@ class ProviderRegistry:
         registry = cls()
         registry.register("performance", PerformanceProvider, source="bundled")
         registry.register("rea", ReaProvider, source="bundled")
+        registry.register("reliability", ReliabilityProvider, source="bundled")
         registry.register("supply_chain", SupplyChainProvider, source="bundled")
         registry.register("xboundary", XBoundaryProvider, source="bundled")
         for ep in sorted(entry_points(group="plex.providers"), key=lambda ep: ep.name):

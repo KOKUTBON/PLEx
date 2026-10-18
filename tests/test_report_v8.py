@@ -311,3 +311,40 @@ def test_cli_refuses_lossy_export_and_performance_only_rendering(tmp_path: Path)
         assert not output.exists()
     result = cli("report", str(FIXTURE), "--format", "summary", "--legacy-schema", "7")
     assert result.returncode == 1
+
+
+def test_v8_repair_status_and_repairs_schema_contract(tmp_path: Path) -> None:
+    base = mixed_report()
+    updated_sec = replace(base.findings_unified[-1], repair_status="verified")
+    with_repairs = replace(
+        base,
+        findings_unified=[*base.findings_unified[:-1], updated_sec],
+        repairs=[
+            {
+                "candidate": {"id": "patch:123", "rule_id": "xbnd.sql-injection"},
+                "status": "verified",
+            }
+        ],
+    )
+    out = tmp_path / "with_repairs.json"
+    write_json(with_repairs, out)
+    loaded = read_json(out)
+    assert loaded.findings_unified[-1].status == "suspected"
+    assert loaded.findings_unified[-1].repair_status == "verified"
+    assert len(loaded.repairs) == 1
+
+    schema = json.loads((ROOT / "schema/plex.schema.json").read_text())
+    jsonschema.validate(json.loads(out.read_text()), schema)
+
+    # Lossy v7 downgrade is rejected when repair_status or repairs is present
+    perf_only = performance_report()
+    perf_with_repair = replace(
+        perf_only,
+        findings_unified=[
+            replace(perf_only.findings_unified[0], repair_status="proposed"),
+            *perf_only.findings_unified[1:],
+        ],
+    )
+    with pytest.raises(ValueError, match="Schema v7"):
+        perf_with_repair.to_dict_v7()
+

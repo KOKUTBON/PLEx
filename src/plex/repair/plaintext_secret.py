@@ -10,6 +10,7 @@ from typing import Any
 from plex.fix.base import BaseFixer, FixChange
 from plex.repair.diffutil import unified_diff
 from plex.repair.models import PatchCandidate
+from plex.repair.sourceedit import SourceEditor
 
 SENSITIVE_KEY_NAMES = {
     "AWS_SECRET_ACCESS_KEY",
@@ -27,14 +28,44 @@ SENSITIVE_KEY_NAMES = {
     "JWT_SECRET",
 }
 
+NON_SECRET_IDENTIFIERS = {
+    "PRIMARY_KEY",
+    "FOREIGN_KEY",
+    "PARTITION_KEY",
+    "SORT_KEY",
+    "CACHE_KEY",
+    "ROUTING_KEY",
+    "INDEX_KEY",
+    "SHARD_KEY",
+    "COMPOSITE_KEY",
+    "ID_KEY",
+}
+
 ENV_SECRET_REGEX = re.compile(
     r"^(\s*(?:export\s+)?)([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(['\"]?)([^'\"#\s]{8,})\3(\s*(?:#.*)?)$"
 )
 
 
+def _is_test_or_dev_file(file_path: str) -> bool:
+    """Return True if file_path appears to be a test suite or development fixture."""
+    if not file_path:
+        return False
+    parts = file_path.lower().replace("\\", "/").split("/")
+    if any(p in {"tests", "test", "testing", "fixtures"} for p in parts):
+        return True
+    fname = parts[-1]
+    if fname.startswith("test_") or fname.endswith("_test.py") or fname == "conftest.py":
+        return True
+    if fname.endswith((".example", ".sample", ".template")):
+        return True
+    return False
+
+
 def is_sensitive_identifier(name: str) -> bool:
     """Check if identifier name indicates a sensitive secret or credential."""
     upper = name.upper()
+    if upper in NON_SECRET_IDENTIFIERS:
+        return False
     if upper in SENSITIVE_KEY_NAMES:
         return True
     if any(
@@ -52,8 +83,12 @@ class PlaintextSecretFixer(BaseFixer):
 
     rule_id = "cfg.plaintext-secret"
     name = "plaintext_secret"
+    auto_apply = False
 
     def fix(self, source: str, file_path: str = "") -> tuple[str, list[FixChange]]:
+        if _is_test_or_dev_file(file_path):
+            return source, []
+
         # Python files (.py) use AST traversal
         if file_path.endswith(".py"):
             try:
@@ -80,19 +115,15 @@ class PlaintextSecretFixer(BaseFixer):
     def _fix_python(
         self, source: str, tree: ast.AST, file_path: str
     ) -> tuple[str, list[FixChange]]:
-        lines = source.splitlines(keepends=True)
+        editor = SourceEditor(source)
         changes: list[FixChange] = []
-        replacements: list[tuple[int, int, int, int, str, str]] = []
         has_os_import = False
 
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 for alias in node.names:
-                    if alias.name == "os":
+                    if alias.name == "os" and alias.asname is None:
                         has_os_import = True
-            elif isinstance(node, ast.ImportFrom):
-                if node.module == "os":
-                    has_os_import = True
 
             if isinstance(node, ast.Assign):
                 # Check for sensitive variable assignments: SECRET_KEY = "..."
@@ -105,100 +136,44 @@ class PlaintextSecretFixer(BaseFixer):
                             and len(node.value.value) >= 8
                             and not node.value.value.startswith("${")
                         ):
-                            # Replace constant with os.getenv("VAR_NAME", "")
-                            new_call = ast.Call(
-                                func=ast.Attribute(
-                                    value=ast.Name(id="os", ctx=ast.Load()),
-                                    attr="getenv",
-                                    ctx=ast.Load(),
-                                ),
-                                args=[
-                                    ast.Constant(value=var_name),
-                                    ast.Constant(value=""),
-                                ],
-                                keywords=[],
-                            )
-                            ast.copy_location(new_call, node.value)
-                            ast.fix_missing_locations(new_call)
-                            new_val_code = ast.unparse(new_call)
+                            old_code = editor.segment(node.value)
+                            new_call = f'os.getenv("{var_name}", "")'
+                            editor.replace(node.value, new_call)
 
-                            val_start_line = node.value.lineno
-                            val_end_line = node.value.end_lineno or node.value.lineno
-                            val_start_col = node.value.col_offset
-                            val_end_col = (
-                                node.value.end_col_offset
-                                or len(lines[val_end_line - 1])
-                            )
-
-                            if val_start_line == val_end_line:
-                                old_code = lines[val_start_line - 1][
-                                    val_start_col:val_end_col
-                                ]
-                            else:
-                                old_code = "".join(
-                                    lines[val_start_line - 1 : val_end_line]
-                                )
-
-                            replacements.append(
-                                (
-                                    val_start_line,
-                                    val_end_line,
-                                    val_start_col,
-                                    val_end_col,
-                                    old_code,
-                                    new_val_code,
+                            changes.append(
+                                FixChange(
+                                    rule_id=self.rule_id,
+                                    description=(
+                                        f"Migrate hardcoded secret literal '{var_name}' "
+                                        "to os.getenv (CWE-798)"
+                                    ),
+                                    lineno=node.value.lineno,
+                                    before=old_code,
+                                    after=new_call,
                                 )
                             )
 
-        if not replacements:
+        if not changes:
             return source, []
 
-        replacements.sort(key=lambda r: (r[0], r[2]), reverse=True)
-        modified_lines = list(lines)
-
-        for s_line, e_line, s_col, e_col, old_code, new_code in replacements:
-            if s_line == e_line:
-                line = modified_lines[s_line - 1]
-                modified_lines[s_line - 1] = line[:s_col] + new_code + line[e_col:]
-            else:
-                first_part = modified_lines[s_line - 1][:s_col]
-                last_part = modified_lines[e_line - 1][e_col:]
-                modified_lines[s_line - 1 : e_line] = [first_part + new_code + last_part]
-
-            changes.append(
-                FixChange(
-                    rule_id=self.rule_id,
-                    description="Migrate hardcoded secret literal to os.getenv (CWE-798)",
-                    lineno=s_line,
-                    before=old_code,
-                    after=new_code,
-                )
-            )
-
-        # Inject import os if absent
-        if not has_os_import:
-            import_idx = 0
-            # Skip docstrings or future imports if present
-            for i, line in enumerate(modified_lines):
-                stripped = line.strip()
-                if stripped.startswith('"""') or stripped.startswith("'''") or stripped.startswith("#"):
-                    continue
-                if stripped.startswith("from __future__"):
-                    import_idx = i + 1
-                    continue
-                break
-            modified_lines.insert(import_idx, "import os\n")
+        if not has_os_import and isinstance(tree, ast.Module):
+            editor.insert_top_level(tree, "import os\n")
             changes.append(
                 FixChange(
                     rule_id=self.rule_id,
                     description="Import os module for environment secret lookup",
-                    lineno=import_idx + 1,
+                    lineno=1,
                     before="",
                     after="import os\n",
                 )
             )
 
-        new_source = "".join(modified_lines)
+        try:
+            new_source = editor.result()
+            ast.parse(new_source)
+        except (ValueError, SyntaxError):
+            return source, []
+
         return new_source, changes
 
     def _fix_env_or_config(self, source: str) -> tuple[str, list[FixChange]]:

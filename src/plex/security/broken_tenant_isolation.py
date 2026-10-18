@@ -64,8 +64,23 @@ DB_QUERY_METHODS = {
 __all__ = ["TENANT_LIMITATIONS", "BrokenTenantIsolationRule"]
 
 
-def _is_route_handler(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+def _is_route_handler(
+    fn: ast.FunctionDef | ast.AsyncFunctionDef,
+    extra_decorators: tuple[str, ...] = (),
+) -> bool:
     """Identify if function is an HTTP route or API endpoint."""
+    route_decs = {
+        "route",
+        "get",
+        "post",
+        "put",
+        "delete",
+        "patch",
+        "head",
+        "options",
+        "api_view",
+        *(d.lower().split(".")[-1] for d in extra_decorators),
+    }
     for dec in fn.decorator_list:
         dec_name = ""
         if isinstance(dec, ast.Call):
@@ -78,17 +93,7 @@ def _is_route_handler(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
         elif isinstance(dec, ast.Name):
             dec_name = dec.id
 
-        if dec_name.lower() in {
-            "route",
-            "get",
-            "post",
-            "put",
-            "delete",
-            "patch",
-            "head",
-            "options",
-            "api_view",
-        }:
+        if dec_name.lower() in route_decs:
             return True
 
     if fn.args.args:
@@ -128,22 +133,28 @@ def _get_client_id_params(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str
     return params
 
 
-def _has_tenant_guard(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+def _has_tenant_guard(
+    fn: ast.FunctionDef | ast.AsyncFunctionDef,
+    extra_fields: tuple[str, ...] = (),
+    extra_guards: tuple[str, ...] = (),
+) -> bool:
     """Check if function has explicit tenant authorization guards or checks."""
+    guard_keywords = TENANT_GUARD_KEYWORDS + tuple(g.lower() for g in extra_guards)
+    tenant_fields = TENANT_FIELDS | {f.lower() for f in extra_fields}
     for dec in fn.decorator_list:
         dec_str = ast.unparse(dec).lower()
-        if any(tok in dec_str for tok in TENANT_GUARD_KEYWORDS):
+        if any(tok in dec_str for tok in guard_keywords):
             return True
 
     for node in ast.walk(fn):
         if isinstance(node, ast.Call):
             call_str = ast.unparse(node.func).lower()
-            if any(tok in call_str for tok in TENANT_GUARD_KEYWORDS):
+            if any(tok in call_str for tok in guard_keywords):
                 return True
 
         if isinstance(node, ast.Compare):
             comp_str = ast.unparse(node).lower()
-            if any(tok in comp_str for tok in TENANT_FIELDS) and any(
+            if any(tok in comp_str for tok in tenant_fields) and any(
                 tok in comp_str
                 for tok in ("current_user", "current_tenant", "g.", "request.user", "session")
             ):
@@ -196,15 +207,19 @@ def _query_uses_client_id(call: ast.Call, method: str, client_ids: set[str]) -> 
     return None
 
 
-def _query_has_tenant_scope(call: ast.Call) -> bool:
+def _query_has_tenant_scope(
+    call: ast.Call,
+    extra_fields: tuple[str, ...] = (),
+) -> bool:
     """Check if query call is explicitly scoped by tenant/organization."""
+    tenant_fields = TENANT_FIELDS | {f.lower() for f in extra_fields}
     for kw in call.keywords:
-        if kw.arg and kw.arg.lower() in TENANT_FIELDS:
+        if kw.arg and kw.arg.lower() in tenant_fields:
             return True
 
     for arg in call.args:
         arg_str = ast.unparse(arg).lower()
-        if any(tf in arg_str for tf in TENANT_FIELDS):
+        if any(tf in arg_str for tf in tenant_fields):
             return True
 
     if isinstance(call.func, ast.Attribute):
@@ -242,6 +257,16 @@ class BrokenTenantIsolationRule(Rule):
     tags = ["security", "authz", "tenant", "bola", "idor", "CWE-639", "A01:2025"]
 
     def apply(self, context: RuleContext) -> Iterable[RuleFinding]:
+        from .policy import SecurityPolicy
+
+        configured = context.security_policy.get("catalog")
+        policy = configured if isinstance(configured, SecurityPolicy) else SecurityPolicy()
+        extra_fields = policy.tenant_fields
+        extra_guards = policy.tenant_guards + policy.authorization_invariants.get(
+            "required_guards", ()
+        )
+        extra_decorators = policy.authorization_invariants.get("protected_decorators", ())
+
         for file in sorted(context.sources):
             tree = context.ast_for_path(file)
             if tree is None:
@@ -251,10 +276,12 @@ class BrokenTenantIsolationRule(Rule):
                 if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                     continue
 
-                if not _is_route_handler(node):
+                if not _is_route_handler(node, extra_decorators=extra_decorators):
                     continue
 
-                if _has_tenant_guard(node):
+                if _has_tenant_guard(
+                    node, extra_fields=extra_fields, extra_guards=extra_guards
+                ):
                     continue
 
                 client_ids = _get_client_id_params(node)
@@ -273,7 +300,7 @@ class BrokenTenantIsolationRule(Rule):
                     if not used_id:
                         continue
 
-                    if _query_has_tenant_scope(child):
+                    if _query_has_tenant_scope(child, extra_fields=extra_fields):
                         continue
 
                     msg = (

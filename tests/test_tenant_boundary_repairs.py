@@ -42,6 +42,7 @@ def test_tenant_boundary_fixer_filter_fastapi():
     fixer = TenantBoundaryFixer()
     source = (
         "from fastapi import APIRouter, Depends\n"
+        "from auth import current_user\n"
         "router = APIRouter()\n"
         "\n"
         "@router.get('/projects/{project_id}')\n"
@@ -78,6 +79,7 @@ def test_tenant_boundary_fixer_query_get_sqlalchemy():
     fixer = TenantBoundaryFixer()
     source = (
         "from flask import Flask\n"
+        "from flask_login import current_user\n"
         "app = Flask(__name__)\n"
         "\n"
         "@app.route('/documents/<doc_id>')\n"
@@ -112,6 +114,7 @@ def test_tenant_boundary_fixer_noop_when_safe():
 def test_tenant_boundary_propose_patch():
     fixer = TenantBoundaryFixer()
     source = (
+        "from flask_login import current_user\n"
         "@app.route('/documents/<doc_id>')\n"
         "def get_doc(doc_id):\n"
         "    return Document.query.filter_by(id=doc_id).first()\n"
@@ -125,6 +128,48 @@ def test_tenant_boundary_propose_patch():
     assert "tenant_id=current_user.tenant_id" in cand.diff
 
 
+def test_tenant_boundary_fixer_abstains_without_declared_tenant_context() -> None:
+    fixer = TenantBoundaryFixer()
+    source = (
+        "from flask import Flask\n"
+        "app = Flask(__name__)\n"
+        "\n"
+        "@app.route('/documents/<doc_id>')\n"
+        "def get_doc(doc_id):\n"
+        "    doc = Document.query.get(doc_id)\n"
+        "    return doc\n"
+    )
+    fixed, changes = fixer.fix(source)
+    assert fixed == source
+    assert len(changes) == 0
+
+
+def test_tenant_boundary_fixer_preserves_comments_and_formatting() -> None:
+    fixer = TenantBoundaryFixer()
+    source = (
+        "from flask import Flask, g\n"
+        "app = Flask(__name__)\n"
+        "\n"
+        "@app.route('/documents/<doc_id>')\n"
+        "def get_doc(doc_id):\n"
+        "    doc = Document.query.filter_by(\n"
+        "        id=doc_id,  # lookup doc by id\n"
+        "    ).first()\n"
+        "    return doc\n"
+    )
+    fixed, changes = fixer.fix(source)
+    assert len(changes) == 1
+    assert "# lookup doc by id" in fixed
+    assert "tenant_id=g.tenant_id" in fixed
+    tree = compile(fixed, "<string>", "exec")
+    assert tree is not None
+
+
+def test_tenant_boundary_fixer_contract_proposal_only() -> None:
+    fixer = TenantBoundaryFixer()
+    assert fixer.auto_apply is False
+
+
 # ==============================================================================
 # 2. End-to-End Coordinator & Multi-Engine Verification Tests
 # ==============================================================================
@@ -135,7 +180,7 @@ def test_tenant_boundary_repair_end_to_end(tmp_path: Path):
     repo.mkdir()
 
     app_code = (
-        "from flask import Flask, jsonify\n"
+        "from flask import Flask, jsonify, g\n"
         "app = Flask(__name__)\n"
         "\n"
         "@app.route('/documents/<doc_id>')\n"
@@ -155,6 +200,7 @@ def test_tenant_boundary_repair_end_to_end(tmp_path: Path):
     plan = coordinator.plan_and_verify(repo_root=repo)
     assert len(plan.candidates) == 1
     assert plan.candidates[0].rule_id == "xbnd.broken-tenant-isolation"
+    assert "tenant_id=g.tenant_id" in plan.candidates[0].diff
     assert plan.repairs[0].status == "inconclusive"
     assert not plan.has_failures
 

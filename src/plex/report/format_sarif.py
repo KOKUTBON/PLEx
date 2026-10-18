@@ -52,6 +52,8 @@ def _unified_result(finding: AnalysisFinding, repo_root: str) -> dict:
             "function_id": finding.function_id,
         },
     }
+    if finding.repair_status is not None:
+        result["properties"]["repair_status"] = finding.repair_status
     if finding.file:
         result["locations"] = [_location(finding.file, finding.lineno, repo_root)]
         if finding.end_lineno:

@@ -234,3 +234,28 @@ def test_remediation_coordinator_dockerfile_end_to_end(tmp_path: Path):
     patched = [apply_unified_diff(original, c.diff) for c in plan.candidates]
     assert any("FROM python:3.12-slim" in p for p in patched)
     assert any("USER nonroot" in p for p in patched)
+
+
+def test_docker_tag_pin_skips_scratch_and_digest_and_stage_names() -> None:
+    fixer = DockerTagPinFixer()
+    source = (
+        "FROM golang:1.22-alpine AS builder\n"
+        "RUN go build -o app\n"
+        "FROM builder AS tester\n"
+        "RUN ./test\n"
+        "FROM scratch\n"
+        "COPY --from=builder /app /app\n"
+        "FROM python@sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\n"
+        "CMD [\"/app\"]\n"
+    )
+    fixed, changes = fixer.fix(source)
+    assert fixed == source
+    assert len(changes) == 0
+
+
+def test_docker_fixers_contract_proposal_only() -> None:
+    user_fixer = DockerUserFixer()
+    tag_fixer = DockerTagPinFixer()
+    assert user_fixer.auto_apply is False
+    assert tag_fixer.auto_apply is False
+

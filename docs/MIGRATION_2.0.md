@@ -53,8 +53,11 @@ plex analyze . --fail-on-severity high --max-findings 5
 ### `plex inspect`
 Inspect compiled binaries and ELF artifacts with the native parser:
 ```bash
-# Native pure-Python ELF analysis
+# Native pure-Python ELF, PE, Mach-O and archive analysis
 plex inspect build/target.elf --engine native
+
+# Correlate binary symbols and call sites back to source tree
+plex inspect build/target.elf --source src/
 
 # Format output as JSON or SARIF
 plex inspect build/target.elf --format json -o out/inspect.json
@@ -63,8 +66,8 @@ plex inspect build/target.elf --format json -o out/inspect.json
 ### `plex validate`
 Execute active, authorized dynamic reproduction against local/staging services:
 ```bash
-# Active reproduction against endpoint with authorization guardrail
-plex validate . --url http://127.0.0.1:8000 --authorize AUTHORIZATION.md
+# Active reproduction against endpoint with authorization guardrail and OpenAPI spec
+plex validate . --url http://127.0.0.1:8000 --authorize AUTHORIZATION.md --spec openapi.yaml
 ```
 
 ### `plex remediate`
@@ -73,11 +76,21 @@ Generate, verify, and apply deterministic fixes to detected vulnerabilities:
 # Preview reviewable patch diff
 plex remediate . --diff
 
+# Multi-engine remediation correlating source code and compiled binary artifact
+plex remediate . --artifact build/target.elf --diff
+
 # Apply verified patches from auto-applicable fixers (requires behavioral tests)
 plex remediate . --apply --test-cmd "pytest"
 
 # Export relational provenance graph
 plex remediate . --out-graph out/provenance_graph.json
+```
+
+### `plex agent`
+Run single-worker autonomous investigations under strict technical scope controls:
+```bash
+# Run goal-driven investigation with turn budget
+plex agent "investigate SQL injection in auth module" --max-turns 10
 ```
 
 ### `plex coverage`
@@ -96,8 +109,8 @@ plex coverage --markdown
 ### `plex benchmark`
 Evaluate comparative accuracy and repair fidelity:
 ```bash
-# Run comparative accuracy evaluation against held-out corpus
-plex benchmark --comparative benchmarks/manifest.json
+# Run comparative accuracy evaluation against held-out corpus manifest or entire directory
+plex benchmark --comparative benchmarks/manifests/
 ```
 
 ---

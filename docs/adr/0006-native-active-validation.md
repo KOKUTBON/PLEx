@@ -1,7 +1,7 @@
 # 0006 Native active application testing (PLEx Validate)
 
-- Status: proposed
-- Date: 2026-10-12
+- Status: accepted
+- Date: 2026-10-16
 - Plan: [PLEx 2.0, section 8](../PLEx-2.0-PLAN.md)
 - Related: [Native platform ownership](0003-native-platform-ownership.md), [Engine isolation model](0002-engine-isolation-model.md)
 
@@ -35,11 +35,17 @@ Introduce the PLEx Validate subsystem (`src/plex/validate/`) with the following 
 - Authorization mandates approving party identity, authorized target URLs/paths, and expiration.
 - Non-local endpoints additionally require a recorded operator identity (`--operator`).
 
-### 3. Static Route Discovery and Finding Correlation
+### 3. Static Route Discovery, OpenAPI/Swagger Intake, and JS/TS Support
 - Native AST visitors discover routes and HTTP methods across major Python web frameworks:
   - Flask: `@app.route()`, `@blueprint.route()`.
   - FastAPI: `@app.get()`, `@app.post()`, `@router.*`.
   - Django: `urlpatterns = [path(), re_path()]`.
+- JavaScript & TypeScript route discovery:
+  - Express.js and Fastify: `app.get()`, `router.post()`, `fastify.get()`.
+  - Next.js: App Router (`app/**/route.ts`) and Pages Router (`pages/api/**/*.ts`).
+- OpenAPI / Swagger specification intake (`parse_openapi_spec`):
+  - Direct ingestion of OpenAPI 3.0/3.1 and Swagger 2.0 specifications in JSON or YAML.
+  - Automatic parameter extraction (`parameters`) for route-guided probe synthesis.
 - Source findings (such as xBOUNDARY SQL injection, command injection, and path traversal) are
   automatically linked to reachable endpoints via file and line proximity.
 
@@ -49,6 +55,7 @@ Introduce the PLEx Validate subsystem (`src/plex/validate/`) with the following 
   - `CommandInjectionRecipe`: Verifies benign test canary reflections across command separators.
   - `PathTraversalRecipe`: Verifies directory traversal signatures (`root:x:`, `/bin/sh`).
   - `RoleMatrixRecipe`: Verifies authentication and tenant isolation boundaries against unauthenticated and forged roles.
+  - `TenantIsolationRecipe`: Verifies broken object-level access boundaries between distinct tenants.
 
 ### 5. Content-Addressed HTTP Evidence
 - Every probe and response is captured as an `HttpExchange` with automatic header redaction (`Authorization`, `Cookie`, tokens).
@@ -57,10 +64,14 @@ Introduce the PLEx Validate subsystem (`src/plex/validate/`) with the following 
 - Hypotheses that do not reproduce retain counterevidence with `status="inconclusive"` or `status="refuted"`.
 
 ### 6. CLI Integration
-- Accessible via `plex validate --target <url> --authorize <file> [--repo <path>] [--fail-on-verified]`.
+- Accessible via:
+  ```bash
+  plex validate --target <url> --authorize <file> [--repo <path>] [--spec <file>] [--operator <id>] [--fail-on-verified]
+  ```
 
 ## Consequences
 
 - Full dynamic verification is achieved without external dependencies, Node, Docker sockets, or third-party agent packages.
 - CI/CD can run deterministic active reproduction recipes against local fixture apps in safe, disposable environments.
 - High-confidence verification links source taint flows to observable HTTP exploitability.
+- Multi-framework support covers Python, Express, Fastify, Next.js, and standard OpenAPI/Swagger specifications.

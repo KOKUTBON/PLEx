@@ -1,0 +1,22 @@
+{
+  "name": "python_ssti_bench",
+  "target_rule": "xbnd.ssti",
+  "min_precision": 0.95,
+  "min_recall": 0.90,
+  "require_zero_regressions": true,
+  "corpus_dir": "../corpora/python_web_security",
+  "cases": [
+    {
+      "file": "vuln_ssti.py",
+      "expected_rule": "xbnd.ssti",
+      "should_detect": true,
+      "expect_repairable": true
+    },
+    {
+      "file": "safe_ssti.py",
+      "expected_rule": "xbnd.ssti",
+      "should_detect": false,
+      "expect_repairable": false
+    }
+  ]
+}

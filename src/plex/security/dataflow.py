@@ -188,11 +188,19 @@ class SQLDataflow:
             }:
                 return name
         if self.kind == "data_leak":
-            if isinstance(node, ast.Attribute) and is_sensitive_name(node.attr):
+            if isinstance(node, ast.Name) and self.policy.is_classified_sensitive(node.id):
+                return node.id
+            if isinstance(node, ast.Attribute) and (
+                is_sensitive_name(node.attr)
+                or self.policy.is_classified_sensitive(node.attr)
+                or self.policy.is_classified_sensitive(f"{self.name(node.value)}.{node.attr}")
+            ):
                 return f"{self.name(node.value)}.{node.attr}"
             if isinstance(node, ast.Subscript):
                 if isinstance(node.slice, ast.Constant) and isinstance(node.slice.value, str):
-                    if is_sensitive_name(node.slice.value):
+                    if is_sensitive_name(node.slice.value) or self.policy.is_classified_sensitive(
+                        node.slice.value
+                    ):
                         return f"{self.name(node.value)}[{node.slice.value}]"
             if isinstance(node, ast.Call):
                 call_name = self.name(node.func)
@@ -202,7 +210,9 @@ class SQLDataflow:
                         and isinstance(node.args[0], ast.Constant)
                         and isinstance(node.args[0].value, str)
                     ):
-                        if is_sensitive_name(node.args[0].value):
+                        if is_sensitive_name(
+                            node.args[0].value
+                        ) or self.policy.is_classified_sensitive(node.args[0].value):
                             return f"{call_name}({node.args[0].value})"
                 elif call_name in {"getpass.getpass", "getpass"}:
                     return call_name
@@ -363,7 +373,7 @@ class SQLDataflow:
                 keywords.get(None, ()),
             )
         )
-        if name in {
+        if self.policy.matches(name, self.policy.sinks_for("command")) or name in {
             "os.system",
             "posix.system",
             "os.popen",
@@ -426,7 +436,7 @@ class SQLDataflow:
     def eval_flow(
         self, node: ast.Call, name: str, values: list[Flow], keywords: dict[str | None, Flow]
     ) -> Flow:
-        if name in {
+        if self.policy.matches(name, self.policy.sinks_for("eval")) or name in {
             "eval",
             "builtins.eval",
             "exec",
@@ -484,7 +494,11 @@ class SQLDataflow:
             "rmdir",
             "mkdir",
         }
-        if name in path_sinks or is_path_method:
+        if (
+            self.policy.matches(name, self.policy.sinks_for("path"))
+            or name in path_sinks
+            or is_path_method
+        ):
             target = (
                 values[0]
                 if values
@@ -526,11 +540,15 @@ class SQLDataflow:
             "yaml.load_all",
         }
         attr_name = node.func.attr if isinstance(node.func, ast.Attribute) else ""
-        is_sink = name in deserialization_sinks or (
-            attr_name in {"loads", "load"}
-            and any(
-                name.startswith(mod)
-                for mod in ("pickle.", "_pickle.", "marshal.", "dill.", "yaml.", "shelve.")
+        is_sink = (
+            self.policy.matches(name, self.policy.sinks_for("deserialization"))
+            or name in deserialization_sinks
+            or (
+                attr_name in {"loads", "load"}
+                and any(
+                    name.startswith(mod)
+                    for mod in ("pickle.", "_pickle.", "marshal.", "dill.", "yaml.", "shelve.")
+                )
             )
         )
         if is_sink:
@@ -604,11 +622,47 @@ class SQLDataflow:
             "request",
             "urlopen",
         }
-        if name in http_sinks or is_http_attr:
+        if (
+            self.policy.matches(name, self.policy.sinks_for("ssrf"))
+            or name in http_sinks
+            or is_http_attr
+        ):
             is_request_method = (
                 name.endswith(".request")
                 or (isinstance(node.func, ast.Attribute) and node.func.attr == "request")
             )
+            url_arg = (
+                node.args[1]
+                if is_request_method and len(node.args) >= 2
+                else (
+                    node.args[0]
+                    if node.args
+                    else next(
+                        (
+                            kw.value
+                            for kw in node.keywords
+                            if kw.arg in ("url", "uri", "endpoint", "target")
+                        ),
+                        None,
+                    )
+                )
+            )
+            if url_arg is not None and self.policy.approved_destinations:
+                prefix = ""
+                if isinstance(url_arg, ast.JoinedStr) and url_arg.values:
+                    first = url_arg.values[0]
+                    if isinstance(first, ast.Constant) and isinstance(first.value, str):
+                        prefix = first.value
+                elif isinstance(url_arg, ast.BinOp) and isinstance(url_arg.op, ast.Add):
+                    if isinstance(url_arg.left, ast.Constant) and isinstance(
+                        url_arg.left.value, str
+                    ):
+                        prefix = url_arg.left.value
+                if prefix and "://" in prefix:
+                    after_scheme = prefix.split("://", 1)[1]
+                    if "/" in after_scheme and self.policy.is_approved_destination(prefix):
+                        return ()
+
             if is_request_method and len(values) >= 2:
                 target = values[1]
             else:
@@ -647,7 +701,7 @@ class SQLDataflow:
         }
         stdout_methods = {"write", "writelines"}
 
-        is_sink = False
+        is_sink = self.policy.matches(name, self.policy.sinks_for("data_leak"))
 
         if name in {"print", "builtins.print"}:
             is_sink = True
@@ -679,6 +733,8 @@ class SQLDataflow:
         return ()
 
     def is_data_leak_sanitizer(self, name: str, node: ast.Call) -> bool:
+        if self.policy.matches(name, self.policy.sanitizers_for("data_leak")):
+            return True
         fn_name = name.split(".")[-1].lower()
         if fn_name in {
             "mask",
@@ -709,7 +765,9 @@ class SQLDataflow:
     def is_tainted_sensitive_assign(
         self, target_name: str, value_node: ast.AST | None, env: Environment
     ) -> bool:
-        if not is_sensitive_name(target_name):
+        if not (
+            is_sensitive_name(target_name) or self.policy.is_classified_sensitive(target_name)
+        ):
             return False
         if value_node is None:
             return False
@@ -863,7 +921,7 @@ class SQLDataflow:
                 source = ""
             if source:
                 return (self.step(node, "source", source),)
-            if self.kind == "sql" and self.policy.matches(name, self.policy.sanitizers):
+            if self.policy.matches(name, self.policy.sanitizers_for(self.kind)):
                 return ()
             if self.kind == "eval" and name in {"ast.literal_eval", "literal_eval"}:
                 return ()
@@ -977,7 +1035,9 @@ class SQLDataflow:
                 self.returns = []
                 args = [*stmt.args.posonlyargs, *stmt.args.args, *stmt.args.kwonlyargs]
                 for arg in args:
-                    if self.kind == "data_leak" and is_sensitive_name(arg.arg):
+                    if self.kind == "data_leak" and (
+                        is_sensitive_name(arg.arg) or self.policy.is_classified_sensitive(arg.arg)
+                    ):
                         local[arg.arg] = (self.step(arg, "source", arg.arg),)
                     else:
                         local[arg.arg] = ()

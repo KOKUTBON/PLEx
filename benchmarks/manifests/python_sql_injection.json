@@ -1,0 +1,22 @@
+{
+  "name": "python_sql_injection_bench",
+  "target_rule": "xbnd.sql-injection",
+  "min_precision": 0.95,
+  "min_recall": 0.90,
+  "require_zero_regressions": true,
+  "corpus_dir": "../corpora/python_injection",
+  "cases": [
+    {
+      "file": "vuln_sqli.py",
+      "expected_rule": "xbnd.sql-injection",
+      "should_detect": true,
+      "expect_repairable": true
+    },
+    {
+      "file": "safe_sqli.py",
+      "expected_rule": "xbnd.sql-injection",
+      "should_detect": false,
+      "expect_repairable": false
+    }
+  ]
+}

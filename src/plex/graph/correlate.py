@@ -10,6 +10,7 @@ from plex.graph.models import GraphNode, ProjectGraph
 from plex.report.unified import AnalysisFinding
 
 if TYPE_CHECKING:
+    from plex.inspect.models import ArtifactDescriptor
     from plex.repair.models import PatchCandidate, RepairRecord
     from plex.validate.routes import RouteEndpoint
 
@@ -278,3 +279,173 @@ class GraphCorrelator:
                     "active_status": active_finding.status,
                 },
             )
+
+    def add_artifact(self, descriptor: ArtifactDescriptor) -> GraphNode:
+        """Register compiled binary artifact and structural symbols into project graph."""
+        nid = _node_id("artifact", f"{descriptor.format}:{descriptor.sha256}")
+        if nid in self.graph.nodes:
+            return self.graph.nodes[nid]
+
+        anode = self.graph.add_node(
+            kind="artifact",
+            label=f"{descriptor.format.upper()} ({descriptor.architecture}) {descriptor.path}",
+            properties={
+                "path": descriptor.path,
+                "format": descriptor.format,
+                "architecture": descriptor.architecture,
+                "endianness": descriptor.endianness,
+                "is_64bit": descriptor.is_64bit,
+                "entry_point": hex(descriptor.entry_point),
+                "sections_count": len(descriptor.sections),
+                "imported_symbols_count": len(descriptor.imported_symbols),
+                "exported_symbols_count": len(descriptor.exported_symbols),
+                "functions_count": len(descriptor.functions),
+                "calls_count": len(descriptor.calls),
+                "is_stripped": descriptor.is_stripped,
+                "hardening": {
+                    "nx": descriptor.hardening.nx,
+                    "pie": descriptor.hardening.pie,
+                    "relro": descriptor.hardening.relro,
+                    "canary": descriptor.hardening.canary,
+                    "fortify": descriptor.hardening.fortify,
+                },
+            },
+            digest=descriptor.sha256,
+            node_id=nid,
+        )
+
+        # Register imported and exported symbols
+        for sym in descriptor.imported_symbols:
+            sym_nid = _node_id("symbol", f"import:{sym}")
+            if sym_nid not in self.graph.nodes:
+                snode = self.graph.add_node(
+                    kind="symbol",
+                    label=f"Import {sym}",
+                    properties={"name": sym, "type": "import"},
+                    node_id=sym_nid,
+                )
+            else:
+                snode = self.graph.nodes[sym_nid]
+            self.graph.add_edge(
+                source=anode.id,
+                target=snode.id,
+                kind="contains",
+                producer="plex.inspect",
+            )
+
+        # Register reconstructed calls
+        for call in descriptor.calls:
+            if call.target_symbol:
+                call_nid = _node_id("call_site", f"{call.caller_address:#x}:{call.target_symbol}")
+                if call_nid not in self.graph.nodes:
+                    cnode = self.graph.add_node(
+                        kind="call_site",
+                        label=f"Call to {call.target_symbol} at {call.caller_address:#x}",
+                        properties={
+                            "caller_address": hex(call.caller_address),
+                            "caller_function": call.caller_function,
+                            "target_symbol": call.target_symbol,
+                        },
+                        node_id=call_nid,
+                    )
+                else:
+                    cnode = self.graph.nodes[call_nid]
+
+                self.graph.add_edge(
+                    source=anode.id,
+                    target=cnode.id,
+                    kind="contains",
+                    producer="plex.inspect.disasm",
+                )
+                sym_nid = _node_id("symbol", f"import:{call.target_symbol}")
+                if sym_nid in self.graph.nodes:
+                    self.graph.add_edge(
+                        source=cnode.id,
+                        target=sym_nid,
+                        kind="calls",
+                        producer="plex.inspect.disasm",
+                    )
+
+        return anode
+
+    def correlate_source_artifact(
+        self,
+        artifact_node: GraphNode,
+        source_file: str,
+        function_name: str | None = None,
+        lineno: int | None = None,
+    ) -> None:
+        """Create explicit maps_to link from binary artifact to source code location."""
+        fnode = self.add_file(source_file)
+        self.graph.add_edge(
+            source=artifact_node.id,
+            target=fnode.id,
+            kind="maps_to",
+            producer="plex.inspect.sourcemap",
+            confidence=0.9,
+            metadata={"function": function_name, "lineno": lineno},
+        )
+
+    def add_artifact_finding(
+        self,
+        finding: AnalysisFinding,
+        artifact_node: GraphNode,
+    ) -> GraphNode:
+        """Register binary finding and link to artifact and source code if source-mapped."""
+        fnode = self.add_finding(finding, producer="plex.inspect")
+        self.graph.add_edge(
+            source=artifact_node.id,
+            target=fnode.id,
+            kind="detects",
+            producer="plex.inspect",
+        )
+
+        source_file = finding.engine_meta.get("source_file")
+        if finding.engine_meta.get("source_mapped") and source_file:
+            snode = self.add_file(source_file)
+            self.graph.add_edge(
+                source=fnode.id,
+                target=snode.id,
+                kind="maps_to",
+                producer="plex.inspect.sourcemap",
+                metadata={"source_line": finding.lineno},
+            )
+            self.correlate_source_artifact(
+                artifact_node=artifact_node,
+                source_file=source_file,
+                function_name=finding.qualname,
+                lineno=finding.lineno,
+            )
+
+        return fnode
+
+    def correlate_runtime_trace(
+        self,
+        artifact_node: GraphNode,
+        trace_result: Any,
+    ) -> None:
+        """Link artifact node to symbols and sinks observed during sandboxed runtime tracing."""
+        if not getattr(trace_result, "executed", False):
+            return
+
+        for sym in getattr(trace_result, "observed_symbols", ()):
+            sym_nid = _node_id("symbol", f"import:{sym}")
+            if sym_nid not in self.graph.nodes:
+                snode = self.graph.add_node(
+                    kind="symbol",
+                    label=f"Runtime Symbol {sym}",
+                    properties={"name": sym, "type": "runtime_observed"},
+                    node_id=sym_nid,
+                )
+            else:
+                snode = self.graph.nodes[sym_nid]
+
+            self.graph.add_edge(
+                source=artifact_node.id,
+                target=snode.id,
+                kind="executes_at_runtime",
+                producer="plex.inspect.trace",
+                confidence=1.0,
+                metadata={"isolation": getattr(trace_result, "isolation", "process")},
+            )
+

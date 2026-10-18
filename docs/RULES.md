@@ -75,38 +75,6 @@ rule_stability: "stable" # "all" (default), "stable", or "experimental"
 Rules run on the IR and are designed to be conservative. Use `exclude`,
 `min_function_lines`, and suppressions to reduce noise.
 
-<a id="plexhotspot"></a>
-## plex.hotspot
-
-<a id="plexhotspot"></a>
-
-Detects functions exhibiting elevated algorithmic complexity signals (nested loops, recursion, unbatched sort calls) exceeding standard heuristic thresholds.
-
-Signals:
-- Deeply nested loops (max loop depth >= 2).
-- Recursive call trees without memoization.
-- Multiple sorting operations over large sequences.
-
-Suggestions:
-- Refactor nested iterations using pre-indexed lookup tables (dict, set).
-- Defer or hoist repeated sorting and conversions outside inner scopes.
-
-<a id="plexregression"></a>
-## plex.regression
-
-<a id="plexregression"></a>
-
-Detects complexity regressions when comparing the change set against the target baseline branch.
-
-Signals:
-- Elevated risk score delta (risk_delta > 0).
-- Complexity hint tier increase (e.g., O(1) -> O(n), or O(n) -> O(n^2)).
-
-Suggestions:
-- Inspect newly added iterations, sorting calls, or recursive paths.
-- Run baseline benchmarks to measure real-world performance impact.
-
-<a id="plexdb-in-loop"></a>
 ## plex.db-in-loop (high)
 
 Detects ORM/SQL calls inside loops (possible N+1 queries).
@@ -119,7 +87,6 @@ Suggestions:
 - Batch queries or prefetch related data.
 - Move queries outside the loop.
 
-<a id="plexjson-in-loop"></a>
 ## plex.json-in-loop (medium)
 
 Detects `json.dumps/loads` inside loops.
@@ -127,7 +94,6 @@ Detects `json.dumps/loads` inside loops.
 Suggestions:
 - Batch serialization or move it outside the loop.
 
-<a id="plexpandas-iterrows"></a>
 ## plex.pandas-iterrows (medium)
 
 Detects row-by-row pandas usage inside loops (`iterrows`, `itertuples`,
@@ -137,7 +103,6 @@ Suggestions:
 - Prefer vectorized operations.
 - Avoid row iteration in hot paths.
 
-<a id="plexregex-catastrophic"></a>
 ## plex.regex-catastrophic (high)
 
 Detects regex patterns prone to catastrophic backtracking.
@@ -146,7 +111,6 @@ Suggestions:
 - Avoid nested quantifiers.
 - Use non-greedy patterns or safe regex forms.
 
-<a id="plexhttp-in-loop"></a>
 ## plex.http-in-loop (high)
 
 Detects unbatched network and HTTP calls inside loops (`requests`, `httpx`, `urllib`, `session`, `aiohttp`, `fetch`, `axios`).
@@ -155,7 +119,6 @@ Suggestions:
 - Batch requests or use concurrent async fetching (e.g., `asyncio.gather` or connection pooling).
 - Move HTTP requests outside the loop or cache responses.
 
-<a id="plexunbounded-file-io"></a>
 ## plex.unbounded-file-io (high)
 
 Detects repeated file open and read/write operations inside loops (`open()`, `Path.read_text()`, `write_text()`).
@@ -164,7 +127,6 @@ Suggestions:
 - Open and read files once before the loop, or buffer/batch file operations.
 - Use streaming generators to process file contents without reopening inside the loop.
 
-<a id="plexstring-concat-in-loop"></a>
 ## plex.string-concat-in-loop (medium)
 
 Detects repeated string concatenation in loops (`+=` or `s = s + ...`) causing $O(n^2)$ memory reallocation.
@@ -173,7 +135,6 @@ Suggestions:
 - Collect substring chunks in a list and join them with `''.join(chunks)` after the loop.
 - Use `io.StringIO` when streaming large textual output.
 
-<a id="plexuncompiled-regex-in-loop"></a>
 ## plex.uncompiled-regex-in-loop (medium)
 
 Detects direct `re.search()`, `re.match()`, `re.findall()`, or `re.sub()` calls inside loops.
@@ -181,7 +142,6 @@ Detects direct `re.search()`, `re.match()`, `re.findall()`, or `re.sub()` calls 
 Suggestions:
 - Precompile regex patterns outside the loop with `pattern = re.compile(...)` and reuse the compiled pattern object.
 
-<a id="plexlinear-search-in-loop"></a>
 ## plex.linear-search-in-loop (high)
 
 Detects linear membership tests (`item in sequence`) inside loops where the target is a list, tuple, or `dict.values()`, causing $O(n \times m)$ quadratic behavior.
@@ -192,7 +152,6 @@ Suggestions:
 
 
 
-<a id="plexsync-io-in-async"></a>
 ## plex.sync-io-in-async (high)
 
 Detects synchronous blocking operations (`time.sleep()`, `open()`, `requests.get/post()`, `subprocess.run()`, `urllib.request.urlopen()`) inside `async def` coroutines, which block the event loop and freeze concurrent tasks.
@@ -203,7 +162,6 @@ Suggestions:
 - Use asynchronous HTTP clients like `httpx.AsyncClient` or `aiohttp.ClientSession`.
 - Use `await asyncio.create_subprocess_exec(...)` instead of `subprocess.run(...)`.
 
-<a id="plexdeepcopy-in-loop"></a>
 ## plex.deepcopy-in-loop (high)
 
 Detects calls to `copy.deepcopy()` or `deepcopy()` inside loops. Recursive traversal of arbitrary object graphs causes severe CPU bottlenecks and memory allocation churn.
@@ -212,7 +170,6 @@ Suggestions:
 - Use shallow copies (`dict.copy()`, `list[:]`, or `copy.copy()`) if nested data is immutable or structural sharing is safe.
 - Move `copy.deepcopy()` outside the loop or reuse pre-allocated template structures.
 
-<a id="plexrepeated-sort-in-loop"></a>
 ## plex.repeated-sort-in-loop (medium)
 
 Detects calls to `sorted()` or `.sort()` inside loops, potentially degrading algorithmic complexity to $O(n \times m \log m)$.
@@ -220,7 +177,6 @@ Detects calls to `sorted()` or `.sort()` inside loops, potentially degrading alg
 Suggestions:
 - Sort the collection once outside the loop if the collection does not change per iteration.
 - If maintaining a running top-K or priority order, maintain a min-heap using `heapq` (e.g., `heappush`/`heappop`) for $O(\log k)$ updates instead of full sorts.
-<a id="plexredundant-comprehension"></a>
 ## plex.redundant-comprehension (low)
 
 Detects redundant wrapping of list/set/dict comprehensions or generator expressions in `list()`, `set()`, or `dict()` calls (e.g. `list([x for x in seq])`, `set([x for x in seq])`, or `dict([(k, v) for k, v in seq])`), allocating unnecessary intermediate collections.
@@ -229,7 +185,6 @@ Suggestions:
 - Remove redundant wrapping calls or convert directly to comprehensions (`[...]`, `{...}`, or `{k: v for ...}`).
 - Automatically remediable via `plex fix` and VS Code Quick Fix (`Cmd+.`).
 
-<a id="plexunnecessary-dict-keys"></a>
 ## plex.unnecessary-dict-keys (low)
 
 Detects redundant `.keys()` calls in `for k in d.keys():` and `if k in d.keys():` / `if k not in d.keys():` checks. Calling `.keys()` creates a dictionary keys view object on each check/iteration, whereas operating directly on `d` utilizes dictionary hash lookups without allocations.
@@ -239,7 +194,6 @@ Suggestions:
 - Check membership directly against the dictionary (`if k in d:`).
 - Automatically remediable via `plex fix` and VS Code Quick Fix (`Cmd+.`).
 
-<a id="plexunnecessary-len"></a>
 ## plex.unnecessary-len (low)
 
 Detects redundant `len(...)` calls compared against `0` in conditional contexts (e.g. `len(seq) > 0`, `len(seq) != 0`, `len(seq) == 0`, or `len(seq) <= 0`). Direct truthiness checks (`if seq:`, `if not seq:`) avoid sequence traversal and length calculation overhead while adhering to PEP 8 idioms.
@@ -248,7 +202,6 @@ Suggestions:
 - Use direct truthiness testing (`if seq:` or `if not seq:`).
 - Automatically remediable via `plex fix` and VS Code Quick Fix (`Cmd+.`).
 
-<a id="plexmath-pow-vs-operator"></a>
 ## plex.math-pow-vs-operator (medium)
 
 Detects `math.pow(x, 2)` or `pow(x, 2)` inside loops. In tight numerical loops, direct multiplication (`x * x`) executes 3-5x faster by avoiding C-level floating point function dispatch overhead.
@@ -257,7 +210,6 @@ Suggestions:
 - Replace `math.pow(x, 2)` or `pow(x, 2)` with direct multiplication `x * x`.
 - Automatically remediable via `plex fix` and VS Code Quick Fix (`Cmd+.`).
 
-<a id="plexdict-get-fallback"></a>
 ## plex.dict-get-fallback (low)
 
 Detects the two-step dictionary lookup pattern:
@@ -273,7 +225,6 @@ Suggestions:
 - Replace with `val = d.get(key, default)`.
 - Automatically remediable via `plex fix` and VS Code Quick Fix (`Cmd+.`).
 
-<a id="plexmutable-default-arg"></a>
 ## plex.mutable-default-arg (medium)
 
 Detects mutable default arguments (`def fn(x=[], y={})`) in function definitions. In Python, default arguments are evaluated only once at definition time and shared across all invocations, creating hidden state retention, memory leaks, and unintended data bleeding across requests.
@@ -282,7 +233,6 @@ Suggestions:
 - Use `None` as the default value and initialize the collection inside the function body (`if x is None: x = []`).
 - Automatically remediable via `plex fix` and VS Code Quick Fix (`Cmd+.`).
 
-<a id="plexmanual-list-extend"></a>
 ## plex.manual-list-extend (medium)
 
 Detects manual iterative append loops:
@@ -296,7 +246,6 @@ Suggestions:
 - Replace with `target.extend(seq)`.
 - Automatically remediable via `plex fix` and VS Code Quick Fix (`Cmd+.`).
 
-<a id="plexunclosed-resource"></a>
 ## plex.unclosed-resource (medium)
 
 Detects file handle initialization via `open(...)` outside of a `with` context manager block. Unclosed file handles leak operating system file descriptors and cause deferred garbage collection stalls.
@@ -304,7 +253,6 @@ Detects file handle initialization via `open(...)` outside of a `with` context m
 Suggestions:
 - Wrap file operations in `with open(...) as f:` to guarantee immediate deterministic cleanup.
 
-<a id="plexshort-circuit-comprehension"></a>
 ## plex.short-circuit-comprehension (medium)
 
 Detects eager list comprehensions inside short-circuiting calls:
@@ -318,7 +266,6 @@ Suggestions:
 - Replace with `any(x for x in seq)` or `all(x for x in seq)`.
 - Automatically remediable via `plex fix` and VS Code Quick Fix (`Cmd+.`).
 
-<a id="plexsorted-min-max"></a>
 ## plex.sorted-min-max (medium)
 
 Detects `sorted(seq)[0]` or `sorted(seq)[-1]` instead of `min()` or `max()`. Sorting an entire sequence executes in $O(n \log n)$ time and allocates a completely new sorted list in memory ($O(n)$ space). `min()` and `max()` scan the sequence in a single pass in $O(n)$ linear time and $O(1)$ constant memory without list allocation.
@@ -328,7 +275,6 @@ Suggestions:
 - Replace `sorted(seq)[-1]` with `max(seq)` (or `min(seq)` if `reverse=True`).
 - Automatically remediable via `plex fix` and VS Code Quick Fix (`Cmd+.`).
 
-<a id="plexunnecessary-comprehension-in-call"></a>
 ## plex.unnecessary-comprehension-in-call (low)
 
 Detects unnecessary intermediate list comprehensions passed to single-pass iterable consumers:
@@ -343,7 +289,6 @@ Suggestions:
 - Replace `tuple([...])` with `tuple(...)`.
 - Automatically remediable via `plex fix` and VS Code Quick Fix (`Cmd+.`).
 
-<a id="plexmembership-in-literal-list"></a>
 ## plex.membership-in-literal-list (medium)
 
 Detects membership checks against inline list literals:
@@ -359,7 +304,6 @@ Suggestions:
 - Replace `in [...]` with `in {...}`.
 - Automatically remediable via `plex fix` and VS Code Quick Fix (`Cmd+.`).
 
-<a id="plexunnecessary-lambda"></a>
 ## plex.unnecessary-lambda (low)
 
 Detects trivial forwarding lambdas that simply wrap a single function call:
@@ -373,7 +317,6 @@ Suggestions:
 - Replace `lambda x: func(x)` with `func`.
 - Automatically remediable via `plex fix` and VS Code Quick Fix (`Cmd+.`).
 
-<a id="plexdict-get-default-none"></a>
 ## plex.dict-get-default-none (low)
 
 Detects explicit `None` defaults passed to `dict.get()`:
@@ -386,7 +329,6 @@ Suggestions:
 - Replace `dict.get(key, None)` with `dict.get(key)`.
 - Automatically remediable via `plex fix` and VS Code Quick Fix (`Cmd+.`).
 
-<a id="plexunnecessary-async-def"></a>
 ## plex.unnecessary-async-def (medium)
 
 Detects `async def` coroutines containing no await/async with/async for expressions, which incur coroutine allocation and event loop overhead.
@@ -394,7 +336,6 @@ Detects `async def` coroutines containing no await/async with/async for expressi
 Suggestions:
 - Automatically remediable via `plex fix` and the VS Code quick fix.
 
-<a id="plexunnecessary-enumerate"></a>
 ## plex.unnecessary-enumerate (low)
 
 Detects `for idx, item in enumerate(...)` where `idx` is never referenced, incurring unnecessary tuple construction and counter tracking.
@@ -402,7 +343,6 @@ Detects `for idx, item in enumerate(...)` where `idx` is never referenced, incur
 Suggestions:
 - Automatically remediable via `plex fix` and the VS Code quick fix.
 
-<a id="plexdict-items-value-unused"></a>
 ## plex.dict-items-value-unused (low)
 
 Detects `for key, value in d.items()` loops where `value` is unused, incurring unnecessary 2-tuple allocations on every iteration.
@@ -410,7 +350,6 @@ Detects `for key, value in d.items()` loops where `value` is unused, incurring u
 Suggestions:
 - Automatically remediable via `plex fix` and the VS Code quick fix.
 
-<a id="plexdict-items-comprehension-to-copy"></a>
 ## plex.dict-items-comprehension-to-copy (medium)
 
 Detects `{k: v for k, v in d.items()}` which can be replaced with `d.copy()`, avoiding Python loop overhead and running ~8.5x faster.
@@ -418,7 +357,6 @@ Detects `{k: v for k, v in d.items()}` which can be replaced with `d.copy()`, av
 Suggestions:
 - Automatically remediable via `plex fix` and the VS Code quick fix.
 
-<a id="plexredundant-collection-call"></a>
 ## plex.redundant-collection-call (low)
 
 Detects redundant nested collection calls like `list(list(x))` or `set(set(x))` that allocate redundant intermediate memory.
@@ -426,7 +364,6 @@ Detects redundant nested collection calls like `list(list(x))` or `set(set(x))` 
 Suggestions:
 - Automatically remediable via `plex fix` and the VS Code quick fix.
 
-<a id="plexredundant-fstring"></a>
 ## plex.redundant-fstring (low)
 
 Detects f-strings that contain no interpolated expressions and can be written as plain string literals.
@@ -434,7 +371,6 @@ Detects f-strings that contain no interpolated expressions and can be written as
 Suggestions:
 - Automatically remediable via `plex fix` and the VS Code quick fix.
 
-<a id="plexstr-startswith-tuple"></a>
 ## plex.str-startswith-tuple (low)
 
 Detects multiple startswith() or endswith() calls on the same string joined with 'or' and suggests combining them into a single call with a tuple.
@@ -442,7 +378,6 @@ Detects multiple startswith() or endswith() calls on the same string joined with
 Suggestions:
 - Automatically remediable via `plex fix` and the VS Code quick fix.
 
-<a id="plexdict-fromkeys"></a>
 ## plex.dict-fromkeys (low)
 
 Detects dictionary comprehensions of the form '{k: <constant> for k in keys}' and suggests 'dict.fromkeys(keys, <constant>)' for faster C-level hash table allocation.
@@ -450,7 +385,6 @@ Detects dictionary comprehensions of the form '{k: <constant> for k in keys}' an
 Suggestions:
 - Automatically remediable via `plex fix` and the VS Code quick fix.
 
-<a id="plexitertools-chain-from-iterable"></a>
 ## plex.itertools-chain-from-iterable (low)
 
 Detects 'itertools.chain(*iterables)' unpacking an iterable and suggests 'itertools.chain.from_iterable(iterables)' to avoid argument tuple allocation.
@@ -458,7 +392,6 @@ Detects 'itertools.chain(*iterables)' unpacking an iterable and suggests 'iterto
 Suggestions:
 - Automatically remediable via `plex fix` and the VS Code quick fix.
 
-<a id="plextry-except-dict-get"></a>
 ## plex.try-except-dict-get (low)
 
 Detects 'try: var = d[k] except KeyError: var = default' patterns and suggests 'd.get(k, default)' to eliminate expensive exception handling.
@@ -466,7 +399,6 @@ Detects 'try: var = d[k] except KeyError: var = default' patterns and suggests '
 Suggestions:
 - Automatically remediable via `plex fix` and the VS Code quick fix.
 
-<a id="plextry-except-pop-default"></a>
 ## plex.try-except-pop-default (low)
 
 Detects 'try: d.pop(k) except KeyError: pass' or assignment fallback and suggests 'd.pop(k, default)'.
@@ -474,7 +406,6 @@ Detects 'try: d.pop(k) except KeyError: pass' or assignment fallback and suggest
 Suggestions:
 - Automatically remediable via `plex fix` and the VS Code quick fix.
 
-<a id="plexif-pass-else-invert"></a>
 ## plex.if-pass-else-invert (low)
 
 Detects 'if condition: pass else: body' and suggests inverting the condition to eliminate the empty branch and jump opcodes.
@@ -482,7 +413,6 @@ Detects 'if condition: pass else: body' and suggests inverting the condition to 
 Suggestions:
 - Automatically remediable via `plex fix` and the VS Code quick fix.
 
-<a id="plexisinstance-tuple"></a>
 ## plex.isinstance-tuple (low)
 
 Detects multiple isinstance(x, T) checks on the same target chained with 'or' and suggests combining them into isinstance(x, (T1, T2)).
@@ -490,7 +420,6 @@ Detects multiple isinstance(x, T) checks on the same target chained with 'or' an
 Suggestions:
 - Automatically remediable via `plex fix` and the VS Code quick fix.
 
-<a id="plexitertools-islice"></a>
 ## plex.itertools-islice (medium)
 
 Detects list(seq)[:n] and tuple(seq)[:n] patterns that realize entire sequences in memory before slicing; itertools.islice() consumes lazily with O(1) allocation.
@@ -498,7 +427,6 @@ Detects list(seq)[:n] and tuple(seq)[:n] patterns that realize entire sequences 
 Suggestions:
 - Automatically remediable via `plex fix` and the VS Code quick fix.
 
-<a id="plexre-sub-literal"></a>
 ## plex.re-sub-literal (low)
 
 Detects re.sub() calls with literal patterns and replacements lacking regex metacharacters; str.replace() bypasses the regex engine and runs 3x faster.
@@ -506,7 +434,6 @@ Detects re.sub() calls with literal patterns and replacements lacking regex meta
 Suggestions:
 - Automatically remediable via `plex fix` and the VS Code quick fix.
 
-<a id="plexstr-removeprefix-suffix"></a>
 ## plex.str-removeprefix-suffix (low)
 
 Detects 'if s.startswith(p): s = s[len(p):]' or 'if s.endswith(suf): s = s[:-len(suf)]' and suggests s.removeprefix(p) or s.removesuffix(suf).
@@ -514,7 +441,6 @@ Detects 'if s.startswith(p): s = s[len(p):]' or 'if s.endswith(suf): s = s[:-len
 Suggestions:
 - Automatically remediable via `plex fix` and the VS Code quick fix.
 
-<a id="plexmath-log-base"></a>
 ## plex.math-log-base (low)
 
 Detects math.log(x, 2) and math.log(x, 10) calls; specialized math.log2() and math.log10() use direct C/FPU instructions, running 2x faster.
@@ -522,7 +448,6 @@ Detects math.log(x, 2) and math.log(x, 10) calls; specialized math.log2() and ma
 Suggestions:
 - Automatically remediable via `plex fix` and the VS Code quick fix.
 
-<a id="plextry-except-next-default"></a>
 ## plex.try-except-next-default (low)
 
 Detects 'try: v = next(it) except StopIteration: v = default' and suggests 'v = next(it, default)' to avoid exception frame unwinding.
@@ -530,7 +455,6 @@ Detects 'try: v = next(it) except StopIteration: v = default' and suggests 'v = 
 Suggestions:
 - Automatically remediable via `plex fix` and the VS Code quick fix.
 
-<a id="plexstr-split-maxsplit"></a>
 ## plex.str-split-maxsplit (medium)
 
 Detects s.split(...)[0] or s.rsplit(...)[-1] without maxsplit; supplying maxsplit avoids allocating and traversing a list of all tokens.
@@ -538,7 +462,6 @@ Detects s.split(...)[0] or s.rsplit(...)[-1] without maxsplit; supplying maxspli
 Suggestions:
 - Automatically remediable via `plex fix` and the VS Code quick fix.
 
-<a id="plexfilter-truthy"></a>
 ## plex.filter-truthy (low)
 
 Detects [x for x in seq if x]; list(filter(None, seq)) executes truthiness filtering in C with 1.5x speedup and lower memory overhead.
@@ -546,7 +469,6 @@ Detects [x for x in seq if x]; list(filter(None, seq)) executes truthiness filte
 Suggestions:
 - Automatically remediable via `plex fix` and the VS Code quick fix.
 
-<a id="plexall-in-superset"></a>
 ## plex.all-in-superset (medium)
 
 Detects all(x in b for x in a); set(b).issuperset(a) is up to 3.5x faster, avoiding bytecode iteration and generator framing.
@@ -556,28 +478,7 @@ Suggestions:
 
 ## Suppressing rules
 
-### Statement-Level Suppressions
-
-For targeted suppressions without ignoring the entire enclosing function, use statement-level directives on the line immediately preceding the finding:
-
-```python
-# Suppress performance rule on next line:
-# plex: disable-next[plex.db-in-loop] reason="batched iterator with bounded page size"
-record = db.query(Model).get(item_id)
-
-# Suppress security injection rule on next line:
-# plex: disable-next[xbnd.sql-injection] reason="query constructed from static enum mapping"
-cursor.execute(sql)
-```
-
-Supported comment directives:
-- `# plex: disable-next[<rule_id>] reason="..."`: Suppresses `<rule_id>` on the next non-comment line.
-- `# plex: disable-next-line[<rule_id>] reason="..."`: Equivalent alias for `disable-next`.
-- `# plex: ignore[<rule_id>] reason="..."`: Suppresses on the same line or next line.
-
-### Function-Level Suppressions
-
-Suppressions can also apply to an entire function definition:
+Suppressions apply to the whole function:
 
 ```python
 # plex: ignore reason="legacy path" ticket="PERF-123"
@@ -585,18 +486,4 @@ def slow_but_expected(...):
     ...
 ```
 
-Suppressions are recorded in the generated scan report for auditability and compliance tracking.
-
----
-
-## Known Boundaries & Limitations
-
-### Algorithmic Complexity Rules
-- **Static Heuristics**: Signals like nested loops and recursion depth are analyzed statically on the IR. Complex dynamic loop break conditions or external pagination boundaries that limit iterations at runtime should be annotated with statement-level suppressions.
-- **Dynamic Verification**: Heuristic findings are graduated with dynamic benchmarking fixtures when available.
-
-### Security Injection Analysis (xBOUNDARY)
-- **Dynamic Reflection**: Taint tracking does not inspect dynamic attributes (`getattr`), dynamic imports (`importlib`), or metaclass runtime dispatch.
-- **Sanitizer Modeling**: Type conversions (`int`, `float`, `bool`) strip taint. Arbitrary quoting functions (`shlex.quote`, string replacements) preserve taint by default unless explicitly configured in `.plex/security.yml`.
-- **Parameterization**: Parameterized query structures (`cursor.execute(sql, params)`) are modeled as safe, whereas interpolated strings passed to the query parameter remain flagged.
-
+Suppressions are recorded in the report for auditability.

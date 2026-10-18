@@ -31,18 +31,38 @@ DEFAULT_PINNED_VERSIONS: dict[str, str] = {
 }
 
 # Regex to identify package specifier
-# e.g. "requests>=2.28.0", "requests", "flask ~= 2.0"
 DEP_SPEC_PATTERN = re.compile(
     r"^([A-Za-z0-9_.\-]+)\s*([=><~^!]+.*)?$"
 )
 VERSION_EXTRACT_PATTERN = re.compile(r"(\d+(?:\.\d+)*(?:[a-zA-Z0-9_\-\.]*))")
 
 
+def _extract_pin_version(spec: str) -> str | None:
+    """Extract baseline version from loose lower-bound specifiers (>=, ~=, ^=).
+
+    Avoids extracting upper-bound (<, <=) or exclusion (!=) versions, which would
+    turn numpy<2 into numpy==2 or foo!=1.5 into foo==1.5.
+    """
+    if not spec:
+        return None
+    stripped = spec.strip()
+    if stripped.startswith((">=", "~=", "^=")):
+        v_match = VERSION_EXTRACT_PATTERN.search(stripped)
+        if v_match:
+            return v_match.group(1)
+    return None
+
+
 class DependencyPinFixer(BaseFixer):
-    """Supply chain fixer that pins unpinned or loose dependencies to concrete versions (CWE-1104)."""
+    """Supply chain fixer that pins unpinned or loose dependencies to concrete versions (CWE-1104).
+
+    This fixer is proposal-only (``auto_apply = False``) because pinning dependencies
+    requires lockfile-derived versions or active package index resolution to prevent dependency conflicts.
+    """
 
     rule_id = "dep.unpinned-version"
     name = "dependency_pin"
+    auto_apply = False
 
     def __init__(self, version_overrides: dict[str, str] | None = None) -> None:
         self.version_overrides = version_overrides or {}
@@ -101,11 +121,15 @@ class DependencyPinFixer(BaseFixer):
             # 1. Check user/coordinator overrides
             if pkg_lower in self.version_overrides:
                 pinned_version = self.version_overrides[pkg_lower]
-            # 2. Extract version from loose specifier (e.g. >=2.31.0, ~=1.2.3)
+            # 2. Extract lower-bound version from loose specifiers (>=, ~=, ^=)
             elif spec:
-                v_match = VERSION_EXTRACT_PATTERN.search(spec)
-                if v_match:
-                    pinned_version = v_match.group(1)
+                extracted = _extract_pin_version(spec)
+                if extracted:
+                    pinned_version = extracted
+                elif pkg_lower in DEFAULT_PINNED_VERSIONS:
+                    pinned_version = DEFAULT_PINNED_VERSIONS[pkg_lower]
+                else:
+                    pinned_version = "1.0.0"
             # 3. Check default known pinned versions
             elif pkg_lower in DEFAULT_PINNED_VERSIONS:
                 pinned_version = DEFAULT_PINNED_VERSIONS[pkg_lower]
@@ -173,6 +197,10 @@ class DependencyPinFixer(BaseFixer):
 
         source_digest = f"sha256:{hashlib.sha256(source.encode('utf-8')).hexdigest()}"
 
+        meta = {"auto_apply": False, "reason": "Dependency pinning requires lockfile or package index resolution"}
+        if metadata:
+            meta.update(metadata)
+
         return PatchCandidate.create(
             finding_ids=finding_ids,
             rule_id=self.rule_id,
@@ -180,11 +208,11 @@ class DependencyPinFixer(BaseFixer):
             source_digest=source_digest,
             target_file=target_file,
             diff=diff,
-            description="Pin unpinned dependency to deterministic concrete version",
+            description="Pin unpinned dependency to concrete version",
             generator="plex.repair.dependency_pin",
             generator_version="1.0.0",
-            confidence="derived",
-            risk="low",
+            confidence="inferred",
+            risk="high",
             rollback_diff=rollback_diff,
-            metadata=metadata or {},
+            metadata=meta,
         )

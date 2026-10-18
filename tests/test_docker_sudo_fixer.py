@@ -54,3 +54,21 @@ def test_propose_patch_candidate_docker_sudo() -> None:
     assert "-RUN echo \"user ALL=(ALL) NOPASSWD:ALL\" > /etc/sudoers.d/user" in candidate.diff
     assert "+RUN echo \"user ALL=(ALL) ALL\" > /etc/sudoers.d/user" in candidate.diff
     assert candidate.rollback_diff != ""
+
+
+def test_docker_sudo_fixer_abstains_on_comments() -> None:
+    fixer = DockerSudoFixer()
+    source = (
+        "FROM ubuntu:22.04\n"
+        "# Note: do not use NOPASSWD:ALL in sudoers\n"
+        "RUN echo 'safe sudoers setup'\n"
+    )
+    fixed, changes = fixer.fix(source, "Dockerfile")
+    assert fixed == source
+    assert len(changes) == 0
+
+
+def test_docker_sudo_fixer_contract_proposal_only() -> None:
+    fixer = DockerSudoFixer()
+    assert fixer.auto_apply is False
+

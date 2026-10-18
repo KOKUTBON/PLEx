@@ -243,3 +243,24 @@ def test_remediation_blocks_unverified_apply(tmp_path: Path):
 
     empty_plan = RemediationPlan(repo_root=str(repo), repairs=())
     assert coordinator.apply_plan(empty_plan) == []
+
+
+def test_cli_analyze_with_graph(tmp_path: Path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "app.py").write_text(VULNERABLE_APP_CODE, encoding="utf-8")
+
+    graph_file = tmp_path / "analysis_graph.json"
+    exit_code = main(["analyze", str(repo), "--checks", "security", "--graph", str(graph_file)])
+    assert exit_code == 0
+    assert graph_file.exists()
+
+    data = json.loads(graph_file.read_text(encoding="utf-8"))
+    assert data["schema_version"] == 1
+    assert "nodes" in data
+    assert "edges" in data
+    assert len(data["nodes"]) > 0
+    assert any(n["kind"] == "file" for n in data["nodes"].values())
+    assert any(n["kind"] == "route" for n in data["nodes"].values())
+    assert any(n["kind"] == "finding" for n in data["nodes"].values())
+

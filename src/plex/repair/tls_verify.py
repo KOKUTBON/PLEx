@@ -9,6 +9,41 @@ from typing import Any
 from plex.fix.base import BaseFixer, FixChange
 from plex.repair.diffutil import unified_diff
 from plex.repair.models import PatchCandidate
+from plex.repair.sourceedit import SourceEditor
+
+HTTP_CLIENT_MODULES = frozenset({"requests", "httpx", "urllib3", "aiohttp", "urllib"})
+HTTP_CLIENT_METHODS = frozenset({
+    "get", "post", "put", "delete", "head", "patch", "request",
+    "Client", "AsyncClient", "Session", "PoolManager", "ProxyManager",
+})
+NON_NETWORK_METHODS = frozenset({
+    "save", "update", "delete_user", "validate", "authenticate", "check_password",
+})
+
+
+def _is_network_call(call: ast.Call) -> bool:
+    """Check if call is likely an HTTP/TLS client invocation."""
+    func = call.func
+    if isinstance(func, ast.Attribute):
+        if func.attr in NON_NETWORK_METHODS:
+            return False
+        if func.attr in HTTP_CLIENT_METHODS:
+            return True
+        val_name = ""
+        if isinstance(func.value, ast.Name):
+            val_name = func.value.id.lower()
+        elif isinstance(func.value, ast.Attribute):
+            val_name = func.value.attr.lower()
+        if any(kw in val_name for kw in ("client", "session", "http", "request", "api", "fetch")):
+            return True
+        if val_name in HTTP_CLIENT_MODULES:
+            return True
+    elif isinstance(func, ast.Name):
+        if func.id in HTTP_CLIENT_METHODS:
+            return True
+        if any(kw in func.id.lower() for kw in ("client", "session", "http")):
+            return True
+    return False
 
 
 class TLSVerifyFixer(BaseFixer):
@@ -16,6 +51,7 @@ class TLSVerifyFixer(BaseFixer):
 
     rule_id = "cfg.insecure-tls"
     name = "tls_verify"
+    auto_apply = False
 
     def fix(self, source: str, file_path: str = "") -> tuple[str, list[FixChange]]:
         try:
@@ -23,37 +59,25 @@ class TLSVerifyFixer(BaseFixer):
         except SyntaxError:
             return source, []
 
-        lines = source.splitlines(keepends=True)
+        editor = SourceEditor(source)
         changes: list[FixChange] = []
-        replacements: list[tuple[int, int, int, int, str, str]] = []
 
         for node in ast.walk(tree):
-            # 1. Calls with verify=False (e.g. requests.get(..., verify=False))
-            if isinstance(node, ast.Call):
+            # 1. Calls with verify=False on HTTP client calls
+            if isinstance(node, ast.Call) and _is_network_call(node):
                 for kw in node.keywords:
                     if kw.arg == "verify" and isinstance(kw.value, ast.Constant) and kw.value.value is False:
-                        new_kw = ast.keyword(arg="verify", value=ast.Constant(value=True))
-                        new_keywords = [new_kw if k.arg == "verify" else k for k in node.keywords]
-                        new_call = ast.Call(
-                            func=node.func,
-                            args=list(node.args),
-                            keywords=new_keywords,
+                        old_code = editor.segment(kw.value)
+                        editor.replace(kw.value, "True")
+                        changes.append(
+                            FixChange(
+                                rule_id=self.rule_id,
+                                description="Enable TLS certificate verification in HTTP call (CWE-295)",
+                                lineno=kw.value.lineno,
+                                before=f"verify={old_code}",
+                                after="verify=True",
+                            )
                         )
-                        ast.copy_location(new_call, node)
-                        ast.fix_missing_locations(new_call)
-                        new_code = ast.unparse(new_call)
-
-                        start_line = node.lineno
-                        end_line = node.end_lineno or node.lineno
-                        start_col = node.col_offset
-                        end_col = node.end_col_offset or len(lines[end_line - 1])
-
-                        if start_line == end_line:
-                            old_code = lines[start_line - 1][start_col:end_col]
-                        else:
-                            old_code = "".join(lines[start_line - 1 : end_line])
-
-                        replacements.append((start_line, end_line, start_col, end_col, old_code, new_code))
 
             # 2. Assigns: check_hostname = False -> check_hostname = True
             elif isinstance(node, ast.Assign):
@@ -69,25 +93,17 @@ class TLSVerifyFixer(BaseFixer):
                         and isinstance(node.value, ast.Constant)
                         and node.value.value is False
                     ):
-                        new_assign = ast.Assign(
-                            targets=list(node.targets),
-                            value=ast.Constant(value=True),
+                        old_code = editor.segment(node.value)
+                        editor.replace(node.value, "True")
+                        changes.append(
+                            FixChange(
+                                rule_id=self.rule_id,
+                                description="Enable TLS hostname verification (CWE-295)",
+                                lineno=node.value.lineno,
+                                before=old_code,
+                                after="True",
+                            )
                         )
-                        ast.copy_location(new_assign, node)
-                        ast.fix_missing_locations(new_assign)
-                        new_code = ast.unparse(new_assign)
-
-                        start_line = node.lineno
-                        end_line = node.end_lineno or node.lineno
-                        start_col = node.col_offset
-                        end_col = node.end_col_offset or len(lines[end_line - 1])
-
-                        if start_line == end_line:
-                            old_code = lines[start_line - 1][start_col:end_col]
-                        else:
-                            old_code = "".join(lines[start_line - 1 : end_line])
-
-                        replacements.append((start_line, end_line, start_col, end_col, old_code, new_code))
 
                     # 3. verify_mode = ssl.CERT_NONE -> verify_mode = ssl.CERT_REQUIRED
                     is_cert_none = False
@@ -98,58 +114,38 @@ class TLSVerifyFixer(BaseFixer):
 
                     if is_cert_none:
                         if isinstance(node.value, ast.Attribute):
-                            new_val: ast.expr = ast.Attribute(
-                                value=node.value.value, attr="CERT_REQUIRED", ctx=ast.Load()
+                            old_code = editor.segment(node.value)
+                            editor.replace(node.value, f"{ast.unparse(node.value.value)}.CERT_REQUIRED")
+                            changes.append(
+                                FixChange(
+                                    rule_id=self.rule_id,
+                                    description="Enforce required TLS certificate verification mode (CWE-295)",
+                                    lineno=node.value.lineno,
+                                    before=old_code,
+                                    after=f"{ast.unparse(node.value.value)}.CERT_REQUIRED",
+                                )
                             )
                         else:
-                            new_val = ast.Name(id="CERT_REQUIRED", ctx=ast.Load())
+                            old_code = editor.segment(node.value)
+                            editor.replace(node.value, "CERT_REQUIRED")
+                            changes.append(
+                                FixChange(
+                                    rule_id=self.rule_id,
+                                    description="Enforce required TLS certificate verification mode (CWE-295)",
+                                    lineno=node.value.lineno,
+                                    before=old_code,
+                                    after="CERT_REQUIRED",
+                                )
+                            )
 
-                        new_assign = ast.Assign(
-                            targets=list(node.targets),
-                            value=new_val,
-                        )
-                        ast.copy_location(new_assign, node)
-                        ast.fix_missing_locations(new_assign)
-                        new_code = ast.unparse(new_assign)
-
-                        start_line = node.lineno
-                        end_line = node.end_lineno or node.lineno
-                        start_col = node.col_offset
-                        end_col = node.end_col_offset or len(lines[end_line - 1])
-
-                        if start_line == end_line:
-                            old_code = lines[start_line - 1][start_col:end_col]
-                        else:
-                            old_code = "".join(lines[start_line - 1 : end_line])
-
-                        replacements.append((start_line, end_line, start_col, end_col, old_code, new_code))
-
-        if not replacements:
+        if not changes:
             return source, []
 
-        replacements.sort(key=lambda r: (r[0], r[2]), reverse=True)
-        modified_lines = list(lines)
+        try:
+            new_source = editor.result()
+        except ValueError:
+            return source, []
 
-        for s_line, e_line, s_col, e_col, old_code, new_code in replacements:
-            if s_line == e_line:
-                line = modified_lines[s_line - 1]
-                modified_lines[s_line - 1] = line[:s_col] + new_code + line[e_col:]
-            else:
-                first_part = modified_lines[s_line - 1][:s_col]
-                last_part = modified_lines[e_line - 1][e_col:]
-                modified_lines[s_line - 1 : e_line] = [first_part + new_code + last_part]
-
-            changes.append(
-                FixChange(
-                    rule_id=self.rule_id,
-                    description="Enable TLS certificate verification and hostname checking (CWE-295)",
-                    lineno=s_line,
-                    before=old_code,
-                    after=new_code,
-                )
-            )
-
-        new_source = "".join(modified_lines)
         return new_source, changes
 
     def propose_patch(
@@ -193,9 +189,9 @@ class TLSVerifyFixer(BaseFixer):
             source_digest=source_digest,
             target_file=target_file,
             diff=diff,
-            description="Enable TLS certificate validation and hostname verification",
+            description="Enable TLS certificate verification and hostname validation (CWE-295).",
             generator="plex.repair.tls_verify",
-            generator_version="1.0.0",
+            generator_version="2.0.0",
             confidence="derived",
             risk="low",
             rollback_diff=rollback_diff,

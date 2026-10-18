@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -19,12 +19,17 @@ from plex.report.unified import (
 )
 
 from .archive import parse_archive
+from .capabilities import detect_capabilities
+from .decompile import decompile_artifact
+from .disasm import disassemble_artifact
 from .elf import parse_elf
 from .intake import ArtifactIntakeError, intake_artifact
 from .macho import parse_macho
 from .models import ArtifactDescriptor
 from .pe import parse_pe
 from .rules import evaluate_artifact_rules
+from .sourcemap import SourceDebugMapper
+from .trace import RuntimeTracer, findings_from_runtime_trace
 
 log = logging.getLogger(__name__)
 
@@ -36,7 +41,13 @@ class InspectEngine:
     evidence_store: EvidenceStore | None = None
     max_size_bytes: int = 100 * 1024 * 1024
 
-    def inspect(self, artifact_path: Path) -> PLExReport:
+    def inspect(
+        self,
+        artifact_path: Path,
+        source_root: Path | None = None,
+        *,
+        allow_dynamic: bool = False,
+    ) -> PLExReport:
         resolved = artifact_path.resolve()
         limitations: list[str] = []
 
@@ -77,6 +88,20 @@ class InspectEngine:
                 descriptor = parse_archive(data, str(resolved), sha256)
             else:
                 raise ValueError(f"Unhandled binary format: {fmt}")
+
+            # Disassemble executable sections and reconstruct functions/calls + pseudo-C
+            if fmt in ("elf", "macho", "pe"):
+                try:
+                    functions, calls = disassemble_artifact(descriptor, data)
+                    if functions or calls:
+                        descriptor = replace(descriptor, functions=functions, calls=calls)
+                    decompiled = decompile_artifact(descriptor)
+                    if decompiled:
+                        meta = dict(descriptor.metadata)
+                        meta["decompiled_functions"] = [d.to_dict() for d in decompiled]
+                        descriptor = replace(descriptor, metadata=meta)
+                except Exception as d_exc:
+                    log.debug("Disassembly reconstruction skipped: %s", d_exc)
         except Exception as exc:
             run_err = EngineRun(
                 engine="inspect",
@@ -96,7 +121,23 @@ class InspectEngine:
         # 2. Evaluate native binary security rules
         rule_findings = evaluate_artifact_rules(descriptor, evidence_ref)
 
-        all_findings = unknown_findings + rule_findings
+        # 3. Formulate binary capability hypotheses
+        capability_findings = detect_capabilities(descriptor, evidence_ref)
+
+        # 4. Opt-in sandboxed runtime tracing when allow_dynamic=True
+        trace_findings: list[AnalysisFinding] = []
+        if allow_dynamic and fmt in ("elf", "macho", "pe"):
+            tracer = RuntimeTracer()
+            trace_res = tracer.trace(descriptor, allow_dynamic=True)
+            trace_findings = findings_from_runtime_trace(descriptor, trace_res, evidence_ref)
+            limitations.extend(trace_res.limitations)
+
+        all_findings = unknown_findings + rule_findings + capability_findings + trace_findings
+
+        # 5. Optional source and debug mapping
+        if source_root and source_root.exists():
+            mapper = SourceDebugMapper(source_root)
+            all_findings = mapper.map_findings(all_findings)
         status: ScanStatus = "complete" if not limitations else "partial"
 
         run = EngineRun(
@@ -118,6 +159,8 @@ class InspectEngine:
             "size": descriptor.size,
             "sections_count": len(descriptor.sections),
             "imported_symbols_count": len(descriptor.imported_symbols),
+            "functions_count": len(descriptor.functions),
+            "calls_count": len(descriptor.calls),
             "is_stripped": descriptor.is_stripped,
             "hardening": {
                 "nx": descriptor.hardening.nx,
@@ -127,6 +170,7 @@ class InspectEngine:
                 "fortify": descriptor.hardening.fortify,
             },
         }
+
 
         if self.evidence_store:
             art = EvidenceArtifact.create(

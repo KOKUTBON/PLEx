@@ -10,6 +10,7 @@ from plex.report.unified import Isolation
 from .container import ContainerSandbox
 from .disposable import DisposableCopyError, create_disposable_copy, disposable_workspace
 from .env import SAFE_ENV_ALLOWLIST, clean_env, is_sensitive_env_key
+from .microvm import MicroVMSandbox
 from .subprocess import SubprocessSandbox
 
 
@@ -34,6 +35,7 @@ __all__ = [
     "ContainerSandbox",
     "DisposableCopyError",
     "InProcessSandbox",
+    "MicroVMSandbox",
     "SAFE_ENV_ALLOWLIST",
     "Sandbox",
     "SubprocessSandbox",

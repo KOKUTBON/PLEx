@@ -35,6 +35,8 @@ def to_check_run_output(
     summary = "\n".join(f"- {line}" for line in summary_lines)
 
     text_lines: list[str] = []
+    non_perf_unified = [uf for uf in report.findings_unified if uf.engine != "performance"]
+
     if report.regression_mode:
         if report.regressions:
             text_lines.append("**Regressions**")
@@ -93,8 +95,20 @@ def to_check_run_output(
                 )
             else:
                 text_lines.append(f"| {f.severity} | {f.risk_score:.3f} | {loc} `{f.qualname}` |")
-    else:
+    elif not non_perf_unified:
         text_lines.append("_No findings._")
+
+    if non_perf_unified and not report.regression_mode:
+        if text_lines:
+            text_lines.append("")
+        text_lines.append("**Security, supply-chain & reliability findings**")
+        text_lines.append("")
+        text_lines.append("| Severity | Rule | Location | Description |")
+        text_lines.append("|---|---|---|---|")
+        for uf in non_perf_unified[:top_n]:
+            loc = _link(uf.file, uf.lineno or 1, repo_url, sha) if uf.file else "n/a"
+            desc = uf.message or uf.title
+            text_lines.append(f"| {uf.severity} | {uf.rule_id} | {loc} | {desc} |")
 
     annotations = []
     if report.regression_mode:
@@ -124,6 +138,19 @@ def to_check_run_output(
                     "annotation_level": check_run_annotation_level(f.severity),
                     "title": "PLEx hotspot",
                     "message": f"{f.complexity_hint} (risk {f.risk_score:.3f}, {f.qualname})",
+                }
+            )
+        for uf in non_perf_unified[:top_n]:
+            start_ln = uf.lineno or 1
+            end_ln = uf.end_lineno or start_ln
+            annotations.append(
+                {
+                    "path": uf.file,
+                    "start_line": start_ln,
+                    "end_line": end_ln,
+                    "annotation_level": check_run_annotation_level(uf.severity),
+                    "title": f"PLEx {uf.rule_id}",
+                    "message": uf.message or uf.title,
                 }
             )
 

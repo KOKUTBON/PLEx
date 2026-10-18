@@ -117,8 +117,18 @@ class ScopedHttpClient:
 
     scope: NetworkScope = field(default_factory=NetworkScope)
     requests_sent: int = 0
+    persist_cookies: bool = False
+    cookie_jar: dict[str, str] = field(default_factory=dict)
     _last_request_time: float = 0.0
     _start_time: float = field(default_factory=time.monotonic)
+
+    def _capture_set_cookies(self, resp_headers: dict[str, str]) -> None:
+        for k, v in resp_headers.items():
+            if k.lower() == "set-cookie":
+                first_part = v.split(";", 1)[0].strip()
+                if "=" in first_part:
+                    cname, cval = first_part.split("=", 1)
+                    self.cookie_jar[cname.strip()] = cval.strip()
 
     def request(
         self,
@@ -156,6 +166,11 @@ class ScopedHttpClient:
         self._last_request_time = time.monotonic()
 
         req_headers = dict(headers or {})
+        if self.persist_cookies and self.cookie_jar and not any(
+            k.lower() == "cookie" for k in req_headers
+        ):
+            req_headers["Cookie"] = "; ".join(f"{k}={v}" for k, v in self.cookie_jar.items())
+
         body_bytes = None
         req_body_str = ""
         if data is not None:
@@ -192,6 +207,9 @@ class ScopedHttpClient:
                 response_body=f"URLError: {exc.reason}",
                 duration_ms=duration_ms,
             )
+
+        if self.persist_cookies:
+            self._capture_set_cookies(resp_headers)
 
         duration_ms = (time.monotonic() - start_clock) * 1000.0
         return make_exchange(

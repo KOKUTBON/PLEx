@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import shlex
 from pathlib import Path
 from typing import Any
 
@@ -15,7 +16,9 @@ from plex.report.format_sarif import write_sarif
 from plex.report.severity import severity_rank
 from plex.sandbox import ContainerSandbox, SubprocessSandbox
 
+from .decompile import decompile_artifact
 from .engine import InspectEngine
+from .rebuild import diff_artifacts, parse_artifact_descriptor, rebuild_and_compare
 
 
 def cmd_inspect(args: argparse.Namespace) -> int:
@@ -27,7 +30,12 @@ def cmd_inspect(args: argparse.Namespace) -> int:
 
     if args.engine in ("native", "inspect"):
         engine = InspectEngine()
-        report = engine.inspect(target_path)
+        source_root = Path(args.source).resolve() if getattr(args, "source", None) else None
+        report = engine.inspect(
+            target_path,
+            source_root=source_root,
+            allow_dynamic=bool(getattr(args, "allow_dynamic", False)),
+        )
     else:
         # Prefer container sandbox if available, else subprocess sandbox
         container = ContainerSandbox()
@@ -44,6 +52,34 @@ def cmd_inspect(args: argparse.Namespace) -> int:
         outcome = run_providers(task, [provider], sandbox=sandbox)
         report = outcome.report()
 
+    decompiled_items = []
+    if getattr(args, "decompile", False):
+        try:
+            desc = parse_artifact_descriptor(target_path)
+            backend_name = getattr(args, "decompiler_backend", "auto")
+            decompiled_items = decompile_artifact(desc, backend=backend_name)
+        except Exception as exc:
+            print(f"Decompilation warning: {exc}")
+
+    diff_report = None
+    diff_against = getattr(args, "diff_against", None)
+    rebuild_cmd = getattr(args, "rebuild_cmd", None)
+    if diff_against is not None:
+        base_path = Path(diff_against).resolve()
+        if base_path.exists():
+            before_desc = parse_artifact_descriptor(base_path)
+            after_desc = parse_artifact_descriptor(target_path)
+            diff_report = diff_artifacts(before_desc, after_desc)
+    elif rebuild_cmd:
+        src_dir = (
+            Path(args.source).resolve()
+            if getattr(args, "source", None)
+            else target_path.parent
+        )
+        diff_report = rebuild_and_compare(
+            src_dir, target_path, shlex.split(rebuild_cmd)
+        )
+
     # Format output
     if args.format == "json":
         if args.output:
@@ -51,7 +87,12 @@ def cmd_inspect(args: argparse.Namespace) -> int:
         else:
             import json
 
-            print(json.dumps(report.to_dict(), indent=2))
+            out_dict = report.to_dict()
+            if decompiled_items:
+                out_dict["decompiled_functions"] = [d.to_dict() for d in decompiled_items]
+            if diff_report is not None:
+                out_dict["artifact_diff"] = diff_report.to_dict()
+            print(json.dumps(out_dict, indent=2))
     elif args.format == "sarif":
         if args.output:
             write_sarif(report, Path(args.output))
@@ -73,6 +114,16 @@ def cmd_inspect(args: argparse.Namespace) -> int:
             status_tag = f" [{finding.status}]" if finding.status != "verified" else ""
             print(
                 f"{finding.file}: {finding.severity.upper()}{status_tag} {finding.rule_id}: {finding.title}"
+            )
+        if decompiled_items:
+            for dec in decompiled_items:
+                print(f"\n// Decompiled ({dec.backend}): {dec.name} @ {hex(dec.start_address)}")
+                print(dec.pseudo_c)
+        if diff_report is not None:
+            print(
+                f"Artifact diff: size_delta={diff_report.size_delta:+d}B "
+                f"removed_imports={list(diff_report.removed_imports)} "
+                f"added_imports={list(diff_report.added_imports)}"
             )
         engine_label = "Native" if args.engine in ("native", "inspect") else "REA"
         print(
@@ -104,9 +155,38 @@ def add_inspect_commands(sub: Any) -> None:
         help="Inspection engine: 'native' for pure-Python ELF analysis, 'rea' for REA provider (default: native)",
     )
     p.add_argument(
+        "--source",
+        type=Path,
+        default=None,
+        help="Path to source code root to correlate binary findings to source lines",
+    )
+    p.add_argument(
         "--allow-dynamic",
         action="store_true",
         help="Allow dynamic inspection tools (requires explicit authorization)",
+    )
+    p.add_argument(
+        "--decompile",
+        action="store_true",
+        help="Include reconstructed pseudo-C functions in inspection output",
+    )
+    p.add_argument(
+        "--decompiler-backend",
+        choices=["auto", "native_lifter", "rizin", "ghidra"],
+        default="auto",
+        help="Decompiler backend preference (default: auto)",
+    )
+    p.add_argument(
+        "--diff-against",
+        type=Path,
+        default=None,
+        help="Compare target artifact against a baseline binary artifact",
+    )
+    p.add_argument(
+        "--rebuild-cmd",
+        type=str,
+        default=None,
+        help="Optional sandboxed build command to rebuild and compare the artifact",
     )
     p.add_argument(
         "--format",

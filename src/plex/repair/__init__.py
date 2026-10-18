@@ -16,7 +16,16 @@ from .docker_tag_pin import DockerTagPinFixer
 from .docker_user import DockerUserFixer
 from .insecure_cookie import InsecureCookieFixer
 from .insecure_index import InsecureIndexFixer
+from .jsts import (
+    JsCodeEvalFixer,
+    JsCommandArrayFixer,
+    JsNoSQLInjectionFixer,
+    JsOpenRedirectFixer,
+    JsPathBoundaryFixer,
+    JsSQLParameterizeFixer,
+)
 from .mass_assignment import MassAssignmentFixer
+from .missing_authorization import MissingAuthorizationFixer
 from .models import (
     PatchCandidate,
     RepairRecord,
@@ -29,6 +38,7 @@ from .nosql_injection import NoSQLInjectionFixer
 from .open_redirect import OpenRedirectFixer
 from .path_boundary import PathBoundaryFixer
 from .plaintext_secret import PlaintextSecretFixer
+from .reliability_fixes import AsyncBlockingCallFixer, UnlockedAcquireFixer
 from .runner import RepairVerificationRunner, apply_unified_diff
 from .safe_deserialization import SafeDeserializationFixer
 from .security_headers import SecurityHeadersFixer
@@ -38,11 +48,13 @@ from .ssrf_validate import SSRFUrlValidateFixer
 from .ssti import SSTIFixer
 from .tenant_boundary import TenantBoundaryFixer
 from .tls_verify import TLSVerifyFixer
+from .unclosed_resource import UnclosedResourceFixer
 from .weak_crypto import WeakCryptoFixer
 from .xss import XSSFixer
 from .xxe import XXEFixer
 
 __all__ = [
+    "AsyncBlockingCallFixer",
     "CORSAllowlistFixer",
     "CSRFFixer",
     "CodeEvalFixer",
@@ -55,7 +67,14 @@ __all__ = [
     "DockerUserFixer",
     "InsecureCookieFixer",
     "InsecureIndexFixer",
+    "JsCodeEvalFixer",
+    "JsCommandArrayFixer",
+    "JsNoSQLInjectionFixer",
+    "JsOpenRedirectFixer",
+    "JsPathBoundaryFixer",
+    "JsSQLParameterizeFixer",
     "MassAssignmentFixer",
+    "MissingAuthorizationFixer",
     "NoSQLInjectionFixer",
     "OpenRedirectFixer",
     "PatchCandidate",
@@ -74,6 +93,8 @@ __all__ = [
     "SensitiveLogRedactFixer",
     "TLSVerifyFixer",
     "TenantBoundaryFixer",
+    "UnclosedResourceFixer",
+    "UnlockedAcquireFixer",
     "VerificationCheck",
     "VerificationRecord",
     "VerificationStatus",

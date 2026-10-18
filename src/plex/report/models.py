@@ -123,6 +123,7 @@ class PLExReport:
     findings_unified: list[AnalysisFinding] = field(default_factory=list)
     engines: list[EngineRun] = field(default_factory=list)
     scan_status: ScanStatus = "complete"
+    repairs: list[dict[str, Any]] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if self.schema_version not in (LEGACY_SCHEMA_VERSION, SCHEMA_VERSION):
@@ -142,11 +143,13 @@ class PLExReport:
             for run in self.engines
         ):
             raise ValueError("Schema v7 cannot represent engine results or incomplete scans")
+        if self.repairs or any(f.repair_status is not None for f in self.findings_unified):
+            raise ValueError("Schema v7 cannot represent repair status or verification records")
         if self.findings_unified and self.findings_unified != performance_findings(self):
             raise ValueError("Schema v7 cannot represent additional unified findings or evidence")
         data = asdict(self)
-        for name in ("findings_unified", "engines", "scan_status"):
-            data.pop(name)
+        for name in ("findings_unified", "engines", "scan_status", "repairs"):
+            data.pop(name, None)
         data["schema_version"] = LEGACY_SCHEMA_VERSION
         if data.get("stats") is None:
             data.pop("stats", None)
@@ -163,4 +166,6 @@ class PLExReport:
         data = asdict(self)
         if data.get("stats") is None:
             data.pop("stats", None)
+        if not data.get("repairs"):
+            data.pop("repairs", None)
         return data

@@ -9,6 +9,7 @@ from typing import Any
 from plex.fix.base import BaseFixer, FixChange
 from plex.repair.diffutil import unified_diff
 from plex.repair.models import PatchCandidate
+from plex.repair.sourceedit import SourceEditor
 
 DEFAULT_TRUSTED_ORIGIN = "https://localhost:3000"
 
@@ -25,19 +26,18 @@ def _is_wildcard_expr(node: ast.expr) -> bool:
 
 
 class CORSAllowlistFixer(BaseFixer):
-    """AST fixer that replaces permissive wildcard CORS origins ('*') with explicit origin allowlists (CWE-942)."""
+    """AST fixer that replaces permissive wildcard CORS origins ('*') with explicit origin allowlists (CWE-942).
+
+    This fixer is proposal-only (``auto_apply = False``) because valid CORS allowed origins
+    depend on the customer's frontend domain, staging environments, and API architecture.
+    """
 
     rule_id = "cfg.cors-wildcard"
     name = "cors_allowlist"
+    auto_apply = False
 
     def __init__(self, allowed_origins: list[str] | None = None) -> None:
         self.allowed_origins = allowed_origins or [DEFAULT_TRUSTED_ORIGIN]
-
-    def _make_allowlist_node(self) -> ast.List:
-        return ast.List(
-            elts=[ast.Constant(value=orig) for orig in self.allowed_origins],
-            ctx=ast.Load(),
-        )
 
     def fix(self, source: str, file_path: str = "") -> tuple[str, list[FixChange]]:
         try:
@@ -45,9 +45,10 @@ class CORSAllowlistFixer(BaseFixer):
         except SyntaxError:
             return source, []
 
-        lines = source.splitlines(keepends=True)
+        editor = SourceEditor(source)
         changes: list[FixChange] = []
-        replacements: list[tuple[int, int, int, int, str, str, str]] = []
+
+        allowlist_repr = repr(self.allowed_origins)
 
         for node in ast.walk(tree):
             # 1. Call nodes: CORSMiddleware / add_middleware / CORS(app, ...)
@@ -58,7 +59,7 @@ class CORSAllowlistFixer(BaseFixer):
                 elif isinstance(node.func, ast.Attribute):
                     call_name = node.func.attr
 
-                # 1a. FastAPI/Starlette add_middleware(CORSMiddleware, allow_origins=["*"]) or CORSMiddleware(..., allow_origins=["*"])
+                # 1a. FastAPI/Starlette add_middleware(CORSMiddleware, allow_origins=["*"])
                 is_cors_middleware = call_name == "CORSMiddleware"
                 if call_name == "add_middleware" and node.args:
                     first_arg = node.args[0]
@@ -68,108 +69,58 @@ class CORSAllowlistFixer(BaseFixer):
                         is_cors_middleware = True
 
                 if is_cors_middleware:
-                    modified_kw = False
-                    new_keywords: list[ast.keyword] = []
                     for kw in node.keywords:
                         if kw.arg == "allow_origins" and _is_wildcard_expr(kw.value):
-                            new_keywords.append(
-                                ast.keyword(arg="allow_origins", value=self._make_allowlist_node())
+                            old_val_code = editor.segment(kw.value)
+                            editor.replace(kw.value, allowlist_repr)
+                            changes.append(
+                                FixChange(
+                                    rule_id=self.rule_id,
+                                    description="Replace wildcard allow_origins=['*'] in CORSMiddleware with explicit allowlist (CWE-942)",
+                                    lineno=kw.value.lineno,
+                                    before=f"allow_origins={old_val_code}",
+                                    after=f"allow_origins={allowlist_repr}",
+                                )
                             )
-                            modified_kw = True
-                        else:
-                            new_keywords.append(kw)
-
-                    if modified_kw:
-                        new_call = ast.Call(
-                            func=node.func,
-                            args=list(node.args),
-                            keywords=new_keywords,
-                        )
-                        ast.copy_location(new_call, node)
-                        ast.fix_missing_locations(new_call)
-                        new_code = ast.unparse(new_call)
-
-                        s_line = node.lineno
-                        e_line = node.end_lineno or node.lineno
-                        s_col = node.col_offset
-                        e_col = node.end_col_offset or len(lines[e_line - 1])
-                        old_code = (
-                            lines[s_line - 1][s_col:e_col]
-                            if s_line == e_line
-                            else "".join(lines[s_line - 1 : e_line])
-                        )
-                        replacements.append(
-                            (
-                                s_line,
-                                e_line,
-                                s_col,
-                                e_col,
-                                old_code,
-                                new_code,
-                                "Replace wildcard allow_origins=['*'] in CORSMiddleware with explicit allowlist (CWE-942)",
-                            )
-                        )
 
                 # 1b. Flask-CORS: CORS(app) or CORS(app, origins="*")
                 elif call_name == "CORS":
                     has_origins_kw = False
                     has_resources_kw = False
-                    modified_cors = False
-                    new_cors_keywords: list[ast.keyword] = []
 
                     for kw in node.keywords:
                         if kw.arg == "origins":
                             has_origins_kw = True
                             if _is_wildcard_expr(kw.value):
-                                new_cors_keywords.append(
-                                    ast.keyword(arg="origins", value=self._make_allowlist_node())
+                                old_val_code = editor.segment(kw.value)
+                                editor.replace(kw.value, allowlist_repr)
+                                changes.append(
+                                    FixChange(
+                                        rule_id=self.rule_id,
+                                        description="Restrict permissive Flask CORS configuration to explicit origin allowlist (CWE-942)",
+                                        lineno=kw.value.lineno,
+                                        before=f"origins={old_val_code}",
+                                        after=f"origins={allowlist_repr}",
+                                    )
                                 )
-                                modified_cors = True
-                            else:
-                                new_cors_keywords.append(kw)
                         elif kw.arg == "resources":
                             has_resources_kw = True
-                            new_cors_keywords.append(kw)
-                        else:
-                            new_cors_keywords.append(kw)
 
                     # Unconstrained CORS(app) without origins or resources defaults to '*'
                     if not has_origins_kw and not has_resources_kw and node.args:
-                        new_cors_keywords.append(
-                            ast.keyword(arg="origins", value=self._make_allowlist_node())
-                        )
-                        modified_cors = True
-
-                    if modified_cors:
-                        new_call = ast.Call(
-                            func=node.func,
-                            args=list(node.args),
-                            keywords=new_cors_keywords,
-                        )
-                        ast.copy_location(new_call, node)
-                        ast.fix_missing_locations(new_call)
-                        new_code = ast.unparse(new_call)
-
-                        s_line = node.lineno
-                        e_line = node.end_lineno or node.lineno
-                        s_col = node.col_offset
-                        e_col = node.end_col_offset or len(lines[e_line - 1])
-                        old_code = (
-                            lines[s_line - 1][s_col:e_col]
-                            if s_line == e_line
-                            else "".join(lines[s_line - 1 : e_line])
-                        )
-                        replacements.append(
-                            (
-                                s_line,
-                                e_line,
-                                s_col,
-                                e_col,
-                                old_code,
-                                new_code,
-                                "Restrict permissive Flask CORS configuration to explicit origin allowlist (CWE-942)",
+                        old_call_text = editor.segment(node)
+                        if old_call_text.endswith(")"):
+                            new_call_text = f"{old_call_text[:-1]}, origins={allowlist_repr})"
+                            editor.replace(node, new_call_text)
+                            changes.append(
+                                FixChange(
+                                    rule_id=self.rule_id,
+                                    description="Add explicit origin allowlist to unconstrained Flask CORS(app) call (CWE-942)",
+                                    lineno=node.lineno,
+                                    before=old_call_text,
+                                    after=new_call_text,
+                                )
                             )
-                        )
 
             # 2. Direct header assignment: response.headers["Access-Control-Allow-Origin"] = "*"
             elif isinstance(node, ast.Assign):
@@ -187,51 +138,27 @@ class CORSAllowlistFixer(BaseFixer):
                                 break
 
                     if is_acao_header:
-                        val_node = node.value
-                        s_line = val_node.lineno
-                        e_line = val_node.end_lineno or val_node.lineno
-                        s_col = val_node.col_offset
-                        e_col = val_node.end_col_offset or len(lines[e_line - 1])
-                        old_code = lines[s_line - 1][s_col:e_col]
-                        new_code = f'"{self.allowed_origins[0]}"'
-                        replacements.append(
-                            (
-                                s_line,
-                                e_line,
-                                s_col,
-                                e_col,
-                                old_code,
-                                new_code,
-                                "Replace wildcard Access-Control-Allow-Origin header '*' with explicit origin (CWE-942)",
+                        old_val = editor.segment(node.value)
+                        new_val = f'"{self.allowed_origins[0]}"'
+                        editor.replace(node.value, new_val)
+                        changes.append(
+                            FixChange(
+                                rule_id=self.rule_id,
+                                description="Replace wildcard Access-Control-Allow-Origin header '*' with explicit origin (CWE-942)",
+                                lineno=node.value.lineno,
+                                before=old_val,
+                                after=new_val,
                             )
                         )
 
-        if not replacements:
+        if not changes:
             return source, []
 
-        replacements.sort(key=lambda r: (r[0], r[2]), reverse=True)
-        modified_lines = list(lines)
+        try:
+            new_source = editor.result()
+        except ValueError:
+            return source, []
 
-        for s_line, e_line, s_col, e_col, old_code, new_code, desc in replacements:
-            if s_line == e_line:
-                line = modified_lines[s_line - 1]
-                modified_lines[s_line - 1] = line[:s_col] + new_code + line[e_col:]
-            else:
-                first_part = modified_lines[s_line - 1][:s_col]
-                last_part = modified_lines[e_line - 1][e_col:]
-                modified_lines[s_line - 1 : e_line] = [first_part + new_code + last_part]
-
-            changes.append(
-                FixChange(
-                    rule_id=self.rule_id,
-                    description=desc,
-                    lineno=s_line,
-                    before=old_code,
-                    after=new_code,
-                )
-            )
-
-        new_source = "".join(modified_lines)
         return new_source, changes
 
     def propose_patch(
@@ -268,6 +195,10 @@ class CORSAllowlistFixer(BaseFixer):
 
         source_digest = f"sha256:{hashlib.sha256(source.encode('utf-8')).hexdigest()}"
 
+        meta = {"auto_apply": False, "reason": "Requires verifying frontend and client domain allowlist"}
+        if metadata:
+            meta.update(metadata)
+
         return PatchCandidate.create(
             finding_ids=finding_ids,
             rule_id=self.rule_id,
@@ -278,8 +209,8 @@ class CORSAllowlistFixer(BaseFixer):
             description="Replace wildcard CORS origins with explicit origin allowlist",
             generator="plex.repair.cors_allowlist",
             generator_version="1.0.0",
-            confidence="derived",
-            risk="low",
+            confidence="inferred",
+            risk="medium",
             rollback_diff=rollback_diff,
-            metadata=metadata or {},
+            metadata=meta,
         )

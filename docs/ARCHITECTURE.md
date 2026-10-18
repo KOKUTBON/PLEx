@@ -51,19 +51,21 @@ CLI (plex analyze | inspect | validate | remediate | coverage | benchmark)
 - `src/plex/security`
   - xBOUNDARY AST dataflow and bounded interprocedural taint rules (about 19 families, experimental).
 - `src/plex/inspect`
-  - Pure-Python ELF, Mach-O, PE and ZIP/JAR/APK/Wheel parsers, section/symbol extraction, and compiler hardening mitigation checks. No disassembly backend yet.
+  - Pure-Python ELF, Mach-O, PE and ZIP/JAR/APK/Wheel parsers, compiler mitigations, replaceable disassembly backends (pure Python + Capstone + Objdump), function/call reconstruction, capability hypothesis engine (`bin.capability.*`), and source/debug mapping (`SourceDebugMapper`).
 - `src/plex/validate`
-  - Scoped active testing engine, route discovery, deterministic HTTP reproduction recipes, and authorization guardrails.
+  - Scoped active testing engine, route discovery (Flask, FastAPI, Django, Express, Fastify, Next.js), OpenAPI 3.0/3.1 and Swagger 2.0 specification intake, deterministic HTTP reproduction recipes, and authorization guardrails (`ScopedHttpClient`).
 - `src/plex/supply_chain`
   - Dependency manifest parsers (`requirements.txt`, `poetry.lock`, `Pipfile.lock`), offline CVE advisories, Dockerfile and IaC rules.
 - `src/plex/repair`
-  - Deterministic security/config fixers (28, experimental), `PatchCandidate` contracts, `RemediationCoordinator`, and 5-stage `RepairVerificationRunner`.
+  - Deterministic security/config fixers (28 Python + 6 JS/TS fixers), `PatchCandidate` contracts, `RemediationCoordinator`, and 5-stage `RepairVerificationRunner`. Verified auto-applicable fixers include 8 Python fixers and 5 JS/TS fixers; 20 fixers are proposal-only.
+- `src/plex/agent`
+  - Autonomous single-worker agent layer with typed tool registry, model-provider interface (`LocalMockModelProvider`, `OllamaModelProvider`, `OpenAICompatibleProvider`), untrusted data isolation (`<DATA_UNTRUSTED>`), and strict runtime scope enforcement (`AgentScopePolicy`).
 - `src/plex/graph`
-  - `ProjectGraph` v1 relational model connecting source findings, AST routes, active evidence, and repair audits. Currently built by the remediation coordinator only; not persisted by `plex analyze`.
+  - `ProjectGraph` v1 relational model connecting source findings, AST routes, active evidence, binary artifacts, and repair audits. Persisted by `plex analyze --graph <path>` and `plex remediate --out-graph <path>`.
 - `src/plex/coverage`
   - Authoritative declared coverage matrix across all seven lifecycle surfaces.
 - `src/plex/bench`
-  - Comparative validation and accuracy benchmark harness calculating confusion matrices, precision, recall, and repair fidelity.
+  - Comparative validation and accuracy benchmark harness calculating confusion matrices, precision, recall, and repair fidelity across source and binary artifact corpora.
 - `src/plex/sandbox`
   - `InProcessSandbox`, `SubprocessSandbox`, environment scrubbing (`SAFE_ENV_ALLOWLIST`), and `disposable_workspace`.
 - `src/plex/ir`

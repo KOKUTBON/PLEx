@@ -11,11 +11,12 @@ from pathlib import Path
 from typing import Any, Literal
 
 from .manifests import (
+    parse_package_lock_json,
     parse_pipfile_lock,
     parse_poetry_lock,
     parse_requirements_txt,
 )
-from .models import AdvisoryRecord, DependencyRecord, ReachabilityStatus
+from .models import AdvisoryFeed, AdvisoryRecord, DependencyRecord, ReachabilityStatus
 from .reachability import ReachabilityAnalyzer
 from .scanner import BUILTIN_ADVISORIES, _is_affected
 
@@ -307,8 +308,14 @@ def _clean_spdx_id(name: str) -> str:
     return f"SPDXRef-Package-{cleaned}"
 
 
-def _clean_purl(name: str, version: str | None) -> str:
-    """Generate canonical Package URL (PURL) for a PyPI package."""
+def _clean_purl(name: str, version: str | None, manifest_file: str = "") -> str:
+    """Generate canonical Package URL (PURL) for a PyPI or npm package."""
+    mfile = manifest_file.lower()
+    if mfile.endswith("package-lock.json") or mfile.endswith("package.json"):
+        npm_name = name.lower()
+        if version:
+            return f"pkg:npm/{npm_name}@{version}"
+        return f"pkg:npm/{npm_name}"
     canonical_name = name.lower().replace("_", "-")
     if version:
         return f"pkg:pypi/{canonical_name}@{version}"
@@ -318,12 +325,18 @@ def _clean_purl(name: str, version: str | None) -> str:
 def generate_sbom(
     target: Path,
     advisories: list[AdvisoryRecord] | None = None,
+    feed: AdvisoryFeed | None = None,
     project_name: str | None = None,
     project_version: str = "1.0.0",
 ) -> SBOMDocument:
     """Generate an SBOMDocument from a repository directory or individual manifest file."""
     resolved_target = target.resolve()
-    advisory_catalog = advisories or BUILTIN_ADVISORIES
+    if feed is not None:
+        advisory_catalog = feed.advisories
+    elif advisories is not None:
+        advisory_catalog = advisories
+    else:
+        advisory_catalog = BUILTIN_ADVISORIES
 
     raw_deps: list[DependencyRecord] = []
     repo_root = resolved_target if resolved_target.is_dir() else resolved_target.parent
@@ -333,7 +346,9 @@ def generate_sbom(
         fname = resolved_target.name
         content = resolved_target.read_text(encoding="utf-8")
         rel_path = resolved_target.name
-        if "poetry" in fname or fname.endswith(".lock") and "poetry" in content:
+        if fname == "package-lock.json":
+            raw_deps.extend(parse_package_lock_json(content, rel_path))
+        elif "poetry" in fname or fname.endswith(".lock") and "poetry" in content:
             raw_deps.extend(parse_poetry_lock(content, rel_path))
         elif "pipfile" in fname.lower():
             raw_deps.extend(parse_pipfile_lock(content, rel_path))
@@ -368,6 +383,12 @@ def generate_sbom(
                     try:
                         content = fpath.read_text(encoding="utf-8")
                         raw_deps.extend(parse_pipfile_lock(content, rel_path))
+                    except Exception:
+                        continue
+                elif fname == "package-lock.json":
+                    try:
+                        content = fpath.read_text(encoding="utf-8")
+                        raw_deps.extend(parse_package_lock_json(content, rel_path))
                     except Exception:
                         continue
 
@@ -418,7 +439,7 @@ def generate_sbom(
     components: list[SBOMComponent] = []
     for pkg_key in sorted(component_map.keys()):
         dep = component_map[pkg_key]
-        purl = _clean_purl(dep.name, dep.resolved_version)
+        purl = _clean_purl(dep.name, dep.resolved_version, dep.file)
         spdx_id = _clean_spdx_id(dep.name)
 
         # Match advisories

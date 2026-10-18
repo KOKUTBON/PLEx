@@ -27,12 +27,22 @@ FROM_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+FROM_STAGE_DECL_PATTERN = re.compile(
+    r"^\s*FROM\s+(?:--platform=\S+\s+)?([A-Za-z0-9_.\-\/:]+)\s+AS\s+([A-Za-z0-9_.\-]+)",
+    re.IGNORECASE,
+)
+
 
 class DockerTagPinFixer(BaseFixer):
-    """Container security fixer that pins unversioned or :latest Docker base images to explicit tags."""
+    """Container security fixer that pins unversioned or :latest Docker base images to explicit tags.
+
+    This fixer is proposal-only (``auto_apply = False``) because choosing base image versions
+    requires testing compatibility with system libraries, language runtime versions, and build pipelines.
+    """
 
     rule_id = "cfg.docker-latest-tag"
     name = "docker_tag_pin"
+    auto_apply = False
 
     def __init__(
         self,
@@ -61,6 +71,13 @@ class DockerTagPinFixer(BaseFixer):
         if not lines:
             return source, []
 
+        # Collect earlier declared stage names to avoid pinning multi-stage build references
+        declared_stages: set[str] = set()
+        for line in lines:
+            stage_match = FROM_STAGE_DECL_PATTERN.match(line)
+            if stage_match:
+                declared_stages.add(stage_match.group(2).lower())
+
         new_lines: list[str] = []
         changes: list[FixChange] = []
 
@@ -70,12 +87,23 @@ class DockerTagPinFixer(BaseFixer):
                 new_lines.append(line)
                 continue
 
+            # If image is already digest-pinned with @sha256:, do not modify
+            if "@" in stripped:
+                new_lines.append(line)
+                continue
+
             match = FROM_PATTERN.match(stripped)
             if not match:
                 new_lines.append(line)
                 continue
 
             prefix, platform, image, tag, as_clause, trailing = match.groups()
+
+            # Skip 'scratch' base image and references to previous build stages
+            if image.lower() == "scratch" or image.lower() in declared_stages:
+                new_lines.append(line)
+                continue
+
             platform_str = platform or ""
             as_str = as_clause or ""
             trailing_str = trailing or ""
@@ -140,6 +168,10 @@ class DockerTagPinFixer(BaseFixer):
 
         source_digest = f"sha256:{hashlib.sha256(source.encode('utf-8')).hexdigest()}"
 
+        meta = {"auto_apply": False, "reason": "Requires verifying pinned base image tag compatibility"}
+        if metadata:
+            meta.update(metadata)
+
         return PatchCandidate.create(
             finding_ids=finding_ids,
             rule_id=self.rule_id,
@@ -150,9 +182,9 @@ class DockerTagPinFixer(BaseFixer):
             description="Pin Docker base image to explicit version tag to avoid floating :latest",
             generator="plex.repair.docker_tag_pin",
             generator_version="1.0.0",
-            confidence="derived",
-            risk="low",
+            confidence="inferred",
+            risk="medium",
             rollback_diff=rollback_diff,
             preconditions=("Base image specifies floating :latest or lacks version tag",),
-            metadata=metadata or {},
+            metadata=meta,
         )

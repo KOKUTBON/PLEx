@@ -57,6 +57,8 @@ RECIPES: dict[str, TestRecipe] = {
     "xbnd.command-injection": CommandInjectionRecipe(),
     "xbnd.path-traversal": PathTraversalRecipe(),
     "authz.access-control": RoleMatrixRecipe(),
+    "xbnd.missing-authorization": RoleMatrixRecipe(),
+    "val.access-control": RoleMatrixRecipe(),
     "xbnd.broken-tenant-isolation": TenantIsolationRecipe(),
     "xbnd.ssrf": SSRFRecipe(),
     "xbnd.code-eval-taint": CodeInjectionRecipe(),
@@ -95,6 +97,7 @@ class ValidateEngine:
     target_url: str
     authz: AuthorizationRecord
     repo_root: Path | None = None
+    spec_path: Path | None = None
     scope: NetworkScope = field(default_factory=NetworkScope)
     operator: str | None = None
     evidence_store: EvidenceStore | None = None
@@ -117,10 +120,11 @@ class ValidateEngine:
 
         client = ScopedHttpClient(scope=self.scope)
 
-        # 3. Discover routes if repo root provided
+        # 3. Discover routes if repo root or spec_path provided
         routes: list[RouteEndpoint] = []
-        if self.repo_root and self.repo_root.is_dir():
-            routes = discover_routes(self.repo_root)
+        if (self.repo_root and self.repo_root.is_dir()) or (self.spec_path and self.spec_path.is_file()):
+            root = self.repo_root or (self.spec_path.parent if self.spec_path else Path("."))
+            routes = discover_routes(root, spec_path=self.spec_path)
 
         # 4. Generate hypotheses from static findings or endpoints
         hypotheses = self._build_hypotheses(static_findings or [], routes)
@@ -173,8 +177,9 @@ class ValidateEngine:
         routes: list[RouteEndpoint],
     ) -> list[ValidationHypothesis]:
         hypotheses: list[ValidationHypothesis] = []
+        matched_route_paths: set[str] = set()
 
-        # Correlate static source findings to discovered routes
+        # 1. Correlate static source findings to discovered routes
         for f in static_findings:
             if f.rule_id not in RECIPES:
                 continue
@@ -182,7 +187,13 @@ class ValidateEngine:
             matched_route = correlate_finding_to_route(f.file, f.lineno, routes)
             if matched_route:
                 url_path = matched_route.path
+                matched_route_paths.add(url_path)
                 full_url = urllib_join(self.target_url, url_path)
+                param = (
+                    matched_route.parameters[0]
+                    if matched_route.parameters
+                    else ("id" if "user" in url_path else "q")
+                )
                 hypotheses.append(
                     ValidationHypothesis(
                         id=f"hyp_{f.id}",
@@ -190,25 +201,97 @@ class ValidateEngine:
                         target_url=full_url,
                         finding_id=f.id,
                         method=matched_route.methods[0] if matched_route.methods else "GET",
-                        parameter="id" if "user" in url_path else "q",
+                        parameter=param,
                         enclosing_route=matched_route.path,
                         file=f.file,
                         lineno=f.lineno,
                     )
                 )
 
-        # If no static findings were provided or matched, generate baseline hypotheses for target
-        if not hypotheses:
+        # 2. If routes were discovered, generate targeted hypotheses for routes without static findings
+        for r in routes:
+            if r.path in matched_route_paths:
+                continue
+            full_url = urllib_join(self.target_url, r.path)
+            param = r.parameters[0] if r.parameters else ("id" if "user" in r.path else "q")
+            r_lower = r.path.lower()
+            method = r.methods[0] if r.methods else "GET"
+
+            # Auth / Role / Tenant routes
+            if any(
+                k in r_lower
+                for k in ("admin", "user", "role", "tenant", "account", "org", "profile")
+            ):
+                hyp_h = hashlib.sha256(f"{r.path}:authz".encode()).hexdigest()[:8]
+                hypotheses.append(
+                    ValidationHypothesis(
+                        id=f"hyp_route_{hyp_h}_authz",
+                        rule_id="authz.access-control",
+                        target_url=full_url,
+                        method=method,
+                        parameter=param,
+                        enclosing_route=r.path,
+                        file=r.file,
+                        lineno=r.lineno,
+                    )
+                )
+
+            # Input-accepting routes
+            if r.parameters or any(
+                k in r_lower
+                for k in ("search", "query", "item", "file", "download", "view", "get", "api")
+            ):
+                for r_rule in (
+                    "xbnd.sql-injection",
+                    "xbnd.command-injection",
+                    "xbnd.path-traversal",
+                    "xbnd.xss",
+                ):
+                    hyp_h = hashlib.sha256(f"{r.path}:{r_rule}".encode()).hexdigest()[:8]
+                    hypotheses.append(
+                        ValidationHypothesis(
+                            id=f"hyp_route_{hyp_h}",
+                            rule_id=r_rule,
+                            target_url=full_url,
+                            method=method,
+                            parameter=param,
+                            enclosing_route=r.path,
+                            file=r.file,
+                            lineno=r.lineno,
+                        )
+                    )
+
+        # 3. Always ensure target-level checks (headers, CORS, debug, cookies) are present
+        existing_rules = {h.rule_id for h in hypotheses}
+        target_level_rules = (
+            "val.security-headers",
+            "val.cors-misconfiguration",
+            "val.debug-exposure",
+            "xbnd.insecure-cookie",
+        )
+        for rule_id in target_level_rules:
+            if rule_id not in existing_rules:
+                hypotheses.append(
+                    ValidationHypothesis(
+                        id=f"hyp_target_{rule_id.split('.')[-1]}",
+                        rule_id=rule_id,
+                        target_url=self.target_url,
+                        parameter="q",
+                    )
+                )
+
+        # 4. If still no injection hypotheses exist, generate baseline injection probes on target_url
+        has_injection = any(
+            h.rule_id in ("xbnd.sql-injection", "xbnd.command-injection", "xbnd.path-traversal")
+            for h in hypotheses
+        )
+        if not has_injection:
             for rule_id in (
                 "xbnd.sql-injection",
                 "xbnd.command-injection",
                 "xbnd.path-traversal",
                 "xbnd.code-eval-taint",
                 "xbnd.sensitive-data-leak",
-                "xbnd.insecure-cookie",
-                "val.security-headers",
-                "val.cors-misconfiguration",
-                "val.debug-exposure",
             ):
                 hypotheses.append(
                     ValidationHypothesis(
@@ -271,6 +354,8 @@ class ValidateEngine:
             engine_meta={
                 "counterevidence": result.counterevidence,
                 "reproduced": result.reproduced,
+                "target_url": hyp.target_url,
+                "route": hyp.enclosing_route or hyp.target_url,
             },
         )
 

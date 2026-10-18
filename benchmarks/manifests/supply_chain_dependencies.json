@@ -1,0 +1,23 @@
+{
+  "name": "supply_chain_dependencies_bench",
+  "target_rule": "dep.vulnerable-version",
+  "min_precision": 0.95,
+  "min_recall": 0.90,
+  "require_zero_regressions": true,
+  "corpus_dir": "../corpora/supply_chain",
+  "cases": [
+    {
+      "file": "requirements_vuln.txt",
+      "expected_rule": "dep.vulnerable-version",
+      "should_detect": true,
+      "expect_repairable": true,
+      "test_cmd": "python3 -m pytest test_requirements.py -q"
+    },
+    {
+      "file": "requirements_safe.txt",
+      "expected_rule": "dep.vulnerable-version",
+      "should_detect": false,
+      "expect_repairable": false
+    }
+  ]
+}

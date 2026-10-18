@@ -27,6 +27,7 @@ def test_discovery_does_not_import_entry_points(monkeypatch, capsys):
         "external",
         "performance",
         "rea",
+        "reliability",
         "supply_chain",
         "xboundary",
     ]

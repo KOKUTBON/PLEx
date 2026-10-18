@@ -332,4 +332,38 @@ def evaluate_artifact_rules(
             )
         )
 
+    # Rule 9: Direct calls to banned APIs reconstructed from disassembly (CWE-676)
+    for call in descriptor.calls:
+        if call.target_symbol and call.target_symbol in BANNED_APIS:
+            sym = call.target_symbol
+            desc = BANNED_APIS[sym]
+            loc = f"0x{call.caller_address:x}"
+            fid = _finding_id("bin.banned-api-call", path, f"{sym}:{loc}")
+            fn_desc = f" in function '{call.caller_function}'" if call.caller_function else ""
+            findings.append(
+                AnalysisFinding(
+                    id=f"bin.{fid}",
+                    engine="inspect",
+                    category="binary",
+                    rule_id="bin.banned-api-call",
+                    severity="critical",
+                    title=f"Disassembly observes call to banned function '{sym}' at {loc}",
+                    status="verified",
+                    confidence="observed",
+                    file=path,
+                    lineno=0,
+                    cwe=["CWE-676", "CWE-120"],
+                    message=f"{desc}. Call site at instruction {loc}{fn_desc}: '{call.instruction}'.",
+                    remediation=[f"Refactor caller to replace '{sym}' with safe, size-bounded alternatives."],
+                    evidence=[evidence_ref],
+                    engine_meta={
+                        "symbol": sym,
+                        "caller_address": loc,
+                        "caller_function": call.caller_function,
+                        "instruction": call.instruction,
+                    },
+                )
+            )
+
     return findings
+

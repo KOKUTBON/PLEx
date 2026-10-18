@@ -6,7 +6,7 @@ from .injection import DataflowInjectionRule
 
 PATH_LIMITATIONS = (
     "Path traversal rule checks file open, deletion, copy, and web send_file sinks",
-    "os.path.basename and werkzeug secure_filename are treated as path sanitizers",
+    "os.path.basename, werkzeug secure_filename and the _plex_within_base containment helper inserted by fix.path-boundary are treated as path sanitizers",
     "Absolute paths and symlink resolution outside the model may still produce false negatives",
 )
 

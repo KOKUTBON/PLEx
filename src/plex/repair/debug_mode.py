@@ -11,6 +11,16 @@ from plex.repair.diffutil import unified_diff
 from plex.repair.models import PatchCandidate
 from plex.repair.sourceedit import SourceEditor
 
+LOCAL_RUNNER_FILENAMES = {
+    "run_local.py",
+    "dev.py",
+    "local.py",
+    "manage.py",
+    "cli.py",
+    "debug.py",
+    "runserver.py",
+}
+
 
 def _is_test_or_dev_file(file_path: str) -> bool:
     """Return True if file_path appears to be a test suite or development fixture."""
@@ -23,12 +33,53 @@ def _is_test_or_dev_file(file_path: str) -> bool:
     return fname.startswith("test_") or fname.endswith("_test.py") or fname == "conftest.py"
 
 
+def _is_main_block(node: ast.If) -> bool:
+    """Return True if if-statement matches `if __name__ == '__main__':`."""
+    test = node.test
+    if isinstance(test, ast.Compare) and len(test.ops) == 1 and isinstance(test.ops[0], ast.Eq):
+        left = test.left
+        right = test.comparators[0]
+        if (
+            isinstance(left, ast.Name)
+            and left.id == "__name__"
+            and isinstance(right, ast.Constant)
+            and right.value == "__main__"
+        ) or (
+            isinstance(right, ast.Name)
+            and right.id == "__name__"
+            and isinstance(left, ast.Constant)
+            and left.value == "__main__"
+        ):
+            return True
+    return False
+
+
+def _find_main_body_node_ids(tree: ast.AST) -> set[int]:
+    """Return set of id(node) for all AST nodes inside an `if __name__ == '__main__':` block."""
+    main_ids: set[int] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.If) and _is_main_block(node):
+            for child in ast.walk(node):
+                if child is not node:
+                    main_ids.add(id(child))
+    return main_ids
+
+
 class DebugModeFixer(BaseFixer):
-    """AST fixer that disables production debug flags in application entrypoints and settings."""
+    """AST fixer that disables production debug flags in application entrypoints and settings.
+
+    In accordance with the PLEx repair contract:
+    - Auto-applies (``auto_apply = True``) when debug mode is enabled in production settings,
+      configuration dictionaries, application factories, or module-level initializers.
+    - Preserves proposal-only fallback (``auto_apply = False``) when debug mode is restricted
+      to standalone runner blocks (``if __name__ == '__main__':``) or development scripts
+      (``dev.py``, ``run_local.py``).
+    - Abstains on test suites and development fixtures to avoid altering test harnesses.
+    """
 
     rule_id = "cfg.debug-enabled"
     name = "debug_mode"
-    auto_apply = False
+    auto_apply = True
 
     def fix(self, source: str, file_path: str = "") -> tuple[str, list[FixChange]]:
         try:
@@ -139,6 +190,65 @@ class DebugModeFixer(BaseFixer):
 
         source_digest = f"sha256:{hashlib.sha256(source.encode('utf-8')).hexdigest()}"
 
+        # Context discrimination:
+        # Determine whether changes target production configuration/initialization
+        # or a local development / standalone runner entry point.
+        is_local_runner = False
+        target_path_lower = target_file.lower().replace("\\", "/")
+        file_name = target_path_lower.split("/")[-1] if "/" in target_path_lower else target_path_lower
+        if file_name in LOCAL_RUNNER_FILENAMES or any(
+            d in target_path_lower for d in ("/dev/", "/local/", "/scripts/")
+        ):
+            is_local_runner = True
+
+        # Check if changes in source are exclusively inside `if __name__ == '__main__':`
+        try:
+            tree = ast.parse(source)
+            main_node_ids = _find_main_body_node_ids(tree)
+            modified_nodes_in_main = 0
+            total_modified_nodes = 0
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Call):
+                    for kw in node.keywords:
+                        if kw.arg == "debug" and isinstance(kw.value, ast.Constant) and kw.value.value is True:
+                            total_modified_nodes += 1
+                            if id(node) in main_node_ids or id(kw) in main_node_ids or id(kw.value) in main_node_ids:
+                                modified_nodes_in_main += 1
+                elif isinstance(node, ast.Assign):
+                    if isinstance(node.value, ast.Constant) and node.value.value is True:
+                        is_debug_target = False
+                        for target in node.targets:
+                            if isinstance(target, ast.Name) and target.id == "DEBUG":
+                                is_debug_target = True
+                            elif isinstance(target, ast.Attribute) and target.attr == "debug":
+                                is_debug_target = True
+                            elif (
+                                isinstance(target, ast.Subscript)
+                                and isinstance(target.slice, ast.Constant)
+                                and target.slice.value == "DEBUG"
+                            ):
+                                is_debug_target = True
+                        if is_debug_target:
+                            total_modified_nodes += 1
+                            if id(node) in main_node_ids or id(node.value) in main_node_ids:
+                                modified_nodes_in_main += 1
+
+            if total_modified_nodes > 0 and modified_nodes_in_main == total_modified_nodes:
+                is_local_runner = True
+        except SyntaxError:
+            pass
+
+        meta: dict[str, Any] = {}
+        if is_local_runner:
+            meta["auto_apply"] = False
+            meta["reason"] = "Review standalone runner debug mode for local development workflow"
+        else:
+            meta["auto_apply"] = True
+            meta["context"] = "production_configuration"
+
+        if metadata:
+            meta.update(metadata)
+
         return PatchCandidate.create(
             finding_ids=finding_ids,
             rule_id=self.rule_id,
@@ -152,5 +262,5 @@ class DebugModeFixer(BaseFixer):
             confidence="derived",
             risk="low",
             rollback_diff=rollback_diff,
-            metadata=metadata or {},
+            metadata=meta,
         )

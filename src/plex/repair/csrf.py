@@ -24,6 +24,28 @@ def _is_test_or_dev_file(file_path: str) -> bool:
     return fname.startswith("test_") or fname.endswith("_test.py") or fname == "conftest.py"
 
 
+API_DECORATORS = {
+    "api_view",
+    "permission_classes",
+    "authentication_classes",
+    "action",
+    "schema",
+}
+
+WEBHOOK_OR_API_KEYWORDS = (
+    "webhook",
+    "stripe",
+    "github",
+    "slack",
+    "paypal",
+    "callback",
+    "hook",
+    "ipn",
+    "api_",
+    "rest_",
+)
+
+
 def _is_csrf_exempt_decorator(dec_node: ast.AST) -> bool:
     """Return True if decorator matches csrf_exempt or csrf.exempt."""
     if isinstance(dec_node, ast.Name):
@@ -41,12 +63,53 @@ def _is_csrf_exempt_decorator(dec_node: ast.AST) -> bool:
     return False
 
 
+def _is_api_or_webhook_func(
+    fn_node: ast.FunctionDef | ast.AsyncFunctionDef, file_path: str = ""
+) -> bool:
+    """Check if function is an API view, DRF action, or external webhook endpoint."""
+    path_lower = file_path.lower().replace("\\", "/")
+    if any(p in path_lower for p in ("/api/", "endpoints/", "webhook")):
+        return True
+    fn_name = fn_node.name.lower()
+    if any(kw in fn_name for kw in WEBHOOK_OR_API_KEYWORDS):
+        return True
+    for dec in fn_node.decorator_list:
+        dec_name = ""
+        if isinstance(dec, ast.Name):
+            dec_name = dec.id
+        elif isinstance(dec, ast.Attribute):
+            dec_name = dec.attr
+        elif isinstance(dec, ast.Call):
+            if isinstance(dec.func, ast.Name):
+                dec_name = dec.func.id
+            elif isinstance(dec.func, ast.Attribute):
+                dec_name = dec.func.attr
+        if dec_name in API_DECORATORS:
+            return True
+        if isinstance(dec, ast.Call) and dec.args:
+            first_arg = dec.args[0]
+            if isinstance(first_arg, ast.Constant) and isinstance(first_arg.value, str):
+                route_path = first_arg.value.lower()
+                if route_path.startswith(("/api/", "/webhook/", "/hook/", "/callbacks/")):
+                    return True
+    return False
+
+
 class CSRFFixer(BaseFixer):
-    """AST fixer that restores CSRF protection by removing @csrf_exempt decorators and enabling CSRF configs (CWE-352)."""
+    """AST fixer that restores CSRF protection by removing @csrf_exempt decorators and enabling CSRF configs (CWE-352).
+
+    In accordance with the PLEx repair contract:
+    - Auto-applies (``auto_apply = True``) when CSRF is disabled globally in configuration
+      (``WTF_CSRF_ENABLED = False``) or on browser-facing web form views.
+    - Preserves proposal-only fallback (``auto_apply = False``) when ``@csrf_exempt`` is used
+      on machine-to-machine API views (``@api_view``) or external webhooks (Stripe, GitHub, Slack)
+      where browser ambient credentials are not used.
+    - Abstains on test suites and development fixtures to avoid altering test harnesses.
+    """
 
     rule_id = "cfg.csrf-disabled"
     name = "csrf_protection"
-    auto_apply = False
+    auto_apply = True
 
     def fix(self, source: str, file_path: str = "") -> tuple[str, list[FixChange]]:
         try:
@@ -159,6 +222,47 @@ class CSRFFixer(BaseFixer):
 
         source_digest = f"sha256:{hashlib.sha256(source.encode('utf-8')).hexdigest()}"
 
+        # Context discrimination:
+        # Determine whether changes target configuration (WTF_CSRF_ENABLED) or view decorators.
+        # For view decorators, verify whether endpoint is an API / webhook (proposal-only)
+        # or a standard browser-facing web form view (auto-apply).
+        is_webhook_or_api = False
+        has_config_change = False
+        has_view_change = False
+
+        try:
+            tree = ast.parse(source)
+            for node in ast.walk(tree):
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    for dec in node.decorator_list:
+                        if _is_csrf_exempt_decorator(dec):
+                            has_view_change = True
+                            if _is_api_or_webhook_func(node, target_file):
+                                is_webhook_or_api = True
+                elif isinstance(node, ast.Assign):
+                    if isinstance(node.value, ast.Constant) and node.value.value is False:
+                        for target in node.targets:
+                            target_str = ast.unparse(target)
+                            if any(var in target_str for var in CSRF_DISABLE_VARS):
+                                has_config_change = True
+        except SyntaxError:
+            pass
+
+        meta: dict[str, Any] = {}
+        if has_view_change and is_webhook_or_api:
+            meta["auto_apply"] = False
+            meta["reason"] = (
+                "Webhook or API endpoint may legitimately require CSRF exemption for non-browser clients"
+            )
+        elif has_config_change or has_view_change:
+            meta["auto_apply"] = True
+            meta["context"] = "configuration" if has_config_change else "browser_form_view"
+        else:
+            meta["auto_apply"] = False
+
+        if metadata:
+            meta.update(metadata)
+
         return PatchCandidate.create(
             finding_ids=finding_ids,
             rule_id=self.rule_id,
@@ -172,5 +276,5 @@ class CSRFFixer(BaseFixer):
             confidence="derived",
             risk="low",
             rollback_diff=rollback_diff,
-            metadata=metadata or {},
+            metadata=meta,
         )

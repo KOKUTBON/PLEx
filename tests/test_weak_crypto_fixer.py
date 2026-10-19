@@ -134,7 +134,44 @@ def test_weak_crypto_fixer_preserves_comments_and_formatting() -> None:
     ast.parse(fixed)
 
 
-def test_weak_crypto_fixer_contract_proposal_only() -> None:
+def test_weak_crypto_fixer_contract_auto_apply() -> None:
     fixer = WeakCryptoFixer()
-    assert fixer.auto_apply is False
+    assert fixer.auto_apply is True
+
+
+def test_weak_crypto_auto_apply_token_signature() -> None:
+    fixer = WeakCryptoFixer()
+    source = """def generate_token_signature(token: str) -> str:
+    hasher = hashlib.md5(token.encode("utf-8"))
+    return hasher.hexdigest()
+"""
+    cand = fixer.propose_patch(source, "crypto.py")
+    assert cand is not None
+    assert cand.metadata.get("auto_apply") is True
+    assert cand.confidence == "derived"
+    assert cand.risk == "low"
+    assert "hashlib.sha256" in cand.diff
+
+
+def test_weak_crypto_auto_apply_cache_etag_usedforsecurity_false() -> None:
+    fixer = WeakCryptoFixer()
+    source = """def get_cache_etag(url: str) -> str:
+    return hashlib.md5(url.encode()).hexdigest()
+"""
+    cand = fixer.propose_patch(source, "cache.py")
+    assert cand is not None
+    assert cand.metadata.get("auto_apply") is True
+    assert cand.confidence == "derived"
+    assert "usedforsecurity=False" in cand.diff
+
+
+def test_weak_crypto_proposal_only_when_ambiguous() -> None:
+    fixer = WeakCryptoFixer()
+    source = """h = hashlib.md5(data).hexdigest()
+"""
+    cand = fixer.propose_patch(source, "generic.py")
+    assert cand is not None
+    assert cand.metadata.get("auto_apply") is False
+    assert cand.confidence == "inferred"
+    assert cand.risk == "medium"
 

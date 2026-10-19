@@ -10,7 +10,8 @@
       "file": "vuln_weak_crypto.py",
       "expected_rule": "xbnd.weak-crypto",
       "should_detect": true,
-      "expect_repairable": false
+      "expect_repairable": true,
+      "test_cmd": "python3 -m pytest test_weak_crypto.py -q"
     },
     {
       "file": "safe_weak_crypto.py",

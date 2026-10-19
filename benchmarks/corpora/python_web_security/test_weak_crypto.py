@@ -2,13 +2,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from vuln_weak_crypto import generate_token_signature
 
-def test_crypto_hash_patterns() -> None:
-    safe_path = Path(__file__).parent / "safe_weak_crypto.py"
-    safe_src = safe_path.read_text(encoding="utf-8")
-    assert "hashlib.md5" not in safe_src
-    assert "hashlib.sha256" in safe_src
 
-    vuln_path = Path(__file__).parent / "vuln_weak_crypto.py"
+def test_crypto_token_sha256() -> None:
+    vuln_path = Path("vuln_weak_crypto.py")
     vuln_src = vuln_path.read_text(encoding="utf-8")
-    assert "hashlib.md5" in vuln_src
+    assert "hashlib.sha256" in vuln_src
+    assert "hashlib.md5" not in vuln_src
+
+    sig = generate_token_signature("test_token")
+    assert isinstance(sig, str)
+    assert len(sig) == 64

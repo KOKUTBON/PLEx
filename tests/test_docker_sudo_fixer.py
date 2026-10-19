@@ -68,7 +68,38 @@ def test_docker_sudo_fixer_abstains_on_comments() -> None:
     assert len(changes) == 0
 
 
-def test_docker_sudo_fixer_contract_proposal_only() -> None:
+def test_docker_sudo_fixer_contract_auto_apply() -> None:
     fixer = DockerSudoFixer()
-    assert fixer.auto_apply is False
+    assert fixer.auto_apply is True
+
+
+def test_docker_sudo_auto_apply_when_unprivileged_and_no_sudo_cmd() -> None:
+    fixer = DockerSudoFixer()
+    source = """FROM python:3.12-slim
+RUN useradd -m -u 1000 app && echo "app ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+USER app
+WORKDIR /app
+CMD ["python", "app.py"]
+"""
+    cand = fixer.propose_patch(source, "Dockerfile")
+    assert cand is not None
+    assert cand.metadata.get("auto_apply") is True
+    assert cand.confidence == "derived"
+    assert cand.risk == "low"
+    added_lines = [line[1:] for line in cand.diff.splitlines() if line.startswith("+") and not line.startswith("+++")]
+    assert not any("NOPASSWD" in line for line in added_lines)
+
+
+def test_docker_sudo_proposal_only_when_cmd_uses_sudo() -> None:
+    fixer = DockerSudoFixer()
+    source = """FROM ubuntu:22.04
+RUN echo "app ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+USER app
+CMD ["sudo", "service", "start"]
+"""
+    cand = fixer.propose_patch(source, "Dockerfile")
+    assert cand is not None
+    assert cand.metadata.get("auto_apply") is False
+    assert cand.confidence == "inferred"
+    assert cand.risk == "high"
 

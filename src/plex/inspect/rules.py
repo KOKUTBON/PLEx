@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import re
 
-from plex.report.unified import AnalysisFinding, EvidenceRef
+from plex.report.unified import AnalysisFinding, EvidenceRef, Severity
 
 from .models import ArtifactDescriptor
 
@@ -429,6 +429,125 @@ def evaluate_artifact_rules(
                 remediation=["Strip debug paths using linker flags, -fdebug-prefix-map, or /PDBALTPATH during release builds."],
                 evidence=[evidence_ref],
                 engine_meta={"exposed_path": p},
+            )
+        )
+
+    # Rule 12: High-risk or dangerous Mach-O entitlements (CWE-250 / CWE-269 / CWE-732)
+    entitlements = descriptor.metadata.get("entitlements", {})
+    if isinstance(entitlements, dict):
+        dangerous_spec: dict[str, tuple[str, str, str, Severity]] = {
+            "com.apple.security.get-task-allow": (
+                "Development debugging entitlement 'get-task-allow' enabled in binary",
+                "CWE-250",
+                "Allows external debuggers and hostile processes to attach and inject code into memory. Must be disabled in production release builds.",
+                "high",
+            ),
+            "com.apple.security.cs.disable-library-validation": (
+                "Library validation disabled via entitlement",
+                "CWE-427",
+                "Disables macOS dyld signature validation, allowing arbitrary unsigned or third-party dylibs to be loaded into the process.",
+                "medium",
+            ),
+            "com.apple.security.cs.allow-dyld-environment-variables": (
+                "DYLD environment variables allowed via entitlement",
+                "CWE-426",
+                "Permits DYLD_INSERT_LIBRARIES and related environment variables to alter dynamic linker behavior, enabling library injection.",
+                "medium",
+            ),
+            "com.apple.security.cs.allow-unsigned-executable-memory": (
+                "Unsigned executable memory allowed via entitlement",
+                "CWE-693",
+                "Bypasses kernel W^X protections, allowing pages to be both writable and executable, weakening memory corruption exploit mitigations.",
+                "low",
+            ),
+        }
+        for ent_key, (title, cwe_id, desc_msg, sev) in dangerous_spec.items():
+            if entitlements.get(ent_key) is True:
+                fid = _finding_id("bin.macho.dangerous-entitlement", path, ent_key)
+                findings.append(
+                    AnalysisFinding(
+                        id=f"bin.{fid}",
+                        engine="inspect",
+                        category="binary",
+                        rule_id="bin.macho.dangerous-entitlement",
+                        severity=sev,
+                        title=title,
+                        status="verified",
+                        confidence="observed",
+                        file=path,
+                        lineno=0,
+                        cwe=[cwe_id, "CWE-250"],
+                        message=(
+                            f"Mach-O binary embeds dangerous entitlement '{ent_key}' = true. {desc_msg}"
+                        ),
+                        remediation=[f"Remove '{ent_key}' entitlement from production provisioning profile or Entitlements.plist."],
+                        evidence=[evidence_ref],
+                        engine_meta={"entitlement": ent_key, "value": True},
+                    )
+                )
+
+    # Rule 13: Mach-O executable signed without Apple Hardened Runtime (CWE-693)
+    if (
+        descriptor.format == "macho"
+        and descriptor.is_64bit
+        and descriptor.metadata.get("has_code_signature")
+        and not descriptor.metadata.get("has_hardened_runtime")
+        and (descriptor.entry_point > 0 or descriptor.metadata.get("filetype") == 2)
+    ):
+        fid = _finding_id("bin.macho.unhardened-runtime", path, "missing_cs_runtime")
+        findings.append(
+            AnalysisFinding(
+                id=f"bin.{fid}",
+                engine="inspect",
+                category="binary",
+                rule_id="bin.macho.unhardened-runtime",
+                severity="low",
+                title="Mach-O executable signed without Apple Hardened Runtime flag (CS_RUNTIME)",
+                status="verified",
+                confidence="observed",
+                file=path,
+                lineno=0,
+                cwe=["CWE-693"],
+                message=(
+                    "64-bit Mach-O executable has a code signature but lacks the Apple Hardened Runtime flag (CS_RUNTIME). "
+                    "Hardened Runtime enforces code signing integrity, memory protections, and dylib validation required by macOS Gatekeeper and notarization."
+                ),
+                remediation=["Sign binary with Hardened Runtime enabled using 'codesign --options runtime' during build packaging."],
+                evidence=[evidence_ref],
+                engine_meta={"format": "macho", "has_hardened_runtime": False},
+            )
+        )
+
+    # Rule 14: Deprecated or weak code signature digest algorithm (CWE-327 / CWE-328)
+    sig_digest = ""
+    authenticode = descriptor.metadata.get("authenticode")
+    if authenticode and isinstance(authenticode, dict):
+        sig_digest = authenticode.get("digest_algorithm", "").lower()
+    elif descriptor.metadata.get("cdhash_type"):
+        sig_digest = descriptor.metadata.get("cdhash_type", "").lower()
+
+    if sig_digest in ("sha1", "sha-1", "md5"):
+        fid = _finding_id("bin.hardening.weak-signature-digest", path, sig_digest)
+        findings.append(
+            AnalysisFinding(
+                id=f"bin.{fid}",
+                engine="inspect",
+                category="binary",
+                rule_id="bin.hardening.weak-signature-digest",
+                severity="medium",
+                title=f"Code signature uses deprecated or weak digest algorithm: '{sig_digest.upper()}'",
+                status="verified",
+                confidence="observed",
+                file=path,
+                lineno=0,
+                cwe=["CWE-327", "CWE-328"],
+                message=(
+                    f"Binary signature was generated using collision-weakened hash algorithm '{sig_digest.upper()}'. "
+                    "Modern operating systems deprecate SHA-1 and MD5 signatures, and modern code integrity policies reject them."
+                ),
+                remediation=["Re-sign binary using SHA-256 or stronger digest algorithm (/fd sha256 or codesign -s)."],
+                evidence=[evidence_ref],
+                engine_meta={"digest_algorithm": sig_digest},
             )
         )
 

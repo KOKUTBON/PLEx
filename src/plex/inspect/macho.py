@@ -6,6 +6,7 @@ import re
 import struct
 from typing import Any
 
+from .macho_cs import parse_macho_code_signature
 from .models import (
     Architecture,
     ArtifactDescriptor,
@@ -163,6 +164,7 @@ def parse_macho(data: bytes, artifact_path: str, sha256: str) -> ArtifactDescrip
     is_encrypted = False
     entry_point = 0
     min_os_version: str | None = None
+    code_sign_info: dict[str, Any] = {}
 
     sections: list[BinarySection] = []
     dylibs: list[str] = []
@@ -313,6 +315,11 @@ def parse_macho(data: bytes, artifact_path: str, sha256: str) -> ArtifactDescrip
         # LC_CODE_SIGNATURE
         elif cmd == LC_CODE_SIGNATURE:
             has_code_signature = True
+            if curr_offset + 16 <= len(slice_data):
+                dataoff, datasize = struct.unpack_from(f"{order}II", slice_data, curr_offset + 8)
+                if dataoff > 0 and datasize >= 12 and dataoff + datasize <= len(slice_data):
+                    cs_data = slice_data[dataoff : dataoff + datasize]
+                    code_sign_info = parse_macho_code_signature(cs_data)
 
         # LC_ENCRYPTION_INFO / LC_ENCRYPTION_INFO_64
         elif cmd in (LC_ENCRYPTION_INFO, LC_ENCRYPTION_INFO_64):
@@ -444,6 +451,7 @@ def parse_macho(data: bytes, artifact_path: str, sha256: str) -> ArtifactDescrip
         "dylibs": tuple(dylibs),
         "rpaths": tuple(rpaths),
         "code_signed": has_code_signature,
+        "has_code_signature": has_code_signature,
         "encrypted": is_encrypted,
         "has_pagezero": has_pagezero,
         "has_data_const": has_data_const,
@@ -451,6 +459,8 @@ def parse_macho(data: bytes, artifact_path: str, sha256: str) -> ArtifactDescrip
     }
     if min_os_version:
         metadata["min_os_version"] = min_os_version
+    if code_sign_info:
+        metadata.update(code_sign_info)
 
     return ArtifactDescriptor(
         path=artifact_path,

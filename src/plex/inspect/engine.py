@@ -180,6 +180,14 @@ class InspectEngine:
             fact_dict["pdb_path"] = descriptor.metadata["pdb_path"]
         if "dwarf" in descriptor.metadata and descriptor.metadata["dwarf"]:
             fact_dict["dwarf_producer"] = descriptor.metadata["dwarf"].get("producer")
+        if "cdhash" in descriptor.metadata:
+            fact_dict["cdhash"] = descriptor.metadata["cdhash"]
+        if "signing_id" in descriptor.metadata:
+            fact_dict["signing_id"] = descriptor.metadata["signing_id"]
+        if "team_id" in descriptor.metadata:
+            fact_dict["team_id"] = descriptor.metadata["team_id"]
+        if "authenticode" in descriptor.metadata:
+            fact_dict["authenticode"] = descriptor.metadata["authenticode"]
 
         if self.evidence_store:
             art = EvidenceArtifact.create(

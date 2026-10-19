@@ -286,4 +286,48 @@ def detect_capabilities(
             )
         )
 
+    # Check for Code Signing / Cryptographic Identity Fingerprint
+    cdhash = descriptor.metadata.get("cdhash")
+    authenticode = descriptor.metadata.get("authenticode")
+    if cdhash or authenticode:
+        fp_parts: list[str] = []
+        meta_payload = {}
+        if cdhash:
+            fp_parts.append(f"Mach-O CDHash: {cdhash}")
+            meta_payload["cdhash"] = cdhash
+            if descriptor.metadata.get("signing_id"):
+                fp_parts.append(f"Signing ID: {descriptor.metadata['signing_id']}")
+                meta_payload["signing_id"] = descriptor.metadata["signing_id"]
+            if descriptor.metadata.get("team_id"):
+                fp_parts.append(f"Team ID: {descriptor.metadata['team_id']}")
+                meta_payload["team_id"] = descriptor.metadata["team_id"]
+        if authenticode:
+            algo = authenticode.get("digest_algorithm", "unknown")
+            fp_parts.append(f"PE Authenticode Digest: {algo}")
+            meta_payload["authenticode_digest"] = algo
+
+        fid = _finding_id("bin.capability.codesign", path, ";".join(fp_parts))
+        findings.append(
+            AnalysisFinding(
+                id=f"bin.{fid}",
+                engine="inspect",
+                category="binary",
+                rule_id="bin.capability.codesign",
+                severity="info",
+                title="Cryptographic Code Signature & Identity Provenance Identified",
+                status="suspected",
+                confidence="inferred",
+                file=path,
+                lineno=0,
+                cwe=["CWE-699"],
+                message=(
+                    f"Binary contains cryptographic code signing identity and provenance metadata. {'; '.join(fp_parts)}. "
+                    "Used for binary provenance, developer signature validation, and OS gatekeeper policy evaluation."
+                ),
+                remediation=["Track code signing identity and ensure production release certificates are applied."],
+                evidence=[evidence_ref],
+                engine_meta=meta_payload,
+            )
+        )
+
     return findings

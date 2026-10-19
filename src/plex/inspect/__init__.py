@@ -32,6 +32,7 @@ from .elf import parse_elf
 from .engine import InspectEngine
 from .intake import ArtifactIntakeError, intake_artifact
 from .macho import parse_macho
+from .macho_cs import parse_macho_code_signature
 from .models import (
     Architecture,
     ArtifactDescriptor,
@@ -45,7 +46,7 @@ from .models import (
     RelroMode,
     compute_section_metrics,
 )
-from .pe import compute_imphash, parse_pe, parse_rich_header
+from .pe import compute_imphash, parse_authenticode, parse_pe, parse_rich_header
 from .rebuild import (
     ArtifactDiffReport,
     diff_artifacts,
@@ -108,9 +109,11 @@ __all__ = [
     "intake_artifact",
     "parse_archive",
     "parse_artifact_descriptor",
+    "parse_authenticode",
     "parse_dwarf",
     "parse_elf",
     "parse_macho",
+    "parse_macho_code_signature",
     "parse_pe",
     "parse_rich_header",
     "parse_trace_output",

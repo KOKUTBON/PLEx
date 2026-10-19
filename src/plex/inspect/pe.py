@@ -216,6 +216,48 @@ def parse_rich_header(data: bytes, e_lfanew: int) -> dict[str, Any] | None:
     }
 
 
+WIN_CERT_TYPE_X509 = 0x0001
+WIN_CERT_TYPE_PKCS_SIGNED_DATA = 0x0002
+
+AUTHENTICODE_DIGEST_OIDS: tuple[tuple[bytes, str], ...] = (
+    (b"\x60\x86\x48\x01\x65\x03\x04\x02\x01", "sha256"),
+    (b"\x60\x86\x48\x01\x65\x03\x04\x02\x02", "sha384"),
+    (b"\x60\x86\x48\x01\x65\x03\x04\x02\x03", "sha512"),
+    (b"\x2b\x0e\x03\x02\x1a", "sha1"),
+    (b"\x2a\x86\x48\x86\xf7\x0d\x02\x05", "md5"),
+)
+
+
+def parse_authenticode(data: bytes, cert_off: int, cert_size: int) -> dict[str, Any] | None:
+    """Parse PE WIN_CERTIFICATE structure and identify digest algorithm and certificate metrics."""
+    if cert_off + 8 > len(data):
+        return None
+    dwLength, wRevision, wCertificateType = struct.unpack_from("<IIH", data, cert_off)
+    if dwLength < 8 or cert_off + dwLength > len(data):
+        return None
+
+    bCert = data[cert_off + 8 : cert_off + dwLength]
+    digest_algo = "unknown"
+
+    # Search for digest algorithm OID in PKCS#7 signedData
+    for oid_bytes, algo_name in AUTHENTICODE_DIGEST_OIDS:
+        pattern = bytes([0x06, len(oid_bytes)]) + oid_bytes
+        if pattern in bCert[:1024]:
+            digest_algo = algo_name
+            break
+
+    certs_count = bCert.count(b"\x30\x82")
+    type_name = "PKCS_SIGNED_DATA" if wCertificateType == WIN_CERT_TYPE_PKCS_SIGNED_DATA else hex(wCertificateType)
+
+    return {
+        "cert_type": type_name,
+        "revision": hex(wRevision),
+        "cert_length": dwLength,
+        "digest_algorithm": digest_algo,
+        "certificates_detected": certs_count,
+    }
+
+
 def parse_pe(data: bytes, path: str, sha256: str) -> ArtifactDescriptor:
     """Parse a 32-bit or 64-bit Windows PE binary artifact in pure Python without external dependencies."""
     if len(data) < 64:
@@ -525,6 +567,11 @@ def parse_pe(data: bytes, path: str, sha256: str) -> ArtifactDescriptor:
     # Authenticode Signature Presence
     sec_entry = data_dirs.get(IMAGE_DIRECTORY_ENTRY_SECURITY)
     has_authenticode = bool(sec_entry and sec_entry[0] > 0 and sec_entry[1] > 0)
+    authenticode_info: dict[str, Any] | None = None
+    if has_authenticode and sec_entry:
+        sec_off, sec_size = sec_entry
+        if sec_off + 8 <= len(data) and sec_size >= 8:
+            authenticode_info = parse_authenticode(data, sec_off, sec_size)
 
     # Stripped Status
     is_stripped = (
@@ -610,6 +657,8 @@ def parse_pe(data: bytes, path: str, sha256: str) -> ArtifactDescriptor:
         "pdb_path": pdb_path,
         "debug_codeview": debug_codeview,
     }
+    if authenticode_info:
+        metadata["authenticode"] = authenticode_info
 
     return ArtifactDescriptor(
         path=path,

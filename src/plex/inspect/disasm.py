@@ -452,6 +452,7 @@ def get_disassembly_backend(preferred: str | None = None) -> DisassemblyBackend:
 def reconstruct_functions(
     instructions: list[Instruction],
     symbol_map: dict[int, str] | None = None,
+    function_starts: list[int] | tuple[int, ...] | set[int] | None = None,
 ) -> list[ReconstructedFunction]:
     """Reconstruct function boundaries and control-flow metadata from instructions."""
     if not instructions:
@@ -467,6 +468,10 @@ def reconstruct_functions(
 
     for addr in symbols:
         start_addresses.add(addr)
+
+    if function_starts:
+        for addr in function_starts:
+            start_addresses.add(addr)
 
     for i, insn in enumerate(instructions):
         if insn.mnemonic in ("ret", "retf"):
@@ -558,7 +563,11 @@ def disassemble_artifact(
         symbol_map[descriptor.entry_point] = "main"
 
     for sec in descriptor.sections:
-        is_exec = "X" in sec.flags or sec.name in (".text", "__text", ".code")
+        is_exec = (
+            "X" in sec.flags
+            or sec.name in (".text", "__text", ".code", "CODE", "__TEXT.__text")
+            or sec.name.endswith(".__text")
+        )
         if not is_exec or sec.size == 0:
             continue
 
@@ -577,7 +586,12 @@ def disassemble_artifact(
         )
         all_instructions.extend(insns)
 
-    functions = reconstruct_functions(all_instructions, symbol_map=symbol_map)
+    fn_starts = descriptor.metadata.get("function_starts", ())
+    functions = reconstruct_functions(
+        all_instructions,
+        symbol_map=symbol_map,
+        function_starts=fn_starts,
+    )
     all_calls: list[ReconstructedCall] = []
     for fn in functions:
         all_calls.extend(fn.calls)

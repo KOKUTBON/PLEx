@@ -221,13 +221,21 @@ def detect_capabilities(
                 )
             )
 
-    # Check for Import Hash (imphash / elf_imphash) capability
-    imphash = descriptor.metadata.get("imphash") or descriptor.metadata.get("elf_imphash")
+    # Check for Import Hash (imphash / elf_imphash / macho_imphash) capability
+    imphash = (
+        descriptor.metadata.get("imphash")
+        or descriptor.metadata.get("elf_imphash")
+        or descriptor.metadata.get("macho_imphash")
+    )
     if imphash:
         fid = _finding_id("bin.capability.imphash", path, imphash)
         sym_count = descriptor.metadata.get("imphash_symbols_count", len(descriptor.imported_symbols))
-        is_elf = descriptor.format == "elf"
-        fmt_label = "ELF" if is_elf else "PE"
+        if descriptor.format == "elf":
+            fmt_label = "ELF"
+        elif descriptor.format == "macho":
+            fmt_label = "Mach-O"
+        else:
+            fmt_label = "PE"
         findings.append(
             AnalysisFinding(
                 id=f"bin.{fid}",

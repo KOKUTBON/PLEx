@@ -176,6 +176,10 @@ class InspectEngine:
             fact_dict["imphash"] = descriptor.metadata["imphash"]
         if "elf_imphash" in descriptor.metadata:
             fact_dict["elf_imphash"] = descriptor.metadata["elf_imphash"]
+        if "macho_imphash" in descriptor.metadata:
+            fact_dict["macho_imphash"] = descriptor.metadata["macho_imphash"]
+        if "function_starts_count" in descriptor.metadata:
+            fact_dict["function_starts_count"] = descriptor.metadata["function_starts_count"]
         if "needed_libraries" in descriptor.metadata:
             fact_dict["needed_libraries"] = list(descriptor.metadata["needed_libraries"])
         if "has_text_relocations" in descriptor.metadata:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
 import struct
 from typing import Any
@@ -61,11 +62,101 @@ LC_LOAD_WEAK_DYLIB = 0x18 | 0x80000000
 LC_REEXPORT_DYLIB = 0x1F | 0x80000000
 LC_ENCRYPTION_INFO = 0x21
 LC_VERSION_MIN_MACOSX = 0x24
+LC_FUNCTION_STARTS = 0x26
 LC_MAIN = 0x28 | 0x80000000
 LC_ENCRYPTION_INFO_64 = 0x2C
 LC_BUILD_VERSION = 0x32
 
 STRING_REGEX = re.compile(rb"[\x20-\x7e]{4,}")
+
+
+def compute_macho_imphash(
+    imported_symbols: list[str] | tuple[str, ...],
+    dylibs: list[str] | tuple[str, ...] | None = None,
+) -> str:
+    """Compute deterministic import hash (imphash) for Mach-O binaries.
+
+    Normalizes imported symbols (stripping Darwin C compiler leading underscore and lowercasing)
+    and dynamic library references (extracting basename and lowercasing),
+    sorting them deterministically and producing an MD5 digest consistent with
+    threat intelligence and static triage conventions.
+    """
+    clean_syms: list[str] = []
+    for s in imported_symbols:
+        cleaned = s.strip()
+        if not cleaned:
+            continue
+        if cleaned.startswith("___stack_chk"):
+            cleaned = cleaned[1:]
+        elif cleaned.startswith("_") and not cleaned.startswith("__"):
+            cleaned = cleaned[1:]
+        clean_syms.append(cleaned.lower())
+
+    if not clean_syms:
+        return ""
+
+    unique_sorted_syms = sorted(set(clean_syms))
+    parts: list[str] = []
+    if dylibs:
+        clean_libs: list[str] = []
+        for lib in dylibs:
+            lstrip = lib.strip()
+            if not lstrip:
+                continue
+            basename = lstrip.split("/")[-1].split("\\")[-1].lower()
+            if basename:
+                clean_libs.append(basename)
+        if clean_libs:
+            parts.append(",".join(sorted(set(clean_libs))))
+
+    parts.append(",".join(unique_sorted_syms))
+    payload = "|".join(parts)
+    return hashlib.md5(payload.encode("utf-8")).hexdigest()
+
+
+def decode_function_starts(
+    data: bytes,
+    dataoff: int,
+    datasize: int,
+    text_vmaddr: int,
+) -> list[int]:
+    """Decode LC_FUNCTION_STARTS ULEB128 delta-encoded function entry addresses.
+
+    In Mach-O binaries, the LC_FUNCTION_STARTS load command points to a stream of
+    unsigned LEB128 values in the __LINKEDIT segment. The first value is the offset
+    from the __TEXT segment virtual base address. Each subsequent non-zero value
+    is the delta from the previous function virtual address. The stream terminates
+    with a 0 byte (or upon reaching datasize).
+    """
+    if dataoff < 0 or datasize <= 0 or dataoff + datasize > len(data):
+        return []
+
+    stream = data[dataoff : dataoff + datasize]
+    idx = 0
+    curr_addr = text_vmaddr
+    starts: list[int] = []
+
+    while idx < len(stream):
+        val = 0
+        shift = 0
+        while idx < len(stream):
+            byte = stream[idx]
+            idx += 1
+            val |= (byte & 0x7F) << shift
+            if (byte & 0x80) == 0:
+                break
+            shift += 7
+            if shift >= 64:
+                break
+
+        if val == 0:
+            break
+
+        curr_addr += val
+        starts.append(curr_addr)
+
+    return starts
+
 
 
 def extract_macho_slice(data: bytes) -> tuple[bytes, int]:
@@ -165,6 +256,8 @@ def parse_macho(data: bytes, artifact_path: str, sha256: str) -> ArtifactDescrip
     entry_point = 0
     min_os_version: str | None = None
     code_sign_info: dict[str, Any] = {}
+    text_vmaddr = 0
+    function_starts_info: tuple[int, int] | None = None
 
     sections: list[BinarySection] = []
     dylibs: list[str] = []
@@ -200,6 +293,8 @@ def parse_macho(data: bytes, artifact_path: str, sha256: str) -> ArtifactDescrip
                     has_data_const = True
                 elif segname == "__RESTRICT":
                     has_restrict = True
+                elif segname == "__TEXT":
+                    text_vmaddr = vmaddr
 
                 # Parse sections inside segment
                 sect_start = curr_offset + 72
@@ -250,6 +345,8 @@ def parse_macho(data: bytes, artifact_path: str, sha256: str) -> ArtifactDescrip
                     has_data_const = True
                 elif segname == "__RESTRICT":
                     has_restrict = True
+                elif segname == "__TEXT":
+                    text_vmaddr = vmaddr
 
                 sect_start = curr_offset + 56
                 for s in range(nsects):
@@ -354,6 +451,12 @@ def parse_macho(data: bytes, artifact_path: str, sha256: str) -> ArtifactDescrip
                 patch = minos & 0xFF
                 min_os_version = f"{major}.{minor}.{patch}"
 
+        # LC_FUNCTION_STARTS
+        elif cmd == LC_FUNCTION_STARTS:
+            if curr_offset + 16 <= len(slice_data):
+                dataoff, datasize = struct.unpack_from(f"{order}II", slice_data, curr_offset + 8)
+                function_starts_info = (dataoff, datasize)
+
         curr_offset += cmdsize
 
     # Parse symbols if symtab and strtab are valid
@@ -445,10 +548,18 @@ def parse_macho(data: bytes, artifact_path: str, sha256: str) -> ArtifactDescrip
 
     is_stripped = len(imported_symbols) == 0 and len(exported_symbols) == 0
 
+    function_starts: list[int] = []
+    if function_starts_info:
+        fn_off, fn_sz = function_starts_info
+        function_starts = decode_function_starts(slice_data, fn_off, fn_sz, text_vmaddr)
+
+    macho_imphash = compute_macho_imphash(list(imported_symbols), dylibs)
+
     metadata: dict[str, Any] = {
         "filetype": filetype,
         "flags": flags,
         "dylibs": tuple(dylibs),
+        "needed_libraries": tuple(dylibs),
         "rpaths": tuple(rpaths),
         "code_signed": has_code_signature,
         "has_code_signature": has_code_signature,
@@ -456,6 +567,11 @@ def parse_macho(data: bytes, artifact_path: str, sha256: str) -> ArtifactDescrip
         "has_pagezero": has_pagezero,
         "has_data_const": has_data_const,
         "has_restrict": has_restrict,
+        "macho_imphash": macho_imphash,
+        "imphash": macho_imphash if macho_imphash else None,
+        "imphash_symbols_count": len(imported_symbols),
+        "function_starts": tuple(function_starts),
+        "function_starts_count": len(function_starts),
     }
     if min_os_version:
         metadata["min_os_version"] = min_os_version

@@ -31,7 +31,7 @@ from .dwarf import find_source_location, parse_dwarf, parse_dwarf_line_table
 from .elf import compute_elf_imphash, parse_elf
 from .engine import InspectEngine
 from .intake import ArtifactIntakeError, intake_artifact
-from .macho import parse_macho
+from .macho import compute_macho_imphash, decode_function_starts, parse_macho
 from .macho_cs import parse_macho_code_signature
 from .models import (
     Architecture,
@@ -97,7 +97,9 @@ __all__ = [
     "compute_elf_imphash",
     "compute_function_similarity",
     "compute_imphash",
+    "compute_macho_imphash",
     "compute_section_metrics",
+    "decode_function_starts",
     "decompile_artifact",
     "decompile_function",
     "detect_capabilities",

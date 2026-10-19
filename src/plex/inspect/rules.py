@@ -579,5 +579,48 @@ def evaluate_artifact_rules(
             )
         )
 
+    # Rule 16: Insecure Mach-O runtime search path (LC_RPATH) enables dylib hijacking (CWE-427 / ATT&CK T1574.002)
+    if descriptor.format == "macho":
+        macho_rpaths = descriptor.metadata.get("rpaths", ())
+        for rpath_entry in macho_rpaths:
+            is_relative = (
+                rpath_entry in (".", "")
+                or rpath_entry.startswith("./")
+                or (not rpath_entry.startswith("/") and not rpath_entry.startswith("@"))
+            )
+            is_writable = rpath_entry.startswith(
+                ("/tmp", "/var/tmp", "/private/tmp", "/private/var/tmp")
+            )
+            if is_relative or is_writable:
+                fid = _finding_id("bin.macho.insecure-rpath", path, rpath_entry)
+                risk_kind = (
+                    "world-writable temporary directory" if is_writable else "relative search directory"
+                )
+                findings.append(
+                    AnalysisFinding(
+                        id=f"bin.{fid}",
+                        engine="inspect",
+                        category="binary",
+                        rule_id="bin.macho.insecure-rpath",
+                        severity="high",
+                        title=f"Insecure Mach-O runtime search path (LC_RPATH) enables dylib hijacking: '{rpath_entry}'",
+                        status="verified",
+                        confidence="observed",
+                        file=path,
+                        lineno=0,
+                        cwe=["CWE-427", "CWE-426"],
+                        message=(
+                            f"Mach-O LC_RPATH contains {risk_kind} '{rpath_entry}'. "
+                            "Insecure relative paths or world-writable directories allow unprivileged local attackers to place malicious dynamic libraries "
+                            "that dyld will execute with the application's privileges (MITRE ATT&CK T1574.002)."
+                        ),
+                        remediation=[
+                            "Remove relative paths and writable directories (/tmp) from LC_RPATH load commands; use @executable_path or signed system library directories."
+                        ],
+                        evidence=[evidence_ref],
+                        engine_meta={"rpath": rpath_entry, "format": "macho"},
+                    )
+                )
+
     return findings
 

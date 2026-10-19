@@ -176,8 +176,9 @@ DECLARED_SURFACES: list[SurfaceCoverage] = [
             "bin.macho.unhardened-runtime",
             "bin.hardening.weak-signature-digest",
             "bin.elf.text-relocation",
+            "bin.macho.insecure-rpath",
         ),
-        verification_level="Pure-Python 32/64-bit ELF, Mach-O, PE, and archive (ZIP, JAR, APK, Wheel) parsers; Mach-O Code Signature SuperBlob parsing, CDHash computation, entitlements extraction, Hardened Runtime analysis, PE Authenticode WIN_CERTIFICATE digest extraction, PE/ELF imphash, MSVC Rich header parsing, section entropy and cryptographic hashing, native ELF DWARF compilation unit recovery, DWARF line number state machine decoding, replaceable disassembly (pure-Python/Capstone/Objdump), pluggable decompiler backends (native lifter/Rizin/Ghidra), rebuild diffing, opt-in sandboxed runtime tracing, capability hypotheses, and source/DWARF mapping",
+        verification_level="Pure-Python 32/64-bit ELF, Mach-O, PE, and archive (ZIP, JAR, APK, Wheel) parsers; Mach-O Code Signature SuperBlob parsing, CDHash computation, entitlements extraction, Hardened Runtime analysis, PE Authenticode WIN_CERTIFICATE digest extraction, PE/ELF/Mach-O imphash, Mach-O function starts ULEB128 decoding, MSVC Rich header parsing, section entropy and cryptographic hashing, native ELF DWARF compilation unit recovery, DWARF line number state machine decoding, replaceable disassembly (pure-Python/Capstone/Objdump), pluggable decompiler backends (native lifter/Rizin/Ghidra), rebuild diffing, opt-in sandboxed runtime tracing, capability hypotheses, and source/DWARF mapping",
         prerequisites=("Valid ELF, Mach-O, PE, or archive (ZIP/JAR/APK/Wheel) artifact",),
         limitations=(
             "Native pseudo-C lifter is heuristic; full AST decompilation requires optional Rizin/Cutter or Ghidra headless backends",

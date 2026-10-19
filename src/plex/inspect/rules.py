@@ -551,5 +551,33 @@ def evaluate_artifact_rules(
             )
         )
 
+    # Rule 15: Text relocations in dynamic ELF segment (DT_TEXTREL / DF_TEXTREL) (CWE-693 / CWE-119)
+    if descriptor.format == "elf" and descriptor.metadata.get("has_text_relocations"):
+        fid = _finding_id("bin.elf.text-relocation", path, "textrel")
+        findings.append(
+            AnalysisFinding(
+                id=f"bin.{fid}",
+                engine="inspect",
+                category="binary",
+                rule_id="bin.elf.text-relocation",
+                severity="high",
+                title="Text relocations detected in dynamic ELF segment (DT_TEXTREL)",
+                status="verified",
+                confidence="observed",
+                file=path,
+                lineno=0,
+                cwe=["CWE-693", "CWE-119"],
+                message=(
+                    "Binary contains text relocations (DT_TEXTREL / DF_TEXTREL). "
+                    "This forces the runtime dynamic linker to map the executable code segment (.text) with write permissions "
+                    "during relocation processing, violating W^X (Write XOR Execute) memory protections and exposing the application "
+                    "to code injection and runtime control-flow hijacking."
+                ),
+                remediation=["Recompile code with '-fPIC' (Position Independent Code) and link with '-Wl,-z,text'."],
+                evidence=[evidence_ref],
+                engine_meta={"has_text_relocations": True},
+            )
+        )
+
     return findings
 

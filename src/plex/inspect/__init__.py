@@ -27,8 +27,8 @@ from .disasm import (
     get_disassembly_backend,
     reconstruct_functions,
 )
-from .dwarf import parse_dwarf
-from .elf import parse_elf
+from .dwarf import find_source_location, parse_dwarf, parse_dwarf_line_table
+from .elf import compute_elf_imphash, parse_elf
 from .engine import InspectEngine
 from .intake import ArtifactIntakeError, intake_artifact
 from .macho import parse_macho
@@ -94,6 +94,7 @@ __all__ = [
     "add_inspect_commands",
     "cmd_inspect",
     "compare_artifact_functions",
+    "compute_elf_imphash",
     "compute_function_similarity",
     "compute_imphash",
     "compute_section_metrics",
@@ -103,6 +104,7 @@ __all__ = [
     "diff_artifacts",
     "disassemble_artifact",
     "evaluate_artifact_rules",
+    "find_source_location",
     "findings_from_runtime_trace",
     "get_decompiler_backend",
     "get_disassembly_backend",
@@ -111,6 +113,7 @@ __all__ = [
     "parse_artifact_descriptor",
     "parse_authenticode",
     "parse_dwarf",
+    "parse_dwarf_line_table",
     "parse_elf",
     "parse_macho",
     "parse_macho_code_signature",

@@ -221,11 +221,13 @@ def detect_capabilities(
                 )
             )
 
-    # Check for Import Hash (imphash) capability
-    if descriptor.metadata.get("imphash"):
-        imphash = descriptor.metadata["imphash"]
+    # Check for Import Hash (imphash / elf_imphash) capability
+    imphash = descriptor.metadata.get("imphash") or descriptor.metadata.get("elf_imphash")
+    if imphash:
         fid = _finding_id("bin.capability.imphash", path, imphash)
-        sym_count = descriptor.metadata.get("imphash_symbols_count", 0)
+        sym_count = descriptor.metadata.get("imphash_symbols_count", len(descriptor.imported_symbols))
+        is_elf = descriptor.format == "elf"
+        fmt_label = "ELF" if is_elf else "PE"
         findings.append(
             AnalysisFinding(
                 id=f"bin.{fid}",
@@ -233,19 +235,19 @@ def detect_capabilities(
                 category="binary",
                 rule_id="bin.capability.imphash",
                 severity="info",
-                title=f"Import Table Fingerprint (imphash): {imphash}",
+                title=f"{fmt_label} Import Table Fingerprint (imphash): {imphash}",
                 status="suspected",
                 confidence="inferred",
                 file=path,
                 lineno=0,
                 cwe=["CWE-699"],
                 message=(
-                    f"Binary import table yields standard PE import hash (imphash): {imphash} "
-                    f"across {sym_count} ordered imported functions. Used for binary lineage, malware clustering, and static triage."
+                    f"Binary import table yields standard {fmt_label} import hash (imphash): {imphash} "
+                    f"across {sym_count} ordered imported symbols. Used for binary lineage, malware clustering, and static triage."
                 ),
                 remediation=["Track imphash across release builds to detect unexpected dynamic import dependencies."],
                 evidence=[evidence_ref],
-                engine_meta={"imphash": imphash, "symbol_count": sym_count},
+                engine_meta={"imphash": imphash, "symbol_count": sym_count, "format": descriptor.format},
             )
         )
 
@@ -327,6 +329,37 @@ def detect_capabilities(
                 remediation=["Track code signing identity and ensure production release certificates are applied."],
                 evidence=[evidence_ref],
                 engine_meta=meta_payload,
+            )
+        )
+
+    # Check for Shared Library Dependencies (DT_NEEDED)
+    needed_libs = descriptor.metadata.get("needed_libraries")
+    if needed_libs and isinstance(needed_libs, (list, tuple)) and len(needed_libs) > 0:
+        fid = _finding_id("bin.capability.library-dependencies", path, ",".join(needed_libs))
+        lib_str = ", ".join(needed_libs[:8])
+        if len(needed_libs) > 8:
+            lib_str += f" (+{len(needed_libs) - 8} more)"
+        findings.append(
+            AnalysisFinding(
+                id=f"bin.{fid}",
+                engine="inspect",
+                category="binary",
+                rule_id="bin.capability.library-dependencies",
+                severity="info",
+                title=f"Shared Library Dependencies Identified: {len(needed_libs)} libraries",
+                status="suspected",
+                confidence="inferred",
+                file=path,
+                lineno=0,
+                cwe=["CWE-699"],
+                message=(
+                    f"Binary dynamically links shared library dependencies: {lib_str}. "
+                    "Used for software bill of materials (SBOM) composition, runtime dependency auditing, "
+                    "and vulnerability attack surface mapping."
+                ),
+                remediation=["Audit third-party library dependencies and verify cryptographic signatures of distribution packages."],
+                evidence=[evidence_ref],
+                engine_meta={"needed_libraries": list(needed_libs), "library_count": len(needed_libs)},
             )
         )
 

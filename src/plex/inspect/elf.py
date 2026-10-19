@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
 import struct
 from typing import Any
@@ -46,16 +47,44 @@ PF_W = 2  # Writable
 PF_R = 4  # Readable
 
 # Dynamic tags
+DT_NEEDED = 1
 DT_RPATH = 15
 DT_RUNPATH = 29
 DT_FLAGS = 30
 DT_BIND_NOW = 24
+DT_TEXTREL = 22
 DT_FLAGS_1 = 0x6FFFFFFB
+DF_TEXTREL = 0x04
 DF_BIND_NOW = 0x08
 DF_1_NOW = 0x01
 DF_1_PIE = 0x08000000
+DF_1_NODEFLIB = 0x0800
 
 STRING_REGEX = re.compile(rb"[\x20-\x7e]{4,}")
+
+
+def compute_elf_imphash(
+    imported_symbols: list[str] | tuple[str, ...],
+    needed_libraries: list[str] | tuple[str, ...] | None = None,
+) -> str:
+    """Compute deterministic import hash (imphash) for ELF binaries.
+
+    Normalizes imported symbols and shared libraries to lowercase, sorting them
+    and computing an MD5 digest consistent with static analysis and threat triage conventions.
+    """
+    clean_syms = [s.strip().lower() for s in imported_symbols if s and s.strip()]
+    if not clean_syms:
+        return ""
+
+    unique_sorted = sorted(set(clean_syms))
+    parts: list[str] = []
+    if needed_libraries:
+        clean_libs = sorted(set(lib.strip().lower() for lib in needed_libraries if lib and lib.strip()))
+        if clean_libs:
+            parts.append(",".join(clean_libs))
+    parts.append(",".join(unique_sorted))
+    payload = "|".join(parts)
+    return hashlib.md5(payload.encode("utf-8")).hexdigest()
 
 
 def parse_elf(data: bytes, artifact_path: str, sha256: str) -> ArtifactDescriptor:
@@ -242,6 +271,10 @@ def parse_elf(data: bytes, artifact_path: str, sha256: str) -> ArtifactDescripto
             dynsym_size = s_size
             dynsym_entsize = s_entsize or (24 if is_64bit else 16)
             dynsym_link = s_link
+        elif s_type == 6:  # SHT_DYNAMIC
+            if not dynamic_offset:
+                dynamic_offset = s_off
+                dynamic_size = s_size
 
     # Extract symbols
     def read_symbols(
@@ -316,10 +349,12 @@ def parse_elf(data: bytes, artifact_path: str, sha256: str) -> ArtifactDescripto
 
     is_stripped = symtab_offset == 0
 
-    # Parse Dynamic tags for RELRO / BIND_NOW / RPATH / RUNPATH
+    # Parse Dynamic tags for RELRO / BIND_NOW / RPATH / RUNPATH / DT_NEEDED / DT_TEXTREL
     bind_now = False
     rpath = None
     runpath = None
+    needed_libraries: list[str] = []
+    has_text_relocations = False
 
     if dynamic_offset and dynamic_size:
         dyn_strtab = b""
@@ -342,7 +377,20 @@ def parse_elf(data: bytes, artifact_path: str, sha256: str) -> ArtifactDescripto
 
             if d_tag == 0:  # DT_NULL
                 break
-            if d_tag == DT_BIND_NOW:
+            if d_tag == DT_NEEDED and dyn_strtab and d_val < len(dyn_strtab):
+                null_p = dyn_strtab.find(b"\x00", d_val)
+                soname = (
+                    dyn_strtab[d_val:null_p].decode("ascii", errors="replace")
+                    if null_p != -1
+                    else dyn_strtab[d_val:].decode("ascii", errors="replace")
+                )
+                if soname and soname not in needed_libraries:
+                    needed_libraries.append(soname)
+            elif d_tag == DT_TEXTREL:
+                has_text_relocations = True
+            elif d_tag == DT_FLAGS and (d_val & DF_TEXTREL):
+                has_text_relocations = True
+            elif d_tag == DT_BIND_NOW:
                 bind_now = True
             elif d_tag == DT_FLAGS and (d_val & DF_BIND_NOW):
                 bind_now = True
@@ -406,9 +454,16 @@ def parse_elf(data: bytes, artifact_path: str, sha256: str) -> ArtifactDescripto
             endian=order,
         )
 
+    # Calculate deterministic ELF import hash
+    elf_imphash = compute_elf_imphash(list(all_imports), needed_libraries)
+
     metadata: dict[str, Any] = {
         "has_interpreter": has_pt_interp,
         "is_pie": pie,
+        "needed_libraries": tuple(needed_libraries),
+        "elf_imphash": elf_imphash,
+        "imphash": elf_imphash if elf_imphash else None,
+        "has_text_relocations": has_text_relocations,
         "dwarf": dwarf_meta,
         "compiler_producer": dwarf_meta.get("producer"),
         "compilation_directory": dwarf_meta.get("comp_dir"),

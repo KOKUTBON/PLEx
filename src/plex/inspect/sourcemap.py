@@ -11,9 +11,11 @@ import os
 import re
 from dataclasses import replace
 from pathlib import Path
+from typing import Any
 
 from plex.report.unified import AnalysisFinding
 
+from .dwarf import find_source_location
 from .models import ArtifactDescriptor
 
 SOURCE_EXTENSIONS = (".c", ".cpp", ".cc", ".cxx", ".h", ".hpp", ".rs", ".go")
@@ -72,12 +74,30 @@ class SourceDebugMapper:
         mapped: list[AnalysisFinding] = []
 
         dwarf_sources: set[str] = set()
+        dwarf_address_lines: list[dict[str, Any]] = []
+        dwarf_subprograms: list[dict[str, Any]] = []
         if descriptor and descriptor.metadata:
             dwarf_sources = set(descriptor.metadata.get("source_files", []))
+            dwarf_meta = descriptor.metadata.get("dwarf") or {}
+            dwarf_address_lines = dwarf_meta.get("address_lines", [])
+            dwarf_subprograms = dwarf_meta.get("subprograms", [])
 
         for finding in findings:
             caller_fn = finding.engine_meta.get("caller_function")
             symbol = finding.engine_meta.get("symbol")
+            address = finding.engine_meta.get("caller_address") or finding.engine_meta.get("address")
+            if address is None and finding.engine_meta.get("call_sites"):
+                call_sites = finding.engine_meta["call_sites"]
+                if isinstance(call_sites, list) and call_sites:
+                    first_site = call_sites[0]
+                    if isinstance(first_site, int):
+                        address = first_site
+                    elif isinstance(first_site, str) and first_site.startswith("0x"):
+                        try:
+                            address = int(first_site, 16)
+                        except ValueError:
+                            pass
+
             if not symbol and finding.engine_meta.get("matched_symbols"):
                 matched_syms = finding.engine_meta.get("matched_symbols") or []
                 for s in matched_syms:
@@ -89,9 +109,27 @@ class SourceDebugMapper:
 
             source_file: str | None = None
             source_line: int | None = None
+            provenance: str = "source_index"
+
+            # 0. Check DWARF address-to-line table if instruction address is available
+            if address is not None and dwarf_address_lines:
+                loc = find_source_location(dwarf_address_lines, address)
+                if loc and loc.get("file"):
+                    source_file = loc["file"]
+                    source_line = loc.get("line")
+                    provenance = "dwarf_line_table"
+
+            # 0b. Check DWARF subprograms if caller_fn is available and not yet mapped
+            if not source_file and caller_fn and dwarf_subprograms:
+                for sub in dwarf_subprograms:
+                    if sub.get("name") == caller_fn and sub.get("file"):
+                        source_file = sub["file"]
+                        source_line = sub.get("line")
+                        provenance = "dwarf_subprogram"
+                        break
 
             # 1. Try matching the specific call within the caller function
-            if symbol and symbol in self.symbol_calls:
+            if not source_file and symbol and symbol in self.symbol_calls:
                 call_candidates = self.symbol_calls[symbol]
                 if caller_fn and caller_fn in self.function_defs:
                     fn_defs = self.function_defs[caller_fn]
@@ -118,7 +156,7 @@ class SourceDebugMapper:
                         source_file, source_line = call_candidates[0]
 
             # 2. Try matching the caller function definition directly
-            elif caller_fn and caller_fn in self.function_defs:
+            elif not source_file and caller_fn and caller_fn in self.function_defs:
                 fn_candidates = self.function_defs[caller_fn]
                 if dwarf_sources:
                     dwarf_fn = next(
@@ -136,7 +174,9 @@ class SourceDebugMapper:
                 updated_meta["binary_path"] = finding.file
                 updated_meta["source_file"] = source_file
                 updated_meta["source_line"] = source_line
-                if dwarf_sources and (source_file in dwarf_sources or Path(source_file).name in dwarf_sources):
+                if provenance != "source_index":
+                    updated_meta["debug_provenance"] = provenance
+                elif dwarf_sources and (source_file in dwarf_sources or Path(source_file).name in dwarf_sources):
                     updated_meta["debug_provenance"] = "dwarf"
                 if descriptor and descriptor.metadata.get("pdb_path"):
                     updated_meta["pdb_path"] = descriptor.metadata["pdb_path"]

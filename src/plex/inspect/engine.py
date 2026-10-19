@@ -174,6 +174,12 @@ class InspectEngine:
 
         if "imphash" in descriptor.metadata:
             fact_dict["imphash"] = descriptor.metadata["imphash"]
+        if "elf_imphash" in descriptor.metadata:
+            fact_dict["elf_imphash"] = descriptor.metadata["elf_imphash"]
+        if "needed_libraries" in descriptor.metadata:
+            fact_dict["needed_libraries"] = list(descriptor.metadata["needed_libraries"])
+        if "has_text_relocations" in descriptor.metadata:
+            fact_dict["has_text_relocations"] = descriptor.metadata["has_text_relocations"]
         if "rich_header" in descriptor.metadata and descriptor.metadata["rich_header"]:
             fact_dict["rich_header_hash"] = descriptor.metadata["rich_header"].get("hash")
         if "pdb_path" in descriptor.metadata:

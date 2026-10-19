@@ -8,7 +8,10 @@ from __future__ import annotations
 import json
 import plistlib
 import struct
+import sys
 from pathlib import Path
+
+import pytest
 
 from plex.evidence import EvidenceStore
 from plex.inspect.capabilities import detect_capabilities
@@ -299,6 +302,8 @@ def test_macho_binary_with_embedded_signature() -> None:
 
 def test_real_macos_system_binaries() -> None:
     # Test real host Mach-O binary parsing if running on macOS
+    if sys.platform != "darwin":
+        pytest.skip("Test requires macOS darwin host platform")
     ls_path = Path("/bin/ls")
     if ls_path.exists():
         desc = parse_macho(ls_path.read_bytes(), "/bin/ls", "sha256_mock")
